@@ -65,7 +65,15 @@ const FIVE = ['datatrust-check-results', 'datatrust-lineage-events', 'datatrust-
 describe('production configuration fits the Workers Free plan', () => {
   it('uses no Paid-only feature', () => {
     const cfg = rendered();
-    for (const key of ['pipelines', 'limits', 'triggers', 'tail_consumers', 'logpush', 'durable_objects']) {
+    // An allowlist of the top-level keys the Free design uses (2026-10-11 review): pipelines, limits, triggers,
+    // tail_consumers, logpush, durable_objects, containers, dispatch_namespaces or any new key fail here until
+    // checked against the Free plan. Mirrored by FREE_PLAN_KEYS in pipelines/datatrust/doctor.py.
+    const FREE_PLAN_KEYS = [
+      '$schema', 'name', 'main', 'compatibility_date', 'compatibility_flags', 'workers_dev', 'preview_urls', 'observability',
+      'd1_databases', 'r2_buckets', 'assets', 'ai', 'secrets', 'queues', 'workflows', 'vars',
+    ];
+    expect(Object.keys(cfg).filter((k) => !FREE_PLAN_KEYS.includes(k))).toEqual([]);
+    for (const key of ['pipelines', 'limits', 'triggers', 'tail_consumers', 'logpush', 'durable_objects', 'containers']) {
       expect(cfg, key).not.toHaveProperty(key);
     }
     // Durable Objects on Free must use SQLite storage; none exist today, and any migration must say so.

@@ -301,14 +301,38 @@ def env_checks() -> list[Check]:
 # ------------------------------------------------------------------------------------------------ Cloudflare
 
 
-PAID_ONLY_KEYS = ("pipelines", "limits", "triggers", "tail_consumers", "logpush", "durable_objects")
+# The only top-level keys the Free-plan design uses (SPEC 28.7). An allowlist, not a list of Paid-only keys:
+# anything else (pipelines, limits, triggers, tail_consumers, logpush, durable_objects, containers,
+# dispatch_namespaces, or a key Cloudflare adds later) is refused until it has been checked against the Free
+# plan (2026-10-11 review). Mirrored in apps/worker/test/free-plan.test.ts.
+FREE_PLAN_KEYS = (
+    "$schema",
+    "name",
+    "main",
+    "compatibility_date",
+    "compatibility_flags",
+    "workers_dev",
+    "preview_urls",
+    "observability",
+    "d1_databases",
+    "r2_buckets",
+    "assets",
+    "ai",
+    "secrets",
+    "queues",
+    "workflows",
+    "vars",
+)
 
 
 def paid_only_keys(template_text: str) -> list[str]:
-    """Top-level keys of the production wrangler template that need Workers Paid or break the Free budget
-    (SPEC 28.7): Pipelines, CPU limits, cron triggers, tail Workers, Logpush, Durable Objects."""
-    keys = set(re.findall(r'^  "([a-z_]+)":', template_text, flags=re.M))
-    return [k for k in PAID_ONLY_KEYS if k in keys]
+    """Top-level keys of the production wrangler template outside FREE_PLAN_KEYS, in template order. The
+    template is parsed as JSONC (placeholders such as ${D1_DATABASE_ID} filled), so formatting cannot hide a
+    key."""
+    from datatrust.prod.free_budget import jsonc
+
+    config_ = jsonc(re.sub(r"\$\{[A-Z0-9_]+\}", "x", template_text))
+    return [k for k in config_ if k not in FREE_PLAN_KEYS]
 
 
 def cloudflare_checks() -> list[Check]:

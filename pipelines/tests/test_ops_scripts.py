@@ -4,6 +4,7 @@ the checks below stop at local preconditions."""
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 
 import pytest
@@ -157,6 +158,12 @@ def test_doctor_checks_the_free_plan_config_and_not_pipelines():
     assert doctor.paid_only_keys(template) == []
     paid = template.replace('  "ai": {', '  "pipelines": [],\n  "limits": {"cpu_ms": 50},\n  "ai": {')
     assert doctor.paid_only_keys(paid) == ["pipelines", "limits"]
+    # An allowlist: Paid-only bindings no list named before, and any indentation, are caught too.
+    other = template.replace('  "ai": {', '"containers": [], "dispatch_namespaces": [],\n      "ai": {')
+    assert doctor.paid_only_keys(other) == ["containers", "dispatch_namespaces"]
+    ts = (config.REPO_ROOT / "apps" / "worker" / "test" / "free-plan.test.ts").read_text()
+    allow = ts[ts.index("const FREE_PLAN_KEYS = [") : ts.index("];", ts.index("const FREE_PLAN_KEYS = ["))]
+    assert sorted(re.findall(r"'([^']+)'", allow)) == sorted(doctor.FREE_PLAN_KEYS)
     source = (config.REPO_ROOT / "pipelines" / "datatrust" / "doctor.py").read_text()
     assert '"pipelines", "streams"' not in source and "Workers Paid plan (manual check)" not in source
 
