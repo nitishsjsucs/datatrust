@@ -1,0 +1,30 @@
+{#- Per zone, share of events outside 07:00-21:00 local time; the metric is the worst zone's share. -#}
+with events as (
+    select
+        {% if p.tz_path %}l{{ p.tz_path | length }}.{{ p.tz_column }}{% else %}e.{{ p.tz }}{% endif %} as tz,
+        e.{{ p.ts }} as ts
+    from {{ rel }} as e
+    {%- for hop in p.tz_path %}
+    {%- set prev = 'e' if loop.first else 'l' ~ loop.index0 %}
+    left join {{ hop.parent_rel }} as l{{ loop.index }}
+        on {{ prev }}.{{ hop.column }} = l{{ loop.index }}.{{ hop.parent_column }}
+    {%- endfor %}
+    {%- if p.filter_column %}
+    where e.{{ p.filter_column }} = '{{ p.filter_value }}'
+    {%- endif %}
+),
+hours as (
+    select tz, {{ m.tz_local_hour('ts', 'tz') }} as local_hour from events where tz is not null
+),
+per_zone as (
+    select
+        tz,
+        count(*) as n_events,
+        sum(case when local_hour < 7 or local_hour >= 21 then 1 else 0 end) as n_outside
+    from hours
+    group by tz
+)
+select tz, n_events, n_outside
+from per_zone
+order by {{ m.as_float('n_outside') }} / n_events desc, tz
+limit 1

@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 7 of 19 (core) done: `feat(lineage): capture OpenLineage from dbt-ol and build a column-level graph`.
+Commit 8 of 19 (core) done: `feat(rca): diagnostic probes, planner and ranker`.
 
 ## Done
 
@@ -15,18 +15,19 @@ Commit 7 of 19 (core) done: `feat(lineage): capture OpenLineage from dbt-ol and 
 - 5. 16 models (6 intermediate tables, 5 marts and 4 metrics with enforced contracts, 1 restricted view over the untagged aggregate), dispatch macros `date_spine`, `safe_divide`, `int_div`, `trailing_median` (+ `trailing_median_finish`), `ordered_path`, `time_travel`, `days_between`, `month_start`, `print_dialect_macros` run-operation, `bigquery` and `bigquery_sa` profiles with defaults, policy-tag vars with placeholders, `test_dialect_macros.py` (banned constructs, sqlglot both dialects, portable model SQL), `test_bigquery_parse.py`. Seed 101 builds all 29 models: 1,980 / 1,200 compensation rows, 0 null USD.
 - 6. 40 checks (18 generic incl. custom `unique_combination` and `expression_is_true`, 22 singular SQL), `checks/registry.yml`, `datatrust.checks.registry` and `datatrust.checks.results` (run_results to CheckResult, contract failures classified as `schema_contract` with columns), `add_days` dialect macro, recorded contract-failure fixture (`pipelines/tests/record_fixtures.py`), `test_check_registry.py`, `test_clean_baseline.py` (CI runs it again under `TZ=America/Los_Angeles`), `test_contract_failure_classified.py`, documented-columns test. Clean build (29 models, 40 checks pass) verified by hand on seeds 1, 2, 3, 7, 42, 101-105.
 - 7. `datatrust.dbt.build.build_with_lineage` (`dbt-ol build`, file transport to `<target>/openlineage.jsonl`, `relations.json` from the manifest), `datatrust build` prints check counts; `packages/rca` types, OpenLineage zod schemas, (schema, table) resolver, `buildLineageGraph`, `upstreamClosure` (column mode with dataset fallback, dataset mode), `columnLineageCoverage`; recorded seed-101 fixtures with namespaces scrubbed; `lineage.test.ts` (incl. `/home/runner` path rewrite), `test_lineage_capture.py`. `stg_stage_events` CTE now lists columns explicitly (the OpenLineage SQL parser cannot see through `select *` in a CTE).
+- 8. Python: `warehouse/{base,readonly,duckdb_wh}.py` (sqlglot guard, read-only DuckDB connection, information-schema column lookup), `diagnostics/probes.py` + 14 Jinja templates with DuckDB/BigQuery branches, probe expression language (`tz_local_date`, `int_div`), `rca_cli.py` (calls `packages/rca/dist/cli.mjs`); probe meta added to sources and staging. TypeScript: `rca/{trace,plan,rank,baselines,weights,tune}.ts`, `evidence/sanitize.ts` (WebCrypto HMAC tokens + Worker-side re-check), `cli.ts` bundled with esbuild (`npm run build`). Tests: `trace.test.ts`, `rank.test.ts`, `baselines.test.ts`, `sanitize.test.ts`, `test_probes_render.py`, `test_readonly_guard.py`, `test_probes_clean.py` (every planned probe on clean seed 101: status ok, anomaly 0). CI python job now sets up Node and builds the RCA CLI first.
 
 ## Next
 
-- 8. `feat(rca): diagnostic probes, planner and ranker`.
+- 9. `feat(bench): 20 fault scenarios, decoys and offline harness`.
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
 - `npm run typecheck`: pass
-- `npm run test:rca`: 11 passed
+- `npm run test:rca`: 37 passed
 - `npm run test:worker`: no tests yet (`--passWithNoTests`, removed when the Worker lands in commit 11)
 - `uv run ruff check`: pass
-- `uv run pytest`: 47 passed
+- `uv run pytest`: 73 passed
 
 ## Deviations from SPEC.md
 
@@ -35,5 +36,7 @@ Commit 7 of 19 (core) done: `feat(lineage): capture OpenLineage from dbt-ol and 
 - `apps/web` (stretch) is not in the npm workspaces list until it exists.
 - Contract `data_type` cannot call project macros: dbt 1.12.5 renders schema YAML without them ("'dt_type' is undefined", observed 2026-10-10). Contracts use inline `{{ 'int64' if target.type == 'bigquery' else 'bigint' }}` expressions instead; `test_warehouse_types.py::test_contract_types_mirror_dt_type` asserts every such expression equals the `dt_type` mapping, so `macros/dialect/types.sql` stays the single source of truth.
 - `trailing_median` is split into two macros, `trailing_median` (window step in a CTE) and `trailing_median_finish` (exact median from the BigQuery array; identity on DuckDB), because BigQuery cannot take a median over a window frame in one expression.
+- Probe planning details beyond SPEC 10/11 (all metadata-driven): models use `fanout_ratio` on their grain and sources use `dup_key_rate`; row-multiplicity probes (`fanout_ratio`, `rowcount_ratio`) are judged inherited when any dataset parent shows a multiplicity anomaly (duplicates, fan-out, row count or overlapping intervals), because join fan-out does not follow column lineage. `recompute_delta` also has an `exact` mode (share of rows that differ) for dates and integer formulas. The S04 time-zone probe on `raw.stage_events` reaches the zone through a `tz_path` join chain in source meta.
+- `dbt build` skips models downstream of a failing test, so their checks report `skip`; the ranker treats skipped checks as neither passing nor failing.
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.

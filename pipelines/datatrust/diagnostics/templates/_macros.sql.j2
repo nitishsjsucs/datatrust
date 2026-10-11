@@ -1,0 +1,26 @@
+{#- Dialect fragments shared by the probe templates. They mirror dbt/macros/dialect/*.sql. -#}
+{% macro tz_local_hour(ts, tz) -%}
+{%- if dialect == 'bigquery' -%}EXTRACT(HOUR FROM {{ ts }} AT TIME ZONE {{ tz }}){%- else -%}extract(hour from timezone({{ tz }}, {{ ts }})){%- endif -%}
+{%- endmacro %}
+{% macro tz_local_date(ts, tz) -%}
+{%- if dialect == 'bigquery' -%}DATE({{ ts }}, {{ tz }}){%- else -%}cast(timezone({{ tz }}, {{ ts }}) as date){%- endif -%}
+{%- endmacro %}
+{% macro date_spine(start_date, end_date) -%}
+{%- if dialect == 'bigquery' -%}(select d from UNNEST(GENERATE_DATE_ARRAY(DATE '{{ start_date }}', DATE '{{ end_date }}')) as d){%- else -%}(select cast(unnest(range(date '{{ start_date }}', date '{{ end_date }}' + 1, interval 1 day)) as date) as d){%- endif -%}
+{%- endmacro %}
+{% macro trailing_median(x, part, ord, n) -%}
+{%- if dialect == 'bigquery' -%}ARRAY_AGG({{ x }} IGNORE NULLS) OVER (PARTITION BY {{ part }} ORDER BY {{ ord }} ROWS BETWEEN {{ n }} PRECEDING AND CURRENT ROW){%- else -%}median({{ x }}) over (partition by {{ part }} order by {{ ord }} rows between {{ n }} preceding and current row){%- endif -%}
+{%- endmacro %}
+{% macro trailing_median_finish(col) -%}
+{%- if dialect == 'bigquery' -%}(SELECT AVG(v) FROM (SELECT v, ROW_NUMBER() OVER (ORDER BY v) AS rn, COUNT(*) OVER () AS cnt FROM UNNEST({{ col }}) AS v) WHERE rn IN (DIV(cnt + 1, 2), DIV(cnt + 2, 2))){%- else -%}{{ col }}{%- endif -%}
+{%- endmacro %}
+{% macro as_float(x) -%}
+{%- if dialect == 'bigquery' -%}CAST({{ x }} AS FLOAT64){%- else -%}cast({{ x }} as double){%- endif -%}
+{%- endmacro %}
+{% macro try_cast(x, kind) -%}
+{%- set types = {'int': ('bigint', 'INT64'), 'money': ('decimal(38,9)', 'NUMERIC'), 'date': ('date', 'DATE'), 'ts': ('timestamptz', 'TIMESTAMP')} -%}
+{%- if dialect == 'bigquery' -%}SAFE_CAST({{ x }} AS {{ types[kind][1] }}){%- else -%}try_cast({{ x }} as {{ types[kind][0] }}){%- endif -%}
+{%- endmacro %}
+{% macro as_text(x) -%}
+{%- if dialect == 'bigquery' -%}CAST({{ x }} AS STRING){%- else -%}cast({{ x }} as varchar){%- endif -%}
+{%- endmacro %}

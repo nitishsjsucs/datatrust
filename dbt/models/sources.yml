@@ -1,6 +1,9 @@
 version: 2
 
 # ADR-0005: raw tables are dbt sources (not seeds), so dbt-ol lists them in dataset inputs.
+# Source meta drives probe planning the same way model meta does (SPEC 10). Foreign-key parents name
+# sources as raw.<table>.
+
 sources:
   - name: raw
     schema: "{{ 'datatrust_raw' if target.type == 'bigquery' else 'raw' }}"
@@ -13,6 +16,8 @@ sources:
       - name: employees
         meta: {grain: [employee_id]}
         columns:
+          - name: employee_id
+            meta: {classification: identifier, entity: emp}
           - name: first_name
             meta: {classification: pii}
           - name: last_name
@@ -21,13 +26,32 @@ sources:
             meta: {classification: pii}
           - name: birth_date
             meta: {classification: pii}
+          - name: hire_date
+            meta: {classification: internal}
+          - name: termination_date
+            meta: {classification: internal}
       - name: job_assignments
-        meta: {grain: [assignment_id], interval: [valid_from, valid_to], interval_key: [employee_id]}
+        meta:
+          grain: [assignment_id]
+          interval: {key: [employee_id], from: valid_from, to: valid_to}
+          foreign_keys:
+            - {column: employee_id, parent: raw.employees, parent_column: employee_id}
+            - {column: department_id, parent: raw.departments, parent_column: department_id}
+            - {column: location_id, parent: raw.locations, parent_column: location_id}
+        columns:
+          - name: employee_id
+            meta: {classification: identifier, entity: emp}
       - name: requisitions
-        meta: {grain: [requisition_id]}
+        meta:
+          grain: [requisition_id]
+          foreign_keys:
+            - {column: department_id, parent: raw.departments, parent_column: department_id}
+            - {column: location_id, parent: raw.locations, parent_column: location_id}
       - name: candidates
         meta: {grain: [candidate_id]}
         columns:
+          - name: candidate_id
+            meta: {classification: identifier, entity: cand}
           - name: first_name
             meta: {classification: pii}
           - name: last_name
@@ -37,22 +61,93 @@ sources:
           - name: phone
             meta: {classification: pii}
       - name: applications
-        meta: {grain: [application_id]}
-      - name: stage_events
-        meta: {grain: [event_id]}
-      - name: offers
-        meta: {grain: [offer_id]}
-      - name: hires
-        meta: {grain: [hire_id]}
-      - name: compensation
-        meta: {grain: [compensation_id], interval: [valid_from, valid_to], interval_key: [employee_id]}
+        meta:
+          grain: [application_id]
+          foreign_keys:
+            - {column: candidate_id, parent: raw.candidates, parent_column: candidate_id}
+            - {column: requisition_id, parent: raw.requisitions, parent_column: requisition_id}
         columns:
+          - name: application_id
+            meta: {classification: identifier, entity: app}
+          - name: candidate_id
+            meta: {classification: identifier, entity: cand}
+      - name: stage_events
+        meta:
+          grain: [event_id]
+          foreign_keys:
+            - {column: application_id, parent: raw.applications, parent_column: application_id}
+          # The zone of an event is the requisition location's zone, reached through these joins.
+          timezone:
+            ts: entered_at
+            filter_column: source_system
+            filter_value: recruiter_tool
+            tz_path:
+              - {column: application_id, parent: raw.applications, parent_column: application_id}
+              - {column: requisition_id, parent: raw.requisitions, parent_column: requisition_id}
+              - {column: location_id, parent: raw.locations, parent_column: location_id, tz: timezone}
+          transitions:
+            key: application_id
+            stage: stage
+            ts: entered_at
+            order_map:
+              Applied: 1
+              Phone Screen: 2
+              Onsite Interview: 3
+              Offer Extended: 4
+              Hired: 5
+              Rejected: 5
+              Withdrawn: 5
+              Offer Declined: 5
+        columns:
+          - name: application_id
+            meta: {classification: identifier, entity: app}
+      - name: offers
+        meta:
+          grain: [offer_id]
+          foreign_keys:
+            - {column: application_id, parent: raw.applications, parent_column: application_id}
+        columns:
+          - name: application_id
+            meta: {classification: identifier, entity: app}
+      - name: hires
+        meta:
+          grain: [hire_id]
+          unique_keys: [[application_id], [employee_id]]
+          foreign_keys:
+            - {column: application_id, parent: raw.applications, parent_column: application_id}
+            - {column: employee_id, parent: raw.employees, parent_column: employee_id}
+        columns:
+          - name: hire_id
+            meta: {classification: identifier, entity: hire}
+          - name: application_id
+            meta: {classification: identifier, entity: app}
+          - name: employee_id
+            meta: {classification: identifier, entity: emp}
+      - name: compensation
+        meta:
+          grain: [compensation_id]
+          interval: {key: [employee_id], from: valid_from, to: valid_to}
+          foreign_keys:
+            - {column: employee_id, parent: raw.employees, parent_column: employee_id}
+          casts: [{column: base_salary_local_minor, type: int}]
+        columns:
+          - name: employee_id
+            meta: {classification: identifier, entity: emp}
           - name: base_salary_local_minor
             meta: {classification: compensation}
       - name: fx_rates
-        meta: {grain: [currency, rate_date]}
+        meta:
+          grain: [currency, rate_date]
+          fx: {currency: currency, date: rate_date, rate: rate_to_usd}
       - name: payroll_lines
-        meta: {grain: [payroll_line_id]}
+        meta:
+          grain: [payroll_line_id]
+          unique_keys: [[employee_id, pay_month]]
+          foreign_keys:
+            - {column: employee_id, parent: raw.employees, parent_column: employee_id}
+          casts: [{column: gross_pay_local_minor, type: int}]
         columns:
+          - name: employee_id
+            meta: {classification: identifier, entity: emp}
           - name: gross_pay_local_minor
             meta: {classification: compensation}

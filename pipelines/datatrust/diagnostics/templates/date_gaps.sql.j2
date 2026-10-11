@@ -1,0 +1,18 @@
+{#- Missing calendar days per currency; the metric is the worst currency's count. -#}
+with keys as (
+    select distinct {{ p.currency }} as k from {{ rel }}
+),
+calendar as (
+    select d from {{ m.date_spine(p.calendar_start, p.calendar_end) }} as spine
+),
+missing as (
+    select keys.k, count(*) as n_missing
+    from keys
+    cross join calendar
+    left join {{ rel }} as r
+        on r.{{ p.currency }} = keys.k
+        and r.{{ p.date }} = calendar.d
+    where r.{{ p.date }} is null
+    group by keys.k
+)
+select coalesce(max(n_missing), 0) as max_missing, coalesce(sum(n_missing), 0) as total_missing from missing

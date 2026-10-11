@@ -1,0 +1,16 @@
+{#- Share of rates outside 15% of their trailing 30-day median (same median SQL as dbt trailing_median). -#}
+with windowed as (
+    select
+        {{ p.currency }} as currency,
+        {{ p.rate }} as rate,
+        {{ m.trailing_median(p.rate, p.currency, p.date, 29) }} as trailing_window
+    from {{ rel }}
+),
+medians as (
+    select currency, rate, {{ m.trailing_median_finish('trailing_window') }} as trailing_median
+    from windowed
+)
+select
+    count(*) as n_rows,
+    sum(case when abs(rate - trailing_median) > 0.15 * trailing_median then 1 else 0 end) as n_outside
+from medians

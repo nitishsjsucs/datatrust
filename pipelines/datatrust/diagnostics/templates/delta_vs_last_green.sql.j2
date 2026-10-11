@@ -1,0 +1,11 @@
+{#- Row count now vs the last green run. Evidence only, never used in ranking. On BigQuery the historical
+    count is a separate statement (one point in time per table per statement). -#}
+{%- if dialect == 'bigquery' %}
+select (select count(*) from {{ rel }}) as n_rows_now
+-- @historical
+select count(*) as n_rows_then from {{ rel }} FOR SYSTEM_TIME AS OF TIMESTAMP_MILLIS({{ p.as_of_ms }})
+{%- else %}
+select (select count(*) from {{ rel }}) as n_rows_now
+-- @historical
+select count(*) as n_rows_then from read_parquet('{{ p.snapshot_path }}')
+{%- endif %}

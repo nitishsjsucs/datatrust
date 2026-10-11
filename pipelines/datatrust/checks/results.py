@@ -40,6 +40,7 @@ class CheckResult:
     node: str
     columns: list[str] = field(default_factory=list)
     message: str | None = None
+    also: list[dict[str, Any]] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -92,6 +93,7 @@ def classify(
                     node=check.node,
                     columns=list(check.columns),
                     message=_short(message) if status in ("fail", "error") else None,
+                    also=[{"node": t.node, "columns": list(t.columns)} for t in check.also],
                 )
             )
         elif node["resource_type"] == "model" and status == "error":

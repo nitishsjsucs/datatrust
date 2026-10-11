@@ -1,0 +1,20 @@
+{#- Overlapping interval pairs per key / distinct keys (half-open intervals). -#}
+select
+    (
+        select count(*)
+        from {{ rel }} as a
+        inner join {{ rel }} as b
+            on {% for k in p.key %}a.{{ k }} = b.{{ k }} and {% endfor %}a.{{ p.id }} < b.{{ p.id }}
+            and a.{{ p['from'] }} < coalesce(b.{{ p.to }}, date '9999-12-31')
+            and b.{{ p['from'] }} < coalesce(a.{{ p.to }}, date '9999-12-31')
+    ) as n_pairs,
+    (select count(*) from (select distinct {{ p.key | join(', ') }} from {{ rel }}) as k) as n_keys
+-- @samples
+select distinct {% for k in p.key %}a.{{ k }}{% if not loop.last %}, {% endif %}{% endfor %}
+from {{ rel }} as a
+inner join {{ rel }} as b
+    on {% for k in p.key %}a.{{ k }} = b.{{ k }} and {% endfor %}a.{{ p.id }} < b.{{ p.id }}
+    and a.{{ p['from'] }} < coalesce(b.{{ p.to }}, date '9999-12-31')
+    and b.{{ p['from'] }} < coalesce(a.{{ p.to }}, date '9999-12-31')
+order by 1
+limit 5

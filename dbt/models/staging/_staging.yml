@@ -222,8 +222,10 @@ models:
         grain: [event_id]
         foreign_keys:
           - {column: application_id, parent: stg_applications, parent_column: application_id}
-        timezone: {ts: entered_at, tz: location_tz, hour: event_local_hour, filter_column: source_system, filter_value: recruiter_tool}
+        timezone: {ts: entered_at, tz: location_tz, filter_column: source_system, filter_value: recruiter_tool}
         transitions: {key: application_id, stage: stage, order: stage_order, ts: entered_at}
+        # Probe expressions use the probe dialect functions tz_local_date(ts, tz) and int_div(a, b).
+        recompute: [{column: event_local_date, expr: "tz_local_date(entered_at, location_tz)", compare: exact}]
     columns:
       - name: event_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
@@ -297,6 +299,7 @@ models:
       contract: {enforced: true}
       meta:
         grain: [hire_id]
+        unique_keys: [[application_id], [employee_id]]
         foreign_keys:
           - {column: application_id, parent: stg_applications, parent_column: application_id}
           - {column: employee_id, parent: stg_employees, parent_column: employee_id}
@@ -379,6 +382,7 @@ models:
       contract: {enforced: true}
       meta:
         grain: [payroll_line_id]
+        unique_keys: [[employee_id, pay_month]]
         foreign_keys:
           - {column: employee_id, parent: stg_employees, parent_column: employee_id}
         casts: [{column: gross_pay_local_minor, type: int}]

@@ -101,3 +101,86 @@ export interface CheckResult {
   /** Further nodes and columns a singular check reads (registry `also`). */
   also?: Array<{ node: NodeId; columns: string[] }>;
 }
+
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+
+export type ProbeKind =
+  | 'dup_key_rate'
+  | 'null_rate'
+  | 'orphan_rate'
+  | 'fanout_ratio'
+  | 'rowcount_ratio'
+  | 'fx_stale_run'
+  | 'date_gaps'
+  | 'fx_band_violation'
+  | 'tz_hour_profile'
+  | 'interval_overlap'
+  | 'transition_violation'
+  | 'recompute_delta'
+  | 'cast_failure'
+  | 'delta_vs_last_green';
+
+/** A probe invocation. The Worker never sends SQL: the runner renders it from its own templates. */
+export interface ProbeRequest {
+  probeId: string;
+  probe: ProbeKind;
+  node: NodeId;
+  columns: string[];
+  params: Record<string, JsonValue>;
+}
+
+export interface ProbeResult {
+  probeId: string;
+  probe: ProbeKind;
+  node: NodeId;
+  columns: string[];
+  metric: string;
+  value: number;
+  /** 0 to 1 (SPEC 10 table). */
+  anomaly: number;
+  sql: string[];
+  dialect: string;
+  status: 'ok' | 'error' | 'missing';
+  sampleKeys: Array<Record<string, JsonValue>>;
+  details: Record<string, JsonValue>;
+  error?: string | null;
+}
+
+export interface TraceCandidate {
+  node: NodeId;
+  kind: 'source' | 'model';
+  /** Minimum hop count from any failing check's tested node. */
+  distance: number;
+  columns: string[];
+  viaDataset: boolean;
+  /** Failing checks whose upstream closure contains this node. */
+  checks: string[];
+}
+
+export interface Weights {
+  coverage: number;
+  anomaly: number;
+  changed: number;
+  unexplainedPass: number;
+}
+
+export interface CandidateFeatures {
+  coverage: number;
+  ownAnomaly: number;
+  changed: number;
+  unexplainedPass: number;
+  distance: number;
+}
+
+export interface RankedCandidate {
+  rank: number;
+  node: NodeId;
+  kind: 'source' | 'model';
+  score: number;
+  features: CandidateFeatures;
+  columns: string[];
+  /** Probe ids that contributed own anomaly, strongest first. */
+  probes: string[];
+}
+
+export type Ablation = 'full' | 'coverage_only' | 'dataset_lineage_only' | 'no_probes' | 'no_change_signal';

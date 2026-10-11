@@ -1,0 +1,4 @@
+{#- Row count relative to the primary parent; compared with the ratio recorded in node meta. -#}
+select
+    (select count(*) from {{ rel }}) as n_rows,
+    (select count(*) from {{ parent_rel }}) as n_parent

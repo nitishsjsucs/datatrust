@@ -1,0 +1,20 @@
+{#- Mean absolute relative error of a column against its recomputation (numeric), or the share of rows
+    that differ (exact). Each row's relative error is capped at 1. -#}
+{%- if p.compare == 'exact' %}
+select
+    count(*) as n_rows,
+    sum(case when {{ cols[0] }} = ({{ expr }}) or ({{ cols[0] }} is null and ({{ expr }}) is null) then 0 else 1 end) as n_bad
+from {{ rel }}
+{%- else %}
+select
+    count(*) as n_rows,
+    avg(
+        case
+            when {{ cols[0] }} is null and ({{ expr }}) is null then 0
+            when {{ cols[0] }} is null or ({{ expr }}) is null then 1
+            when ({{ expr }}) = 0 then case when {{ cols[0] }} = 0 then 0 else 1 end
+            else least(1.0, {{ m.as_float('abs(' ~ cols[0] ~ ' - (' ~ expr ~ '))') }} / abs({{ m.as_float(expr) }}))
+        end
+    ) as mean_rel_error
+from {{ rel }}
+{%- endif %}

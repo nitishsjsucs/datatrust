@@ -17,7 +17,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Synthetic data generator (exact, seeded counts) | implemented; tests pass locally (`uv run pytest`), CI configured |
 | dbt models, 22 enforced contracts, 40 checks | implemented: 29 models, 22 enforced contracts and 40 checks build and pass on clean seeds on DuckDB (stand-in), tested locally; CI configured to run them under `TZ=UTC` and `TZ=America/Los_Angeles` |
 | OpenLineage capture and column-level lineage graph | implemented: `dbt-ol build` (openlineage-dbt 1.53.0, file transport) on DuckDB (stand-in), TypeScript graph and upstream closure; tested locally |
-| Diagnostic probes, root-cause ranker, baselines | planned |
+| Diagnostic probes, root-cause ranker, baselines | implemented: 14 read-only probe templates (DuckDB executed, BigQuery rendered only), TypeScript trace, planner, ranker, ablations, naive baselines and HMAC sanitizer; tested locally |
 | Fault-injection benchmark (20 scenarios) | planned |
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | planned |
 | Access JWT verification | planned |
@@ -56,6 +56,17 @@ Employees: 780 tenured, 60 leavers (2025-06-30), 360 hired in 2025 (30 per month
 | SQL reconciliation | 4 | payroll actual vs expected, headcount, payroll cost and a three-way hires reconciliation across metric, fact and HRIS events |
 
 Separately, 22 enforced dbt model contracts (13 staging, 5 marts, 4 metrics) are the schema contracts. Staging passes raw integer money columns through uncast, so a source that starts delivering salary as text fails the `stg_compensation` contract at build time; the runner classifies that as `schema_contract` with the column name.
+
+## Root-cause analysis
+
+When checks fail, the TypeScript RCA core (`packages/rca`, the same code in the Worker and in the offline benchmark CLI) does four things:
+
+1. **Trace.** From each failing check's tested columns, walk upstream through OpenLineage column lineage (falling back to dataset edges for columns the SQL parser could not trace). Candidates are the union of the closures.
+2. **Plan.** Pick diagnostic probes from each candidate's dbt meta (grain, unique keys, foreign keys, intervals, time zones, FX, recomputable columns, casts) and probe the candidates' parents too. Planning is metadata-driven and the same for every incident.
+3. **Probe.** The Python runner renders each probe from its own SQL templates (the Worker never sends SQL), checks it with a sqlglot read-only guard, runs it on a read-only connection and returns aggregates plus at most five sample keys, which `rca sanitize` turns into HMAC tokens (pseudonymization) before upload.
+4. **Rank.** `score = 0.40 coverage + 0.35 own_anomaly + 0.15 changed - 0.10 unexplained_pass` (initial weights; ADR-0004 freezes the tuned ones). `own_anomaly` subtracts the same probe's anomaly on the lineage-mapped parent columns, so the first anomalous node along the column path wins; row-multiplicity anomalies are discounted against any dataset parent.
+
+Ablations (`coverage_only`, `dataset_lineage_only`, `no_probes`, `no_change_signal`) and naive baselines (`change_only`, `nearest_upstream_source`, `random_in_closure`) are computed from the same probe results.
 
 ## Architecture
 

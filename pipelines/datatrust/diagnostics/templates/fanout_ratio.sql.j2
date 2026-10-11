@@ -1,0 +1,15 @@
+{#- Rows / distinct grain values: 1.0 when the grain holds, above 1 after a join fan-out. -#}
+with grouped as (
+    select {{ cols | join(', ') }}, count(*) as c
+    from {{ rel }}
+    group by {{ cols | join(', ') }}
+)
+select coalesce(sum(c), 0) as n_rows, count(*) as n_groups
+from grouped
+-- @samples
+select {{ cols | join(', ') }}, count(*) as c
+from {{ rel }}
+group by {{ cols | join(', ') }}
+having count(*) > 1
+order by c desc, {{ cols | join(', ') }}
+limit 5

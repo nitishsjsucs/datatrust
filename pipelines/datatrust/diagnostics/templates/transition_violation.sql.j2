@@ -1,0 +1,26 @@
+{#- Share of keys (applications) whose stages, in time order, go backwards in canonical stage order. -#}
+{%- set ordered -%}
+with events as (
+    select
+        {{ p.key }} as k,
+        {{ p.ts }} as ts,
+        {% if p.order %}{{ p.order }}{% else %}case {{ p.stage }}{% for label, order in p.order_map.items() %} when '{{ label }}' then {{ order }}{% endfor %} end{% endif %} as o
+    from {{ rel }}
+),
+lagged as (
+    select k, o, lag(o) over (partition by k order by ts, o) as prev_o from events
+)
+{%- endset %}
+{{ ordered }}
+select
+    (select count(distinct k) from events) as n_keys,
+    count(distinct k) as n_bad
+from lagged
+where prev_o is not null and (o is null or prev_o > o)
+-- @samples
+{{ ordered }}
+select distinct k as {{ p.key }}
+from lagged
+where prev_o is not null and (o is null or prev_o > o)
+order by 1
+limit 5

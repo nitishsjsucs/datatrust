@@ -75,3 +75,21 @@ def built_101_results(built_101):
     rr = json.loads((built_101.target_path / "run_results.json").read_text())
     manifest = json.loads((built_101.target_path / "manifest.json").read_text())
     return classify(rr, manifest)
+
+
+@pytest.fixture(scope="session")
+def all_planned_probes(built_101, built_101_results):
+    """Probe requests the TypeScript planner produces when every one of the 40 checks fails (seed 101)."""
+    import json
+
+    from datatrust.rca_cli import rca
+
+    rel = json.loads((built_101.target_path / "relations.json").read_text())
+    events = [
+        json.loads(line)
+        for line in (built_101.target_path / "openlineage.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    checks = [{**r.to_json(), "status": "fail"} for r in built_101_results]
+    plan = rca("plan", {"checks": checks, "events": events, "relations": rel})
+    return rel, plan["probes"]

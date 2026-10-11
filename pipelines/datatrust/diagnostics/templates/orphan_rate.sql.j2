@@ -1,0 +1,16 @@
+{#- Share of child rows whose foreign key has no parent row. -#}
+select
+    count(*) as n_rows,
+    sum(case when c.{{ cols[0] }} is not null and p.k is null then 1 else 0 end) as n_orphan
+from {{ rel }} as c
+left join (select distinct {{ p.parent_column }} as k from {{ parent_rel }}) as p
+    on c.{{ cols[0] }} = p.k
+-- @samples
+select c.{{ cols[0] }}, count(*) as c
+from {{ rel }} as c
+left join (select distinct {{ p.parent_column }} as k from {{ parent_rel }}) as p
+    on c.{{ cols[0] }} = p.k
+where c.{{ cols[0] }} is not null and p.k is null
+group by c.{{ cols[0] }}
+order by c desc, c.{{ cols[0] }}
+limit 5

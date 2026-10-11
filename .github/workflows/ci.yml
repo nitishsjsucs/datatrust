@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run build
       - run: npm run test:rca
       - run: npm run test:worker
 
@@ -31,6 +32,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # the Python runner calls the bundled TypeScript RCA CLI (ADR-0002)
+      - run: npm run build -w @datatrust/rca
       - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true

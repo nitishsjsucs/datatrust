@@ -238,8 +238,7 @@ models:
         grain: [employee_id, pay_month]
         rowcount: {parent: stg_payroll_lines, ratio: 1.0}
         recompute:
-          - {column: expected_gross_local_minor, expr: "base_salary_local_minor / 12.0"}
-          - {column: actual_gross_local_minor, expr: "expected_gross_local_minor"}
+          - {column: expected_gross_local_minor, expr: "int_div(base_salary_local_minor + 6, 12)", compare: exact}
     data_tests:
       - unique_combination:
           name: dq_u08_unique_fct_payroll_reconciliation_employee_month

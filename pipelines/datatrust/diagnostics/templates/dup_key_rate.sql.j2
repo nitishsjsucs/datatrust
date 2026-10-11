@@ -1,0 +1,15 @@
+{#- Duplicate rows / rows over the key columns. -#}
+with grouped as (
+    select {{ cols | join(', ') }}, count(*) as c
+    from {{ rel }}
+    group by {{ cols | join(', ') }}
+)
+select coalesce(sum(c), 0) as n_rows, coalesce(sum(c - 1), 0) as n_dup
+from grouped
+-- @samples
+select {{ cols | join(', ') }}, count(*) as c
+from {{ rel }}
+group by {{ cols | join(', ') }}
+having count(*) > 1
+order by c desc, {{ cols | join(', ') }}
+limit 5

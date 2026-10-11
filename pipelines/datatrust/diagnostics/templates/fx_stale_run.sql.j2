@@ -1,0 +1,22 @@
+{#- Longest run of identical consecutive daily rates of any non-USD currency. -#}
+with flagged as (
+    select
+        {{ p.currency }} as currency,
+        {{ p.date }} as rate_date,
+        case
+            when {{ p.rate }} = lag({{ p.rate }}) over (partition by {{ p.currency }} order by {{ p.date }}) then 0
+            else 1
+        end as starts_run
+    from {{ rel }}
+    where {{ p.currency }} <> 'USD'
+),
+runs as (
+    select
+        currency,
+        sum(starts_run) over (partition by currency order by rate_date rows between unbounded preceding and current row) as run_id
+    from flagged
+),
+lengths as (
+    select currency, run_id, count(*) as run_days from runs group by currency, run_id
+)
+select currency, run_days from lengths order by run_days desc, currency limit 1
