@@ -309,7 +309,9 @@ def test_doctor_keeps_checking_google_cloud_before_env_prod_names_the_project(mo
         by_name["datasets datatrust_raw, datatrust_staging, datatrust_marts, datatrust_restricted"].status
         == "missing"
     )
-    assert by_name["service accounts datatrust-analyst, datatrust-prober"].status == "missing"
+    assert (
+        by_name["service accounts datatrust-analyst, datatrust-prober, datatrust-builder"].status == "missing"
+    )
     assert by_name["policy tags and masking policies"].status == "missing"
     assert by_name["project-level roles of datatrust-* identities"].status == "ok"
     # read-only: every command is a get, list, show, describe or get-iam-policy

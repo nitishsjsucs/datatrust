@@ -426,6 +426,7 @@ def _cmd_prod(args: argparse.Namespace) -> int:
                     gcp_user_email(),
                     extra_readers=args.extra_reader,
                     taxonomy_admins=args.taxonomy_admin,
+                    dataset_owners=args.dataset_owner,
                 )
                 print(json.dumps(state.__dict__, indent=2))
                 return 0
@@ -633,6 +634,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="MEMBER",
         help="grant Policy Tags Admin on the DataTrust taxonomy only (a CI runner that sets policy tags)",
+    )
+    g.add_argument(
+        "--dataset-owner",
+        action="append",
+        default=[],
+        metavar="MEMBER",
+        help="grant OWNER (BigQuery Data Owner) on the four datatrust_* datasets only, e.g. "
+        "serviceAccount:datatrust-builder@<project>.iam.gserviceaccount.com",
     )
     ws = prod.add_parser("worker-secrets", help="write the Worker secrets JSON for wrangler --secrets-file")
     ws.add_argument("--out", required=True)

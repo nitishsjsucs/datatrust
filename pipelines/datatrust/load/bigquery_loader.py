@@ -5,6 +5,7 @@ DATE(ts, tz)), integer minor-unit money INT64, rates NUMERIC and dates DATE (rev
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,18 @@ EXPECTED_TYPES = {
 
 class LoadTypeError(RuntimeError):
     pass
+
+
+def builder_credentials(project: str) -> Any | None:
+    """Impersonated credentials of datatrust-builder when DATATRUST_BUILDER_SA is set, as dbt uses
+    (dbt/profiles.yml): the loader then writes datatrust_raw as an identity that owns only the four DataTrust
+    datasets of the shared project. None means the caller's own application default credentials."""
+    sa = os.environ.get("DATATRUST_BUILDER_SA", "").strip()
+    if not sa:
+        return None
+    from datatrust.warehouse.bigquery_wh import impersonated
+
+    return impersonated(sa, project)
 
 
 def check_schema(
@@ -51,7 +64,9 @@ def load_raw_bigquery(
 ) -> dict[str, int]:
     from google.cloud import bigquery
 
-    client = client or bigquery.Client(project=project, location=location)
+    client = client or bigquery.Client(
+        project=project, location=location, credentials=builder_credentials(project)
+    )
     counts: dict[str, int] = {}
     for table in S.TABLE_ORDER:
         dest = f"{project}.{dataset}.{table}"

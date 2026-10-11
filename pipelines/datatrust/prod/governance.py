@@ -33,6 +33,7 @@ VERIFY_MAX_BYTES = 100 * 1000 * 1000
 POLICY_TAG_ADMIN = "roles/datacatalog.categoryAdmin"
 PROBER_DATASETS = ("datatrust_raw", "datatrust_staging", "datatrust_marts")
 ANALYST_DATASETS = ("datatrust_marts", "datatrust_restricted")
+DATATRUST_DATASETS = ("datatrust_raw", "datatrust_staging", "datatrust_marts", "datatrust_restricted")
 
 
 @dataclass
@@ -139,29 +140,43 @@ def ensure_binding(client: Any, resource: str, role: str, members: list[str]) ->
     return True
 
 
-def ensure_dataset_readers(bq: Any, settings: GcpSettings, state: GovernanceState) -> None:
+def _email(member: str) -> str:
+    """`serviceAccount:x@y` or `user:x@y` to the email a dataset access entry names."""
+    return member.split(":", 1)[1] if ":" in member else member
+
+
+def ensure_dataset_readers(
+    bq: Any, settings: GcpSettings, state: GovernanceState, owners: list[str] | None = None
+) -> None:
+    """Dataset access entries, one etag-checked update per DataTrust dataset that changes: READER for the
+    prober and the analyst on their datasets, and OWNER on the four datatrust_* datasets for each of `owners`
+    (the datatrust-builder identity that loads and runs dbt, or the CI runner). `bq add-iam-policy-binding`
+    does not support datasets (bq reference), so dataset grants are made here."""
     from google.cloud import bigquery
 
-    wanted = {d: [] for d in (*PROBER_DATASETS, *ANALYST_DATASETS)}
+    wanted: dict[str, list[tuple[str, str]]] = {d: [] for d in DATATRUST_DATASETS}
     for d in PROBER_DATASETS:
-        wanted[d].append(settings.prober_sa)
+        wanted[d].append(("READER", settings.prober_sa))
     for d in ANALYST_DATASETS:
-        wanted[d].append(settings.analyst_sa)
-    for dataset_id, emails in wanted.items():
+        wanted[d].append(("READER", settings.analyst_sa))
+    for member in owners or []:
+        for d in DATATRUST_DATASETS:
+            wanted[d].append(("OWNER", _email(member)))
+    for dataset_id, grants in wanted.items():
+        if not grants:
+            continue
         ds = bq.get_dataset(f"{settings.project}.{dataset_id}")
         entries = list(ds.access_entries)
         have = {(e.role, e.entity_id) for e in entries}
-        added = False
-        for email in emails:
-            if ("READER", email) not in have:
-                entries.append(
-                    bigquery.AccessEntry(role="READER", entity_type="userByEmail", entity_id=email)
-                )
-                added = True
+        added = []
+        for role, email in grants:
+            if (role, email) not in have:
+                entries.append(bigquery.AccessEntry(role=role, entity_type="userByEmail", entity_id=email))
+                added.append(role.lower())
         if added:
             ds.access_entries = entries
             bq.update_dataset(ds, ["access_entries"])  # etag-checked update
-            state.created.append(f"dataset readers on {dataset_id}")
+            state.created.append(f"dataset {' and '.join(sorted(set(added)))}s on {dataset_id}")
 
 
 def write_dbt_vars(state: GovernanceState) -> None:
@@ -175,6 +190,7 @@ def apply(
     *,
     extra_readers: list[str] | None = None,
     taxonomy_admins: list[str] | None = None,
+    dataset_owners: list[str] | None = None,
     ptm=None,
     dps=None,
     bq=None,
@@ -210,7 +226,7 @@ def apply(
         # the DataTrust taxonomy only, never Project Viewer (SPEC 28.5.10, docs/prod-runner-wif.md).
         if ensure_binding(ptm, state.taxonomy, POLICY_TAG_ADMIN, [member]):
             state.created.append(f"policy tag admin on {TAXONOMY} for {member}")
-    ensure_dataset_readers(bq, settings, state)
+    ensure_dataset_readers(bq, settings, state, owners=dataset_owners)
     write_dbt_vars(state)
     return state
 

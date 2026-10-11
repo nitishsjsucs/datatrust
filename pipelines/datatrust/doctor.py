@@ -943,7 +943,7 @@ def gcp_checks() -> list[Check]:
             Check("missing", f"datasets {', '.join(absent)}", "not found", "npm run setup:prod -- --gcp-only")
         )
     accounts_missing = []
-    for sa in ("datatrust-analyst", "datatrust-prober"):
+    for sa in ("datatrust-analyst", "datatrust-prober", "datatrust-builder"):
         email = f"{sa}@{project}.iam.gserviceaccount.com"
         exists = (
             run(["gcloud", "iam", "service-accounts", "describe", email, f"--project={project}"]).returncode

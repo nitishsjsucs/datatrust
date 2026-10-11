@@ -11,9 +11,13 @@ datatrust:
         # ADR-0006: without this the session inherits the machine zone and local dates differ by OS.
         TimeZone: UTC
     bigquery:
-      # Production warehouse. OAuth via `gcloud auth application-default login` (SPEC 7.4, 21.2).
+      # Production warehouse. OAuth via `gcloud auth application-default login` (SPEC 7.4, 21.2). With
+      # DATATRUST_BUILDER_SA set (setup:prod writes it to .env.prod), dbt impersonates datatrust-builder, which
+      # owns the four datatrust_* datasets and reads nothing else in the shared project; empty means your own
+      # credentials (dbt-bigquery 1.12.1 impersonates only when the value is non-empty).
       type: bigquery
       method: oauth
+      impersonate_service_account: "{{ env_var('DATATRUST_BUILDER_SA', '') }}"
       project: "{{ env_var('DATATRUST_GCP_PROJECT', 'datatrust-ci-placeholder') }}"
       dataset: datatrust_staging
       location: "{{ env_var('DATATRUST_BQ_LOCATION', 'US') }}"

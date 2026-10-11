@@ -29,18 +29,18 @@ gcloud iam service-accounts create datatrust-runner-ci --project=$P --display-na
 SA=datatrust-runner-ci@$P.iam.gserviceaccount.com
 gcloud projects add-iam-policy-binding $P --member=serviceAccount:$SA --role=roles/bigquery.jobUser --condition=None
 # dbt replaces tables and views and re-applies policy tags with persist_docs. Setting a policy tag needs
-# bigquery.tables.setCategory (BigQuery Data Owner, granted on the DataTrust datasets only) and
+# bigquery.tables.setCategory (BigQuery Data Owner, granted on the DataTrust datasets only, as OWNER access
+# entries by governance apply below: `bq add-iam-policy-binding` does not support datasets) and
 # datacatalog.taxonomies.get (in Policy Tags Admin and Project Viewer, per the BigQuery column-level security
 # docs). Policy Tags Admin is granted on the datatrust-classification taxonomy only, by governance apply below.
-for D in datatrust_raw datatrust_staging datatrust_marts datatrust_restricted; do
-  bq add-iam-policy-binding --member=serviceAccount:$SA --role=roles/bigquery.dataOwner $P:$D
-done
 # The runner impersonates datatrust-prober for probes, so it needs Token Creator on the prober only
 gcloud iam service-accounts add-iam-policy-binding datatrust-prober@$P.iam.gserviceaccount.com --project=$P \
   --member=serviceAccount:$SA --role=roles/iam.serviceAccountTokenCreator --condition=None
-# dbt tests read masked columns, so the runner also needs Fine-Grained Reader on the three DataTrust policy
-# tags; and Policy Tags Admin on the DataTrust taxonomy for datacatalog.taxonomies.get
-uv run datatrust prod governance apply --extra-reader serviceAccount:$SA --taxonomy-admin serviceAccount:$SA
+# OWNER on the four datatrust_* datasets; dbt tests read masked columns, so the runner also needs
+# Fine-Grained Reader on the three DataTrust policy tags; and Policy Tags Admin on the DataTrust taxonomy for
+# datacatalog.taxonomies.get
+uv run datatrust prod governance apply --dataset-owner serviceAccount:$SA --extra-reader serviceAccount:$SA \
+  --taxonomy-admin serviceAccount:$SA
 
 # Workload identity pool and GitHub OIDC provider, restricted to prod-runner.yml on main of this repository
 # (immutable numeric repository id; GitHub's OIDC token carries repository_id, ref and workflow_ref)

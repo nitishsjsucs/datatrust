@@ -706,3 +706,61 @@ def test_wif_trust_is_this_repositorys_prod_runner_on_main_only():
     assert "attribute.repository_id/$REPO_ID" in text
     assert "attribute.repository/" not in text and "assertion.repository==" not in text
     assert (config.REPO_ROOT / ".github" / "workflows" / "prod-runner.yml").exists()
+
+
+def test_builder_identity_owns_only_the_datatrust_datasets(monkeypatch, tmp_path):
+    """Loads and dbt run as datatrust-builder (2026-10-11 review): OWNER access entries on the four
+    datatrust_* datasets and nothing else, granted by governance apply (bq add-iam-policy-binding does not
+    support datasets); the loader and dbt impersonate it when DATATRUST_BUILDER_SA is set."""
+    monkeypatch.setattr(governance, "DBT_VARS", tmp_path / "dbt_vars.yml")
+    monkeypatch.setattr(governance, "PROD_DIR", tmp_path)
+    s = GcpSettings("datatrust-abc123", "US", "p@x.iam.gserviceaccount.com", "a@x.iam.gserviceaccount.com")
+    builder = "datatrust-builder@datatrust-abc123.iam.gserviceaccount.com"
+    bq = FakeDatasets()
+    governance.apply(
+        s,
+        "nitish@example.com",
+        dataset_owners=[f"serviceAccount:{builder}"],
+        ptm=FakePTM(),
+        dps=FakeDPS(),
+        bq=bq,
+    )
+    owners = {
+        ref.split(".")[1]
+        for ref, ds in bq.datasets.items()
+        for e in ds.access_entries
+        if e.role == "OWNER" and e.entity_id == builder
+    }
+    assert owners == set(governance.DATATRUST_DATASETS)
+    assert all(ref.split(".")[1].startswith("datatrust_") for ref in bq.datasets)
+    updates = bq.updates
+    governance.apply(
+        s,
+        "nitish@example.com",
+        dataset_owners=[f"serviceAccount:{builder}"],
+        ptm=FakePTM(),
+        dps=FakeDPS(),
+        bq=bq,
+    )
+    assert bq.updates == updates  # idempotent
+
+    # The loader impersonates the builder exactly when DATATRUST_BUILDER_SA is set, like dbt/profiles.yml.
+    from datatrust.load import bigquery_loader
+    from datatrust.warehouse import bigquery_wh
+
+    seen = []
+    monkeypatch.setattr(
+        bigquery_wh, "impersonated", lambda sa, project=None: seen.append((sa, project)) or "creds"
+    )
+    monkeypatch.delenv("DATATRUST_BUILDER_SA", raising=False)
+    assert bigquery_loader.builder_credentials("datatrust-abc123") is None
+    monkeypatch.setenv("DATATRUST_BUILDER_SA", builder)
+    assert bigquery_loader.builder_credentials("datatrust-abc123") == "creds"
+    assert seen == [(builder, "datatrust-abc123")]
+    profile = (config.REPO_ROOT / "dbt" / "profiles.yml").read_text()
+    assert "impersonate_service_account: \"{{ env_var('DATATRUST_BUILDER_SA', '') }}\"" in profile
+    setup = (config.REPO_ROOT / "scripts" / "setup-prod.sh").read_text()
+    assert "for SA in datatrust-analyst datatrust-prober datatrust-builder; do" in setup
+    assert '--dataset-owner "serviceAccount:$BUILDER"' in setup
+    for text in (setup, (config.REPO_ROOT / "docs" / "prod-runner-wif.md").read_text()):
+        assert "  bq add-iam-policy-binding" not in text and "run bq add-iam-policy-binding" not in text

@@ -304,7 +304,9 @@ if ((DO_GCP)); then
   done
 
   say "17. Service accounts"
-  for SA in datatrust-analyst datatrust-prober; do
+  # datatrust-builder runs the raw loads and dbt (impersonated through DATATRUST_BUILDER_SA), so the process
+  # that writes BigQuery owns the four datatrust_* datasets and can read no other repo's data.
+  for SA in datatrust-analyst datatrust-prober datatrust-builder; do
     EMAIL="$SA@$P.iam.gserviceaccount.com"
     gcloud iam service-accounts describe "$EMAIL" --project="$P" >/dev/null 2>&1 \
       || run gcloud iam service-accounts create "$SA" --project="$P" --display-name="DataTrust ${SA#datatrust-}"
@@ -313,12 +315,20 @@ if ((DO_GCP)); then
     run gcloud projects add-iam-policy-binding "$P" --member="serviceAccount:$EMAIL" \
       --role=roles/bigquery.jobUser --condition=None >/dev/null
   done
+  BUILDER="datatrust-builder@$P.iam.gserviceaccount.com"
+  env_set DATATRUST_BUILDER_SA "$BUILDER"
+  export DATATRUST_BUILDER_SA="$BUILDER"
+  note "loads and dbt run as $BUILDER from here on (new grants can take a few minutes; rerun if step 19 is denied)"
 
   say "18. Governance: taxonomy, policy tags, masking (v1 data policies bound to the tags), IAM"
   # Fine-Grained Reader goes to the Google identity that runs dbt (the gcloud account), not to the
   # Cloudflare Access email in DATATRUST_OPERATOR_EMAIL, which may be a different address.
   export DATATRUST_GCP_USER="$USER_EMAIL"
-  run uv run datatrust prod governance apply
+  # The builder owns the four datatrust_* datasets (OWNER access entries, nothing else in the project), reads
+  # masked columns in dbt tests (Fine-Grained Reader) and sets policy tags with persist_docs (Policy Tags
+  # Admin on the DataTrust taxonomy only, for datacatalog.taxonomies.get).
+  run uv run datatrust prod governance apply --dataset-owner "serviceAccount:$BUILDER" \
+    --extra-reader "serviceAccount:$BUILDER" --taxonomy-admin "serviceAccount:$BUILDER"
 
   say "19. Validate the BigQuery path (compile, build --empty, probe dry runs)"
   run uv run datatrust prod validate
