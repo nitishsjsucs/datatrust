@@ -6,7 +6,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` and 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B` done; 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
-Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F8.
+Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F9.
 
 ## Done
 
@@ -71,9 +71,11 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 3, F8 `fix(runner): idle lease backoff up to 30 seconds`: `watch()` waits 2 s after a job and doubles while idle up to 30 s (`IDLE_INTERVAL_START`, `IDLE_INTERVAL_MAX`; CLI `--interval` and `--max-interval`), reset by a job, so an idle runner sends at most 2,880 lease requests a day instead of 43,200; the smoke's background runner thread uses the same backoff instead of a fixed 3 s; `sleep` and `clock` are injectable. Tests in `test_runner_client.py`: waits 2, 4, 8, 16, 30, 30 then 2, 4 after a job; `--idle-exit` measured on the same clock. The prod-runner workflow is unchanged (it uses the defaults).
 
+- Builder 3, F9 `fix(worker): no second investigation after the 3-day Workflows retention`: the `datatrust-investigate` consumer first looks up the incident id (`incidentExists`, one primary-key read) and acks without `create()` when the row exists, so the same alert after the Free plan's 3-day instance retention starts no second investigation and spends no neurons twice. Tests: `investigation.test.ts` (first delivery creates, the same alert after an incident row exists acks without `create()`), `d1-statements.test.ts` (investigate batch of 5: at most 5 statements).
+
 ## Next
 
-- SPEC 23.1, Free plan migration, in order (F1 to F8 done): F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
+- SPEC 23.1, Free plan migration, in order (F1 to F9 done): F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
 - Production execution, by Nitish's operator after the builder gate (a rerun of `setup:prod -- --cloudflare-only` redeploys later Worker changes and applies new migrations): SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux container, not yet observed on ubuntu-latest.
 
@@ -81,7 +83,7 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 55 passed
-- `npm run test:worker`: 86 passed
+- `npm run test:worker`: 88 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
 - `uv run pytest`: 189 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F7)

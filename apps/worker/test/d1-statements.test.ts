@@ -105,6 +105,17 @@ describe('D1 statements per invocation', () => {
     expect(n?.n).toBeGreaterThanOrEqual(10);
   });
 
+  it('investigate batch of 5 messages: at most 5 (one incident lookup each)', async () => {
+    const created: unknown[] = [];
+    const workflow = { create: async (o: unknown) => void created.push(o) } as unknown as Workflow;
+    const { env, counter } = counted({ INVESTIGATION: workflow });
+    const bodies = Array.from({ length: 5 }, (_, i) => ({ runId: `run_d1_inv_${i}`, incidentId: `inc_run_d1_inv_${i}_checks_00000000`, trigger: 'checks' }));
+    const result = await deliver(env, QUEUES.investigate, bodies);
+    expect(result.explicitAcks).toHaveLength(5);
+    expect(created).toHaveLength(5);
+    expect(counter.statements).toBeLessThanOrEqual(5);
+  });
+
   it('runner lease and build completion: at most 2 each', async () => {
     await insertJob(baseEnv.DB, {
       jobId: 'job_d1_lease',

@@ -454,6 +454,11 @@ export interface IncidentRow {
   created_at: string;
 }
 
+/** One primary-key read: does this incident already exist? */
+export async function incidentExists(db: D1Database, id: string): Promise<boolean> {
+  return (await db.prepare(`SELECT 1 AS found FROM incidents WHERE incident_id = ?`).bind(id).first<{ found: number }>()) !== null;
+}
+
 export async function getIncident(db: D1Database, id: string): Promise<IncidentRow | null> {
   return db.prepare(`SELECT * FROM incidents WHERE incident_id = ?`).bind(id).first<IncidentRow>();
 }

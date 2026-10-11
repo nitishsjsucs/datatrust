@@ -1,9 +1,11 @@
-import { introspectWorkflowInstance } from 'cloudflare:test';
+import { createExecutionContext, createMessageBatch, getQueueResult, introspectWorkflowInstance } from 'cloudflare:test';
 import { env as baseEnv } from 'cloudflare:workers';
 import { buildLineageGraph, findUnsanitized } from '@datatrust/rca';
 import { describe, expect, it } from 'vitest';
 import { investigationIds } from '../src/investigation-ids';
-import { getIncident, getJob, getRun, upsertCheckResults, upsertLineageGraph } from '../src/store/repo';
+import type { AppEnv } from '../src/env';
+import worker from '../src/index';
+import { getIncident, getJob, getRun, upsertCheckResults, upsertIncident, upsertLineageGraph } from '../src/store/repo';
 import { s01 } from './helpers/fixtures';
 
 async function seedRun(runId: string) {
@@ -158,5 +160,48 @@ describe('InvestigationWorkflow', () => {
     expect(trace.failing).toContain('alert:metric_hires_monthly');
     expect(trace.candidates.map((c) => c.node)).toContain('model.datatrust.fct_hires');
     expect(trace.candidates.map((c) => c.node)).toContain('source.datatrust.raw.hires');
+  });
+});
+
+describe('datatrust-investigate after the 3-day Workflows retention of the Free plan (SPEC 28.5.7)', () => {
+  it('acks without create() when the incident already exists, and creates otherwise', async () => {
+    const created: unknown[] = [];
+    const workflow = { create: async (opts: unknown) => void created.push(opts) } as unknown as Workflow;
+    const e = { ...(baseEnv as unknown as AppEnv), INVESTIGATION: workflow };
+    const runId = 'run_inv_retained';
+    const alert = { runId, metricNode: 'model.datatrust.metric_headcount_monthly', observed: 900, expected: 870 };
+    const ids = await investigationIds(runId, 'alert', alert);
+    const deliver = async (body: unknown) => {
+      const batch = createMessageBatch('datatrust-investigate', [{ id: 'm0', timestamp: new Date(), attempts: 1, body }]);
+      await worker.queue(batch, e);
+      return getQueueResult(batch, createExecutionContext());
+    };
+    const msg = { runId, incidentId: ids.incidentId, trigger: 'alert', alert };
+
+    expect((await deliver(msg)).explicitAcks).toEqual(['m0']);
+    expect(created).toHaveLength(1);
+
+    // Days later the instance is gone, but the incident row stays: the same alert creates nothing.
+    await upsertIncident(baseEnv.DB, {
+      incidentId: ids.incidentId,
+      runId,
+      trigger: 'alert',
+      status: 'open',
+      failingChecks: [],
+      ranked: [],
+      evidenceR2Key: null,
+      summaryDraft: null,
+      summary: null,
+      summaryProvider: 'template',
+      summaryModel: 'template-v1',
+      summaryAttempts: 1,
+      summaryFallback: false,
+      summaryFallbackReason: null,
+      provenance: {},
+    });
+    const again = await deliver(msg);
+    expect(again.explicitAcks).toEqual(['m0']);
+    expect(again.retryMessages).toEqual([]);
+    expect(created).toHaveLength(1);
   });
 });
