@@ -142,7 +142,6 @@ async function workerEnv() {
     ACCESS_AUD: 'datatrust-cpu',
     ACCESS_JWKS_JSON: JSON.stringify({ keys: [jwk] }),
     ROLE_MAP_JSON: JSON.stringify({ emails: {}, serviceTokens: { 'cpu-runner.access': ['runner'] } }),
-    EVIDENCE_HMAC_KEY: 'cpu-evidence-key-0123456789abcdef',
     WORKERS_AI_MODEL: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
     AI_DAILY_NEURON_CAP: '2000',
     LAKE_SETTLE_SECONDS: '120',

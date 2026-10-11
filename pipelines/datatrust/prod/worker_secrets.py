@@ -10,6 +10,10 @@ Principals in ROLE_MAP_JSON:
 
 ACCESS_AUD stays the literal `unset` until the Access application exists, which makes every authenticated
 route answer 401 (fail closed).
+
+EVIDENCE_HMAC_KEY is not a Worker secret (2026-10-11 review): only the runner tokenizes sample keys (`rca
+sanitize`), and the Worker's re-check (`findUnsanitized`) needs only the token format, so the key that links
+tokens back to employee ids stays in `.env.prod` (and the CI runner's secret) and nowhere on Cloudflare.
 """
 
 from __future__ import annotations
@@ -19,11 +23,11 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
+# Exactly the secrets the production Worker declares (wrangler.prod.template.jsonc `secrets.required`).
+WORKER_SECRETS = ("ACCESS_AUD", "ROLE_MAP_JSON")
+
 
 def worker_secrets(env: Mapping[str, str]) -> dict[str, str]:
-    key = env.get("EVIDENCE_HMAC_KEY", "")
-    if len(key) < 32:
-        raise ValueError("EVIDENCE_HMAC_KEY must be set (setup-prod generates it) and at least 32 characters")
     emails: dict[str, list[str]] = {}
     if env.get("DATATRUST_OPERATOR_EMAIL"):
         emails[env["DATATRUST_OPERATOR_EMAIL"].strip().lower()] = ["operator", "viewer"]
@@ -39,7 +43,6 @@ def worker_secrets(env: Mapping[str, str]) -> dict[str, str]:
             )
         tokens[op] = ["operator", "viewer"]
     return {
-        "EVIDENCE_HMAC_KEY": key,
         "ROLE_MAP_JSON": json.dumps({"emails": emails, "serviceTokens": tokens}, sort_keys=True),
         "ACCESS_AUD": env.get("ACCESS_AUD") or "unset",
     }

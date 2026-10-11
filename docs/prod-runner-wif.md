@@ -63,7 +63,8 @@ optionally `DATATRUST_SCHEDULED_RUNNER=true`. Optionally also `BASIN_CATALOG_URI
 15 minutes and before it exits.
 
 Repository secrets: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` (service token `datatrust-runner`),
-`EVIDENCE_HMAC_KEY` (the same value as the Worker secret, so tokens match) and, only if you use the "start a
+`EVIDENCE_HMAC_KEY` (the value `setup:prod` saved in `.env.prod`, so the CI runner's sample-key tokens match
+the laptop runner's; the Worker never holds it) and, only if you use the "start a
 run" option, `CF_ACCESS_OPERATOR_CLIENT_ID` and `CF_ACCESS_OPERATOR_CLIENT_SECRET` (service token
 `datatrust-operator`; the runner token cannot start runs).
 

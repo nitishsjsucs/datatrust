@@ -27,7 +27,7 @@
   },
   // Secrets: ACCESS_JWKS_JSON is local only (written by `npm run dev:keys` to .dev.vars). Declaring them here
   // keeps `wrangler types` independent of whatever .dev.vars holds on a given machine.
-  "secrets": { "required": ["ACCESS_AUD", "ROLE_MAP_JSON", "EVIDENCE_HMAC_KEY", "ACCESS_JWKS_JSON"] },
+  "secrets": { "required": ["ACCESS_AUD", "ROLE_MAP_JSON", "ACCESS_JWKS_JSON"] },
   "queues": {
     "producers": [
       { "binding": "CHECK_RESULTS_Q", "queue": "datatrust-check-results" },

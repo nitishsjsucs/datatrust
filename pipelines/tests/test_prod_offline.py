@@ -308,7 +308,7 @@ def test_governance_verify_reports_the_assertion_still_failing(monkeypatch):
 
 
 def _secret_env(**extra):
-    return {"EVIDENCE_HMAC_KEY": "k" * 64, **extra}
+    return {"EVIDENCE_HMAC_KEY": "k" * 64, **extra}  # in .env.prod, for the runner only
 
 
 def test_worker_secrets_give_each_principal_least_privilege():
@@ -327,15 +327,14 @@ def test_worker_secrets_give_each_principal_least_privilege():
         "emails": {"nitish@example.com": ["operator", "viewer"]},
         "serviceTokens": {"runner.access": ["runner"], "operator.access": ["operator", "viewer"]},
     }
-    assert out["ACCESS_AUD"] == "aud-tag" and out["EVIDENCE_HMAC_KEY"] == "k" * 64
+    assert out["ACCESS_AUD"] == "aud-tag" and "EVIDENCE_HMAC_KEY" not in out
 
 
 def test_worker_secrets_fail_closed_and_refuse_a_shared_token(tmp_path):
     from datatrust.prod.worker_secrets import worker_secrets, write_worker_secrets
 
     assert worker_secrets(_secret_env())["ACCESS_AUD"] == "unset"
-    with pytest.raises(ValueError, match="EVIDENCE_HMAC_KEY"):
-        worker_secrets({})
+    assert worker_secrets({})["ACCESS_AUD"] == "unset"
     with pytest.raises(ValueError, match="second service token"):
         worker_secrets(
             _secret_env(CF_ACCESS_CLIENT_ID="same.access", CF_ACCESS_OPERATOR_CLIENT_ID="SAME.access")
@@ -343,7 +342,29 @@ def test_worker_secrets_fail_closed_and_refuse_a_shared_token(tmp_path):
     path = tmp_path / "prod" / "secrets.json"
     write_worker_secrets(path, _secret_env())
     assert path.stat().st_mode & 0o777 == 0o600
-    assert set(json.loads(path.read_text())) == {"EVIDENCE_HMAC_KEY", "ROLE_MAP_JSON", "ACCESS_AUD"}
+    assert set(json.loads(path.read_text())) == {"ROLE_MAP_JSON", "ACCESS_AUD"}
+
+
+def test_the_worker_never_holds_the_evidence_key():
+    """Only the runner tokenizes (`rca sanitize`); the Worker's re-check needs only the token format, so the
+    key that links tokens to employee ids is never a Worker secret (2026-10-11 review)."""
+    from datatrust.prod.free_budget import WORKER, jsonc
+    from datatrust.prod.worker_secrets import WORKER_SECRETS
+
+    template = jsonc(
+        (WORKER / "wrangler.prod.template.jsonc")
+        .read_text()
+        .replace("${D1_DATABASE_ID}", "x")
+        .replace("${ACCESS_TEAM_DOMAIN}", "https://x")
+    )
+    assert tuple(template["secrets"]["required"]) == WORKER_SECRETS == ("ACCESS_AUD", "ROLE_MAP_JSON")
+    for local in ("wrangler.jsonc", "wrangler.test.jsonc"):
+        assert jsonc((WORKER / local).read_text())["secrets"]["required"] == [
+            *WORKER_SECRETS,
+            "ACCESS_JWKS_JSON",
+        ]
+    sources = "".join(p.read_text() for p in (WORKER / "src").rglob("*.ts"))
+    assert "EVIDENCE_HMAC_KEY" not in sources
 
 
 def test_prod_clients_use_the_token_for_their_role(monkeypatch, tmp_path):

@@ -464,7 +464,9 @@ def cloudflare_checks() -> list[Check]:
             else Check("ok", "wrangler.prod.jsonc rendered")
         )
         secrets = wrangler("secret", "list", "-c", str(rendered))
-        for s in ("ACCESS_AUD", "ROLE_MAP_JSON", "EVIDENCE_HMAC_KEY"):
+        from datatrust.prod.worker_secrets import WORKER_SECRETS
+
+        for s in WORKER_SECRETS:
             out.append(
                 Check("ok", f"Worker secret {s}")
                 if s in secrets.stdout
@@ -482,7 +484,8 @@ def cloudflare_checks() -> list[Check]:
             )
         )
     # ACCESS_AUD, the service tokens and BASIN_CATALOG_TOKEN are reported once, under .env.prod.
-    # EVIDENCE_HMAC_KEY is not asked for: setup:prod generates it on its first run.
+    # EVIDENCE_HMAC_KEY is not asked for: setup:prod generates it on its first run. It is the runner's key
+    # only and never a Worker secret.
     out.append(
         Check("ok", ".env.prod EVIDENCE_HMAC_KEY")
         if os.environ.get("EVIDENCE_HMAC_KEY")

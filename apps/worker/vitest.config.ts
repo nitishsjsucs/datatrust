@@ -14,7 +14,6 @@ export default defineConfig(async () => {
             // Test-only secrets. Access keys are generated per run inside the tests (test/helpers/keys.ts).
             ACCESS_AUD: 'datatrust-test',
             ROLE_MAP_JSON: '{}',
-            EVIDENCE_HMAC_KEY: 'test-evidence-key-0123456789abcdef',
             ACCESS_JWKS_JSON: '',
           },
         },

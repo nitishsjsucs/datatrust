@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Local Access stand-in (SPEC 15): an RS256 keypair under .dev/keys/ (gitignored) and the Worker's local
-// secrets in apps/worker/.dev.vars. Idempotent: existing keys and the evidence key are reused.
+// secrets in apps/worker/.dev.vars, plus the runner's evidence key in .dev/evidence_hmac_key (the Worker never
+// needs it). Idempotent: existing keys and the evidence key are reused.
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -46,7 +47,6 @@ const lines = [
   `ACCESS_JWKS_JSON='${jwks}'`,
   `ACCESS_AUD=${LOCAL.audience}`,
   `ROLE_MAP_JSON='${JSON.stringify(roleMap)}'`,
-  `EVIDENCE_HMAC_KEY=${readFileSync(evidencePath, 'utf8').trim()}`,
   '',
 ];
 writeFileSync(devVars, lines.join('\n'), { mode: 0o600 });

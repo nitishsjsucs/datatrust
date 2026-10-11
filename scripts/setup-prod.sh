@@ -214,13 +214,13 @@ PYCAT
   fi
   run wr d1 migrations apply datatrust --remote -c "$ROOT/apps/worker/wrangler.prod.jsonc"
 
-  say "10. Worker secrets (.prod/secrets.json)"
+  say "10. Worker secrets (.prod/secrets.json) and the runner's evidence key"
   if [[ -z "${EVIDENCE_HMAC_KEY:-}" ]]; then
+    # The runner's pseudonymization key: kept in .env.prod only, never deployed to the Worker.
     EVIDENCE_HMAC_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
     env_set EVIDENCE_HMAC_KEY "$EVIDENCE_HMAC_KEY"
-    note "generated EVIDENCE_HMAC_KEY (saved to .env.prod for the runner)"
+    note "generated EVIDENCE_HMAC_KEY (saved to .env.prod for the runner; not a Worker secret)"
   fi
-  export EVIDENCE_HMAC_KEY
   # ROLE_MAP_JSON: your Access email -> operator+viewer; datatrust-runner -> runner; datatrust-operator ->
   # operator+viewer (pipelines/datatrust/prod/worker_secrets.py).
   run uv run --locked datatrust prod worker-secrets --out "$PROD/secrets.json"
