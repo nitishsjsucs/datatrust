@@ -222,17 +222,17 @@ def local_checks() -> list[Check]:
 # ------------------------------------------------------------------------------------------------ .env.prod
 
 ENV_KEYS: tuple[tuple[str, str], ...] = (
-    ("CLOUDFLARE_ACCOUNT_ID", "shown by `npx wrangler whoami` (README Cloudflare step 6)"),
-    ("DATATRUST_OPERATOR_EMAIL", "the email you log in to Access with (README Cloudflare step 9)"),
-    ("BASIN_CATALOG_TOKEN", "R2 API token, Admin Read & Write (README Cloudflare step 8)"),
-    ("ACCESS_TEAM_DOMAIN", "https://<team>.cloudflareaccess.com (README Cloudflare step 12)"),
-    ("ACCESS_AUD", "Application Audience tag of the datatrust Access app (README Cloudflare step 12)"),
-    ("CF_ACCESS_CLIENT_ID", "service token datatrust-runner (README Cloudflare step 13)"),
-    ("CF_ACCESS_CLIENT_SECRET", "service token datatrust-runner (README Cloudflare step 13)"),
-    ("CF_ACCESS_OPERATOR_CLIENT_ID", "service token datatrust-operator (README Cloudflare step 13)"),
-    ("CF_ACCESS_OPERATOR_CLIENT_SECRET", "service token datatrust-operator (README Cloudflare step 13)"),
-    ("DATATRUST_API_URL", "the deployed Worker URL; setup:prod writes it after the first deploy (step 10)"),
-    ("DATATRUST_GCP_PROJECT", "your Google Cloud project id (README Google Cloud step 7)"),
+    ("CLOUDFLARE_ACCOUNT_ID", "shown by `npx wrangler whoami` (README Cloudflare step 8)"),
+    ("DATATRUST_OPERATOR_EMAIL", "the email you log in to Access with (README Cloudflare step 8)"),
+    ("BASIN_CATALOG_TOKEN", "R2 API token, Admin Read & Write (README Cloudflare step 9)"),
+    ("ACCESS_TEAM_DOMAIN", "https://<team>.cloudflareaccess.com (README Cloudflare step 8)"),
+    ("ACCESS_AUD", "Application Audience tag of the datatrust Access app (README Cloudflare step 13)"),
+    ("CF_ACCESS_CLIENT_ID", "service token datatrust-runner (README Cloudflare step 14)"),
+    ("CF_ACCESS_CLIENT_SECRET", "service token datatrust-runner (README Cloudflare step 14)"),
+    ("CF_ACCESS_OPERATOR_CLIENT_ID", "service token datatrust-operator (README Cloudflare step 14)"),
+    ("CF_ACCESS_OPERATOR_CLIENT_SECRET", "service token datatrust-operator (README Cloudflare step 14)"),
+    ("DATATRUST_API_URL", "the deployed Worker URL; setup:prod writes it after the first deploy (step 11)"),
+    ("DATATRUST_GCP_PROJECT", "the Google Cloud project id (README Google Cloud step 4)"),
 )
 
 
@@ -277,7 +277,7 @@ def env_checks() -> list[Check]:
             "warn",
             "DATATRUST_CF_API_TOKEN (optional)",
             "not set; create the AI Gateway in the dashboard instead",
-            "README Cloudflare step 7",
+            "README Cloudflare step 10",
             required=False,
         )
     )
@@ -285,6 +285,16 @@ def env_checks() -> list[Check]:
 
 
 # ------------------------------------------------------------------------------------------------ Cloudflare
+
+
+PAID_ONLY_KEYS = ("pipelines", "limits", "triggers", "tail_consumers", "logpush", "durable_objects")
+
+
+def paid_only_keys(template_text: str) -> list[str]:
+    """Top-level keys of the production wrangler template that need Workers Paid or break the Free budget
+    (SPEC 28.7): Pipelines, CPU limits, cron triggers, tail Workers, Logpush, Durable Objects."""
+    keys = set(re.findall(r'^  "([a-z_]+)":', template_text, flags=re.M))
+    return [k for k in PAID_ONLY_KEYS if k in keys]
 
 
 def cloudflare_checks() -> list[Check]:
@@ -313,13 +323,15 @@ def cloudflare_checks() -> list[Check]:
         )
     )
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    paid = paid_only_keys((WORKER / "wrangler.prod.template.jsonc").read_text())
     out.append(
-        Check(
-            "warn",
-            "Workers Paid plan (manual check)",
-            "wrangler cannot read the plan; Basin Pipelines needs Workers Paid",
-            "dashboard: Workers & Pages, Plans (https://dash.cloudflare.com/?to=/:account/workers/plans)",
-            required=False,
+        Check("ok", "Workers Free plan only", "production config has no Paid-only binding")
+        if not paid
+        else Check(
+            "missing",
+            "Workers Free plan only",
+            f"production template declares {', '.join(paid)}",
+            "remove them: production must run on the Workers Free plan (SPEC 28)",
         )
     )
     if not logged_in:
@@ -372,34 +384,6 @@ def cloudflare_checks() -> list[Check]:
             Check("ok", f"queue {q}")
             if q in queues.stdout
             else Check("missing", f"queue {q}", "not found", "npm run setup:prod -- --cloudflare-only")
-        )
-    for label, args, name in (
-        (
-            "Pipelines stream datatrust_events",
-            ("basin", "pipelines", "streams", "list", "--json"),
-            "datatrust_events",
-        ),
-        (
-            "Pipelines sink datatrust_events_iceberg",
-            ("basin", "pipelines", "sinks", "list", "--json"),
-            "datatrust_events_iceberg",
-        ),
-        (
-            "pipeline datatrust_events_pipeline",
-            ("basin", "pipelines", "list", "--json"),
-            "datatrust_events_pipeline",
-        ),
-    ):
-        found = name in names_in(json_out(wrangler(*args)))
-        out.append(
-            Check("ok", label)
-            if found
-            else Check(
-                "missing",
-                label,
-                "not found",
-                "npm run setup:prod -- --cloudflare-only (needs BASIN_CATALOG_TOKEN)",
-            )
         )
     token = os.environ.get("DATATRUST_CF_API_TOKEN")
     if token and account:
@@ -473,7 +457,7 @@ def cloudflare_checks() -> list[Check]:
             "missing",
             "ACCESS_AUD",
             "unset: every API call answers 401",
-            "copy the Application Audience tag into .env.prod (README step 12)",
+            "copy the Application Audience tag into .env.prod (README Cloudflare step 13)",
         )
     )
     for key in ("CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET", "BASIN_CATALOG_TOKEN", "EVIDENCE_HMAC_KEY"):
@@ -503,7 +487,7 @@ def cloudflare_checks() -> list[Check]:
                     "missing",
                     "Access team JWKS",
                     "ACCESS_TEAM_DOMAIN not set",
-                    "set it in .env.prod (README step 12)",
+                    "set it in .env.prod (README Cloudflare step 8)",
                 )
             )
         if url:
@@ -515,7 +499,7 @@ def cloudflare_checks() -> list[Check]:
                     "missing",
                     "unauthenticated request denied by Access",
                     f"HTTP {anon.status_code}",
-                    "enable Cloudflare Access on the workers.dev route (README step 11)",
+                    "enable Cloudflare Access on the workers.dev route (README Cloudflare step 12)",
                 )
             )
             out.extend(service_token_checks(url))
@@ -581,7 +565,7 @@ def service_token_checks(url: str, get: Callable[..., Any] | None = None) -> lis
                     "missing",
                     f"service token {label}",
                     f"{prefix}_ID / {prefix}_SECRET not set",
-                    "README Cloudflare step 13",
+                    "README Cloudflare step 14",
                 )
             )
             continue
@@ -599,7 +583,7 @@ def service_token_checks(url: str, get: Callable[..., Any] | None = None) -> lis
                 "ROLE_MAP_JSON includes it",
             }.get(
                 res.status_code,
-                f"add {label} to the Service Auth policy of the datatrust Access app (README step 13)",
+                f"add {label} to the Service Auth policy of the datatrust Access app (README Cloudflare step 14)",
             )
             out.append(Check("missing", f"service token {label}", f"HTTP {res.status_code}", fix))
             continue
@@ -742,7 +726,7 @@ def gcp_checks() -> list[Check]:
                 "missing",
                 "DATATRUST_GCP_PROJECT",
                 "not set",
-                "set it in .env.prod (README, Google Cloud step 7)",
+                "set it in .env.prod (README, Google Cloud step 4)",
             )
         )
         return out
@@ -757,7 +741,7 @@ def gcp_checks() -> list[Check]:
             "missing",
             "billing enabled",
             billing or "unknown",
-            f"gcloud billing projects link {project} --billing-account=<ID>",
+            f"enable billing: https://console.cloud.google.com/billing?project={project} (README Google Cloud step 2)",
         )
     )
     enabled = run(

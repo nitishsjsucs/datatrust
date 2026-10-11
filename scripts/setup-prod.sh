@@ -2,6 +2,9 @@
 # Idempotent production bootstrap (SPEC 18.1): creates every Cloudflare and Google Cloud resource DataTrust
 # needs, from the CLIs, once Nitish is logged in. Every step checks for the resource first and creates only
 # what is missing, recording ids in .prod/state.json, so a rerun after a partial failure continues.
+# Cloudflare: Workers Free plan only (SPEC 28): D1, two R2 buckets, Basin Catalog, five datatrust-* queues,
+# the AI Gateway, migrations and the Worker. No Workers Paid feature. Google Cloud: only datatrust_* datasets
+# and datatrust-* identities in the shared project, with dataset- or resource-scoped grants.
 #
 #   npm run setup:prod                       Cloudflare, then Google Cloud
 #   npm run setup:prod -- --cloudflare-only
@@ -67,7 +70,7 @@ data = json.loads(raw[start:]) if start >= 0 else []
 def walk(x):
     if isinstance(x, dict):
         if x.get("name") == name:
-            for k in ("uuid", "id", "database_id", "stream_id"):
+            for k in ("uuid", "id", "database_id"):
                 if x.get(k):
                     print(x[k]); sys.exit(0)
         for v in x.values():
@@ -178,29 +181,11 @@ PYCAT
     if wr queues info "$q" >/dev/null 2>&1; then note "$q exists"; else run wr queues create "$q"; fi
   done
 
-  say "5. Basin Pipelines stream datatrust_events"
-  [[ -n "${BASIN_CATALOG_TOKEN:-}" ]] || die "BASIN_CATALOG_TOKEN is missing from .env.prod: create an R2 API token (dashboard: R2, Manage API tokens, Account API token, Admin Read & Write) and save it (README step 8)"
-  STREAM_ID="$(wr basin pipelines streams list --json 2>/dev/null | json_id datatrust_events || true)"
-  if [[ -z "$STREAM_ID" ]]; then
-    run wr basin pipelines streams create datatrust_events --schema-file "$ROOT/schemas/lake/audit_event.stream.json" --http-enabled=false
-    STREAM_ID="$(wr basin pipelines streams list --json 2>/dev/null | json_id datatrust_events || true)"
-  fi
-  [[ -n "$STREAM_ID" || $DRY -eq 1 ]] || die "could not read the stream id; run \`npx wrangler basin pipelines streams list\` and set stream_id in .prod/state.json"
-  state_set stream_id "${STREAM_ID:-dry-run}"
-
-  say "6. Sink datatrust_events_iceberg"
-  if [[ -n "$(wr basin pipelines sinks list --json 2>/dev/null | json_id datatrust_events_iceberg || true)" ]]; then
-    note "sink exists"
-  else
-    run wr basin pipelines sinks create datatrust_events_iceberg --type r2-data-catalog --bucket datatrust-lake \
-      --namespace datatrust --table audit_events --catalog-token "$BASIN_CATALOG_TOKEN" --roll-interval 60
-  fi
-
-  say "7. Pipeline datatrust_events_pipeline"
-  if [[ -n "$(wr basin pipelines list --json 2>/dev/null | json_id datatrust_events_pipeline || true)" ]]; then
-    note "pipeline exists"
-  else
-    run wr basin pipelines create datatrust_events_pipeline --sql "INSERT INTO datatrust_events_iceberg SELECT * FROM datatrust_events"
+  # Steps 5 to 7 (Basin Pipelines stream, sink and pipeline) were removed in spec 1.2: Basin Pipelines is
+  # Workers Paid only, and production runs on the Workers Free plan (SPEC 28, ADR-0008). The audit lake needs
+  # only the queue of step 4 and the catalog of step 3; `datatrust lake commit --catalog basin` writes it.
+  if [[ -z "${BASIN_CATALOG_TOKEN:-}" ]]; then
+    note "BASIN_CATALOG_TOKEN is not in .env.prod yet: the lake commit and the smoke need it (R2, Manage API tokens, Account API token, Admin Read & Write; README Cloudflare step 9)"
   fi
 
   say "8. AI Gateway datatrust"
@@ -279,7 +264,7 @@ PY2
     say "12. Cloudflare Access is not fully configured yet"
     note "The Worker is deployed fail-closed: every API call answers 401 until ACCESS_AUD is set."
     note "Worker URL: $(state_get worker_url)"
-    note "Next (README, production setup, Cloudflare steps 11-14):"
+    note "Next (README, production setup, Cloudflare steps 12-15):"
     note "  - Workers & Pages > datatrust > Settings > Domains & Routes: Enable Cloudflare Access on the workers.dev route, allow your email"
     note "  - copy the Application Audience (AUD) tag into ACCESS_AUD and https://<team>.cloudflareaccess.com into ACCESS_TEAM_DOMAIN"
     note "  - create service tokens datatrust-runner and datatrust-operator; save CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET"
@@ -301,7 +286,7 @@ if ((DO_GCP)); then
   [[ "$(gcloud config get-value project 2>/dev/null)" == "$P" ]] || die "gcloud config set project $P"
   ADC="${GOOGLE_APPLICATION_CREDENTIALS:-$HOME/.config/gcloud/application_default_credentials.json}"
   [[ -f "$ADC" ]] || die "gcloud auth application-default login"
-  [[ "$(gcloud billing projects describe "$P" --format='value(billingEnabled)' 2>/dev/null)" == "True" ]] || die "link a billing account: gcloud billing projects link $P --billing-account=<ID>"
+  [[ "$(gcloud billing projects describe "$P" --format='value(billingEnabled)' 2>/dev/null)" == "True" ]] || die "billing is not enabled on $P: enable it at https://console.cloud.google.com/billing?project=$P (README Google Cloud step 2)"
   USER_EMAIL="$(gcloud config get-value account 2>/dev/null)"
   note "project $P, location $LOC, account $USER_EMAIL"
 

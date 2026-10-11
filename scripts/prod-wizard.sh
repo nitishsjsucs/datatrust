@@ -188,20 +188,33 @@ finish() {
 # DataTrust production setup (README "Production setup", SPEC 21): the steps only the account owner can do,
 # with `npm run setup:prod` (idempotent, creates every resource from the CLIs) run between them.
 #   npm run setup:wizard
-# Values go to .env.prod (gitignored, mode 600). Dashboard labels can drift; the README table is the
-# reference, and `npm run doctor -- --prod` always says what is still missing.
+# Production runs on the Cloudflare Workers Free plan only (SPEC 28, ADR-0008): no stage subscribes to
+# Workers Paid. Values go to .env.prod (gitignored, mode 600). Values already known on 2026-10-10 (SPEC 28.1)
+# are pre-filled and offered as defaults (Enter keeps them). Dashboard labels can drift; the README table is
+# the reference, and `npm run doctor -- --prod` always says what is still missing.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 ENV_FILE="$ROOT/.env.prod"
-TOTAL_STAGES=22
+TOTAL_STAGES=19
+
+# Known on 2026-10-10 (SPEC 28.1): the shared Cloudflare account and Zero Trust team, and the shared Google
+# Cloud project used by four repos. Override any of them by typing another value at the prompt.
+KNOWN_CLOUDFLARE_ACCOUNT_ID="dc93c3bc8aa4f9e09a0d7e7354a80873"
+KNOWN_ACCESS_TEAM_DOMAIN="https://old-truth-a7dc.cloudflareaccess.com"
+KNOWN_GCP_PROJECT="master-magnet-444903-u4"
+KNOWN_BQ_LOCATION="US"
 
 run_cmd() { # show and run a command in the repo; a failure is reported, the wizard continues
   printf '  %s$ %s%s\n' "$DIM" "$*" "$RESET"
   "$@" || warn "the command exited with status $?; fix what it printed, then re-run the wizard"
 }
 
-banner "DataTrust production setup: Cloudflare, then Google Cloud"
+prefill() { # KEY VALUE: write a known value once, so `ask` offers it as the default
+  [[ -n "$(_existing "$1" || true)" ]] || write_env "$1" "$2"
+}
+
+banner "DataTrust production setup on the Workers Free plan: Cloudflare, then Google Cloud"
 
 # ── Cloudflare ────────────────────────────────────────────────────────────
 stage "Values file .env.prod"
@@ -217,28 +230,21 @@ if grep -qE '^CLOUDFLARE_API_TOKEN=.+' "$ENV_FILE"; then
 fi
 pause
 
-stage "Cloudflare account"
-open_url "https://dash.cloudflare.com/sign-up"
-step "Sign up, or log in if you already have an account (free)."
-pause "Press Enter once you are in the Cloudflare dashboard"
+stage "Cloudflare account, Workers Free plan, R2 (done on 2026-10-10)"
+say "Already done: account $KNOWN_CLOUDFLARE_ACCOUNT_ID, R2 activated with a card on file, workers.dev"
+say "subdomain registered. Stay on the Workers Free plan: do not subscribe to Workers Paid. DataTrust uses"
+say "no Paid feature, and Basin Pipelines (Paid only) is not used."
+note "If any of this is not true for your account, open the dashboard and fix it before continuing:"
+note "https://dash.cloudflare.com/ (R2 activation: R2 Object Storage; subdomain: Workers & Pages, Account details)"
+pause
 
-stage "Workers Paid plan (\$5/month)"
-say "Basin Pipelines is only on Workers Paid; it also gives Queues and Workflows headroom."
-open_url "https://dash.cloudflare.com/?to=/:account/workers/plans"
-step "Workers & Pages > Plans: subscribe to Workers Paid."
-pause "Press Enter once Workers Paid is active"
-
-stage "Activate R2"
-say "R2 needs a payment card even though DataTrust stays inside the free tier."
-open_url "https://dash.cloudflare.com/?to=/:account/r2"
-step "R2 Object Storage: follow the activation steps (do not create buckets; the bootstrap does)."
-pause "Press Enter once R2 is active"
-
-stage "Zero Trust organization (Access)"
+stage "Zero Trust organization and One-time PIN login"
+say "The Zero Trust organization exists on the Free plan (50 seats, shared by four repos)."
+say "New organizations no longer get the One-time PIN login method automatically; add it."
 open_url "https://one.dash.cloudflare.com/"
-step "Choose a team name and the Free plan (onboarding may ask for a card even on Free)."
-note "Your team domain is https://<team name>.cloudflareaccess.com"
-ask ACCESS_TEAM_DOMAIN "Team name, or the full https://<team>.cloudflareaccess.com:"
+step "Integrations > Identity providers > Add new identity provider > One-time PIN. Save."
+prefill ACCESS_TEAM_DOMAIN "$KNOWN_ACCESS_TEAM_DOMAIN"
+ask ACCESS_TEAM_DOMAIN "Team domain, https://<team>.cloudflareaccess.com:"
 ACCESS_TEAM_DOMAIN="${ACCESS_TEAM_DOMAIN%/}"
 ACCESS_TEAM_DOMAIN="${ACCESS_TEAM_DOMAIN#https://}"
 ACCESS_TEAM_DOMAIN="https://${ACCESS_TEAM_DOMAIN%.cloudflareaccess.com}.cloudflareaccess.com"
@@ -247,19 +253,21 @@ if [[ "$ACCESS_TEAM_DOMAIN" =~ ^https://[a-z0-9-]+\.cloudflareaccess\.com$ ]]; t
 else
   warn "$ACCESS_TEAM_DOMAIN does not look like https://<team>.cloudflareaccess.com (lowercase); not saved"
 fi
+pause "Press Enter once One-time PIN is added"
 
-stage "Log wrangler in (OAuth)"
+stage "wrangler login (OAuth) and account id"
 say "wrangler must use your login, not a token from the shell (a token would override it)."
-if confirm "Run \`npx wrangler login\` now (opens the browser)?"; then
+(cd apps/worker && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_API_KEY -u CLOUDFLARE_EMAIL npx wrangler whoami) || true
+if confirm "Not logged in above? Run \`npx wrangler login\` now (opens the browser)?"; then
   (cd apps/worker && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_API_KEY -u CLOUDFLARE_EMAIL npx wrangler login) \
     || warn "wrangler login failed; run it again later: cd apps/worker && npx wrangler login"
 fi
-(cd apps/worker && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_API_KEY -u CLOUDFLARE_EMAIL npx wrangler whoami) || true
-step "Copy the Account ID from the table above."
+prefill CLOUDFLARE_ACCOUNT_ID "$KNOWN_CLOUDFLARE_ACCOUNT_ID"
 ask CLOUDFLARE_ACCOUNT_ID "Cloudflare Account ID:"
 write_env CLOUDFLARE_ACCOUNT_ID "$CLOUDFLARE_ACCOUNT_ID"
 
 stage "R2 API token for Basin Catalog"
+say "The lake committer (datatrust lake commit --catalog basin) and the smoke's read-back use it."
 open_url "https://dash.cloudflare.com/?to=/:account/r2/api-tokens"
 step "R2 > Manage API tokens > Create Account API token."
 step "Permissions: Admin Read & Write. Create it and copy the Token value (shown once)."
@@ -267,8 +275,8 @@ ask_secret BASIN_CATALOG_TOKEN "Paste the R2 API token value:"
 write_env BASIN_CATALOG_TOKEN "$BASIN_CATALOG_TOKEN"
 
 stage "AI Gateway API token (optional)"
-say "Lets the bootstrap create the AI Gateway 'datatrust'. Without it, create the gateway in the dashboard"
-say "(AI > AI Gateway > Create Gateway, name datatrust)."
+say "Lets the bootstrap create the AI Gateway 'datatrust' (1 of 10 per account). Without it, create the"
+say "gateway in the dashboard (AI > AI Gateway > Create Gateway, name datatrust)."
 if confirm "Create an AI Gateway API token now?"; then
   open_url "https://dash.cloudflare.com/profile/api-tokens"
   step "Create Token > Custom token: account permissions 'AI Gateway' Read and 'AI Gateway' Edit, your account."
@@ -282,13 +290,14 @@ fi
 
 stage "Your Access login email"
 say "The Worker gives this address the operator and viewer roles when you sign in through Access."
+note "Persona logins can use plus-addresses of it; each distinct email takes one of the 50 shared seats."
 ask DATATRUST_OPERATOR_EMAIL "Email you will log in to Cloudflare Access with:"
 write_env DATATRUST_OPERATOR_EMAIL "$DATATRUST_OPERATOR_EMAIL"
 
 stage "Cloudflare bootstrap, first pass"
-say "Creates D1, two R2 buckets, the catalog, four queues, the Pipelines stream, sink and pipeline, the AI"
-say "Gateway, applies the D1 migrations (confirm the prompt) and deploys the Worker fail-closed."
-note "On a new account wrangler asks to register a workers.dev subdomain: answer yes and pick a name."
+say "Creates D1 datatrust, R2 datatrust-artifacts and datatrust-lake, Basin Catalog on datatrust-lake, the"
+say "five datatrust-* queues and the AI Gateway, applies the D1 migrations (confirm the prompt) and deploys"
+say "the Worker fail-closed. Everything stays inside the Workers Free plan."
 note "It ends with 'rerun after Access is configured'; that is expected."
 if confirm "Run \`npm run setup:prod -- --cloudflare-only\` now?"; then
   run_cmd npm run setup:prod -- --cloudflare-only
@@ -340,58 +349,49 @@ say "Re-renders the config with your team domain and redeploys with the real ACC
 if confirm "Run \`npm run setup:prod -- --cloudflare-only\` again now?"; then
   run_cmd npm run setup:prod -- --cloudflare-only
 fi
+note "Optional: Basin Catalog snapshot expiration keeps old Iceberg snapshots bounded (free; leave compaction"
+note "off). See \`cd apps/worker && npx wrangler basin catalog snapshot-expiration --help\`."
 pause
 
-# ── Google Cloud ──────────────────────────────────────────────────────────
-stage "Google Cloud billing and a budget alert"
-say "Policy tags and masking need billing; expected cost at this data size is about \$0."
-open_url "https://console.cloud.google.com/billing"
-step "Create (or pick) a billing account with a card."
-step "Billing > Budgets & alerts > Create budget: \$5, alerts at 50/90/100%."
-pause "Press Enter once billing and the budget exist"
+# ── Google Cloud (shared project) ─────────────────────────────────────────
+stage "Billing on the shared project, and a budget alert"
+say "Project $KNOWN_GCP_PROJECT is shared by four repos. On 2026-10-10 a billing account was linked but"
+say "billing was off; the BigQuery sandbox rejects DML and expires tables after 60 days. Expected cost: \$0"
+say "(1 TiB of queries per month is free and every DataTrust query is capped)."
+open_url "https://console.cloud.google.com/billing?project=$KNOWN_GCP_PROJECT"
+step "Enable billing for the project (reactivate or relink the billing account)."
+step "Billing > Budgets & alerts > Create budget scoped to the project: \$5, alerts at 50/90/100%."
+pause "Press Enter once billing is enabled and the budget exists"
 
-stage "Google Cloud CLI (gcloud, bq)"
+stage "Google Cloud CLI and logins (done on 2026-10-10)"
 if command -v gcloud >/dev/null 2>&1 && command -v bq >/dev/null 2>&1; then
-  say "gcloud and bq are installed: $(command -v gcloud)"
-elif command -v brew >/dev/null 2>&1 && confirm "Install with \`brew install --cask gcloud-cli\` now?"; then
-  run_cmd brew install --cask gcloud-cli
-  note "Open a new terminal if gcloud is not on PATH yet, then re-run the wizard."
+  run_cmd gcloud config list
+  note "If the account or project above is wrong: gcloud auth login, gcloud config set project $KNOWN_GCP_PROJECT"
 else
   open_url "https://cloud.google.com/sdk/docs/install"
-  step "Install the Google Cloud CLI for macOS, then re-run the wizard."
+  step "Install the Google Cloud CLI, run gcloud auth login and gcloud auth application-default login,"
+  step "then re-run the wizard."
 fi
 pause
 
-stage "Sign in to Google Cloud"
-say "Three logins: the CLI, then application-default credentials (used by dbt and the Python clients)."
-if confirm "Run \`gcloud init\`, \`gcloud auth login\` and \`gcloud auth application-default login\` now?"; then
-  run_cmd gcloud init
-  run_cmd gcloud auth login
-  run_cmd gcloud auth application-default login
-fi
-pause
-
-stage "Project and billing link"
-note "Project ids are global: datatrust-<a short suffix>, for example datatrust-ns2026."
+stage "Project values and the ADC quota project"
+prefill DATATRUST_GCP_PROJECT "$KNOWN_GCP_PROJECT"
 ask DATATRUST_GCP_PROJECT "Project id:"
 write_env DATATRUST_GCP_PROJECT "$DATATRUST_GCP_PROJECT"
-write_env DATATRUST_BQ_LOCATION "US"
-if confirm "Create project $DATATRUST_GCP_PROJECT now (skip if it already exists)?"; then
-  run_cmd gcloud projects create "$DATATRUST_GCP_PROJECT" --name=DataTrust
+prefill DATATRUST_BQ_LOCATION "$KNOWN_BQ_LOCATION"
+ask DATATRUST_BQ_LOCATION "BigQuery location:"
+write_env DATATRUST_BQ_LOCATION "$DATATRUST_BQ_LOCATION"
+say "Python clients for Data Catalog and data policies need a quota project on the application-default login."
+if confirm "Run \`gcloud auth application-default set-quota-project $DATATRUST_GCP_PROJECT\` now?"; then
+  run_cmd gcloud auth application-default set-quota-project "$DATATRUST_GCP_PROJECT"
 fi
-run_cmd gcloud config set project "$DATATRUST_GCP_PROJECT"
-run_cmd gcloud billing accounts list
-ask GCP_BILLING_ACCOUNT "Billing account ID from the list above (XXXXXX-XXXXXX-XXXXXX):"
-if [[ -n "$GCP_BILLING_ACCOUNT" ]] && confirm "Link $DATATRUST_GCP_PROJECT to billing account $GCP_BILLING_ACCOUNT?"; then
-  run_cmd gcloud billing projects link "$DATATRUST_GCP_PROJECT" --billing-account="$GCP_BILLING_ACCOUNT"
-fi
-run_cmd gcloud auth application-default set-quota-project "$DATATRUST_GCP_PROJECT"
 pause
 
 stage "Google Cloud bootstrap"
-say "Enables the APIs, creates four datasets (7-day time travel), the analyst and prober service accounts,"
-say "the policy-tag taxonomy and masking policies, validates the BigQuery path (compile, build --empty,"
-say "probe dry runs), runs the real build, and verifies masking as the analyst (up to 10 minutes)."
+say "Enables datacatalog, iam and iamcredentials; creates only datatrust_* datasets (7-day time travel), the"
+say "datatrust-analyst and datatrust-prober service accounts, the datatrust-classification taxonomy and"
+say "masking policies, with dataset- or resource-scoped grants; validates the BigQuery path (compile,"
+say "build --empty, probe dry runs), runs the real build and verifies masking as the analyst (up to 10 min)."
 if confirm "Run \`npm run setup:prod -- --gcp-only\` now?"; then
   run_cmd npm run setup:prod -- --gcp-only
 fi
@@ -400,7 +400,7 @@ pause
 stage "Check everything, then the production smoke test"
 run_cmd npm run doctor -- --prod
 say "When the doctor shows nothing missing, the smoke runs one clean and five fault runs on BigQuery"
-say "through the deployed Queues and Workflows, with Workers AI summaries (a few cents at most)."
+say "through the deployed Queues and Workflows, with Workers AI summaries inside the Free allowance."
 if confirm "Run \`npm run prod:smoke\` now?"; then
   run_cmd npm run prod:smoke
 fi

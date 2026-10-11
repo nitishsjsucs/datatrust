@@ -238,17 +238,15 @@ Audit events (check results, completed runs, incidents) go to the lake the same 
 
 ## Production setup
 
-> **Being moved to the Workers Free plan.** Production no longer uses Workers Paid or Basin Pipelines (SPEC 28, ADR-0008). Cloudflare steps 2 and 10 below still describe the old design and will be replaced in the next commits; do not run `setup:prod` until this note is gone.
+Production runs on the **Cloudflare Workers Free plan** (no Workers Paid feature anywhere: [SPEC section 28](SPEC.md), [ADR-0008](docs/adr/0008-workers-free-plan.md)) and on a Google Cloud project shared with three other repos, so every resource DataTrust creates is named `datatrust*`, and the bootstrap's grants are scoped to DataTrust's own datasets, policy tags, data policies and service accounts (plus BigQuery Job User for its two service accounts). Everything below is implemented and tested locally against stand-ins, and has **not yet run on Cloudflare or Google Cloud**. These are the steps only the account owner can do; the scripts do the rest. `npm run doctor -- --prod` prints one line per prerequisite with the exact fix, so run it whenever you are unsure what is left.
 
-Everything below is implemented and tested locally against stand-ins, and has **not yet run on Cloudflare or Google Cloud**. These are the steps only the account owner can do; the scripts do the rest. `npm run doctor -- --prod` prints one line per prerequisite with the exact fix, so run it whenever you are unsure what is left.
-
-The quickest path is the guided wizard, which opens each dashboard page, says what to click and copy, writes the values into `.env.prod`, and runs the bootstrap and the doctor between phases (re-run it any time; it keeps values already saved):
+The quickest path is the guided wizard, which opens each dashboard page, says what to click and copy, pre-fills the values already known, writes them into `.env.prod`, and runs the bootstrap and the doctor between phases (re-run it any time; it keeps values already saved):
 
 ```sh
 npm run setup:wizard
 ```
 
-The tables below are the same steps by hand. Start with the values file (gitignored; never put `CLOUDFLARE_API_TOKEN` in it, because wrangler would use it instead of your `wrangler login`):
+The tables below are the same steps by hand (SPEC section 21). "Done" reflects read-only checks of the account on 2026-10-10. Start with the values file (gitignored; never put `CLOUDFLARE_API_TOKEN` in it, because wrangler would use it instead of your `wrangler login`):
 
 ```sh
 cp .env.example .env.prod && chmod 600 .env.prod
@@ -256,41 +254,41 @@ cp .env.example .env.prod && chmod 600 .env.prod
 
 ### Cloudflare
 
-| # | What you do | Where | Cost |
-|---|---|---|---|
-| 1 | Create a Cloudflare account | https://dash.cloudflare.com/sign-up | free |
-| 2 | Subscribe to Workers Paid (Basin Pipelines needs it; also covers Queues and Workflows headroom) | dashboard: Workers & Pages, Plans | $5/month |
-| 3 | Activate R2 (a payment card is required; usage stays in the free tier) | dashboard: R2 Object Storage | free tier |
-| 4 | Create a Zero Trust organization on the Free plan (choose a team name) | https://one.dash.cloudflare.com/ | free |
-| 5 | Log wrangler in with OAuth, with no Cloudflare token exported in the shell | `cd apps/worker && unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL && npx wrangler login && npx wrangler whoami` | free |
-| 6 | Put the account id in `.env.prod` as `CLOUDFLARE_ACCOUNT_ID` | from `npx wrangler whoami` | free |
-| 7 | Optional: an API token with account permissions "AI Gateway Read" and "AI Gateway Edit", saved as `DATATRUST_CF_API_TOKEN` (otherwise create the gateway in the dashboard: AI, AI Gateway, Create Gateway, name `datatrust`) | https://dash.cloudflare.com/profile/api-tokens | free |
-| 8 | An R2 API token for Basin Catalog (R2, Manage API tokens, Create Account API token, Admin Read & Write), saved as `BASIN_CATALOG_TOKEN` | dashboard: R2 | free |
-| 9 | Set `DATATRUST_OPERATOR_EMAIL` to the email you will log in to Access with | `.env.prod` | free |
-| 10 | Run the Cloudflare bootstrap. It creates D1, both R2 buckets, the catalog, four queues, the Pipelines stream, sink and pipeline, the AI Gateway, renders `wrangler.prod.jsonc`, applies the D1 migrations (confirm the prompt) and deploys the Worker with its secrets, then saves the Worker URL as `DATATRUST_API_URL`. On a new account the first deploy asks to register a workers.dev subdomain: answer yes and pick a name. The first deploy is fail-closed (every API call answers 401) and the script stops with "rerun after Access is configured" | `npm run setup:prod -- --cloudflare-only` | Pipelines and catalog usage inside the included amounts |
-| 11 | Protect the Worker with Access: Workers & Pages, datatrust, Settings, Domains & Routes, **Enable Cloudflare Access** on the workers.dev route, then Manage Cloudflare Access and allow your email | dashboard | free |
-| 12 | Copy the Application Audience (AUD) tag into `ACCESS_AUD`, and `https://<team>.cloudflareaccess.com` into `ACCESS_TEAM_DOMAIN` | Zero Trust, Access, Applications | free |
-| 13 | Create two service tokens (1 year each; each secret is shown once): `datatrust-runner`, saved as `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (the runner; it can only lease jobs and post results), and `datatrust-operator`, saved as `CF_ACCESS_OPERATOR_CLIENT_ID` and `CF_ACCESS_OPERATOR_CLIENT_SECRET` (starts runs and reads incidents from the CLI and the smoke test). Then add a second policy on the datatrust Access app with action **Service Auth** that includes both tokens | Zero Trust, Access, Service credentials | free |
-| 14 | Rerun the bootstrap to set the real secrets and redeploy | `npm run setup:prod -- --cloudflare-only` | free |
-| 15 | Check (it also confirms each service token reaches the Worker with exactly its roles) | `npm run doctor -- --prod` | free |
+| # | Step | Command or URL | Cost | Done (2026-10-10) |
+|---|---|---|---|---|
+| 1 | Cloudflare account `dc93c3bc8aa4f9e09a0d7e7354a80873` | https://dash.cloudflare.com/ | free | yes |
+| 2 | Stay on the Workers Free plan; do not subscribe to Workers Paid | dashboard: Workers & Pages, Plans shows Free | free | yes |
+| 3 | R2 activated with a payment card | https://dash.cloudflare.com/?to=/:account/r2 | free tier: 10 GB-month, 1M Class A, 10M Class B operations per month | yes |
+| 4 | wrangler logged in with OAuth, no Cloudflare token exported in the shell | `cd apps/worker && unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL && npx wrangler whoami` | free | yes |
+| 5 | workers.dev subdomain `nitish-ratakonda` | dashboard: Workers & Pages, Account details | free | yes |
+| 6 | Zero Trust organization `old-truth-a7dc` on the Free plan (50 seats, shared by four repos) | https://one.dash.cloudflare.com/ | $0 | yes |
+| 7 | Add the One-time PIN login method (new organizations no longer get it automatically) | Zero Trust, Integrations, Identity providers, Add new identity provider, One-time PIN | free | in progress |
+| 8 | Fill `.env.prod`: `CLOUDFLARE_ACCOUNT_ID=dc93c3bc8aa4f9e09a0d7e7354a80873`, `ACCESS_TEAM_DOMAIN=https://old-truth-a7dc.cloudflareaccess.com`, `DATATRUST_OPERATOR_EMAIL=<your Access login email>`, plus the Google values of step 4 below | edit `.env.prod` | free | no |
+| 9 | R2 API token for Basin Catalog (R2, Manage API tokens, Create Account API token, Admin Read & Write), saved as `BASIN_CATALOG_TOKEN` | https://dash.cloudflare.com/?to=/:account/r2/api-tokens | free | no |
+| 10 | Optional: narrow AI Gateway token (account permissions AI Gateway Read and Edit) saved as `DATATRUST_CF_API_TOKEN`; or create gateway `datatrust` in the dashboard (AI, AI Gateway, Create Gateway) | https://dash.cloudflare.com/profile/api-tokens | free (1 of 10 gateways) | no |
+| 11 | Run the Cloudflare bootstrap: D1 `datatrust`, R2 `datatrust-artifacts` and `datatrust-lake`, Basin Catalog on `datatrust-lake`, the five `datatrust-*` queues, the AI Gateway, the D1 migrations (confirm the prompt), and a fail-closed first deploy (every API call answers 401); the Worker URL is saved as `DATATRUST_API_URL` | `npm run setup:prod -- --cloudflare-only` | free | no |
+| 12 | Protect the Worker with Access: Workers & Pages, datatrust, Settings, Domains & Routes, **Enable Cloudflare Access** on the workers.dev entry, then **Manage Cloudflare Access** to allow your email (each distinct email, plus-addresses included, takes one of the 50 shared seats) | https://dash.cloudflare.com/?to=/:account/workers-and-pages | free | no |
+| 13 | Copy the Application Audience (AUD) tag of the datatrust Access application into `ACCESS_AUD` | https://one.dash.cloudflare.com/ (Access, Applications) | free | no |
+| 14 | Create two service tokens (1 year each; each secret is shown once): `datatrust-runner`, saved as `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (the runner; it can only lease jobs, post results and export the lake), and `datatrust-operator`, saved as `CF_ACCESS_OPERATOR_CLIENT_ID` and `CF_ACCESS_OPERATOR_CLIENT_SECRET` (starts runs and reads incidents from the CLI and the smoke test). Then add one policy on the datatrust Access app with action **Service Auth** that includes both | Zero Trust, Access, Service credentials, Service Tokens | free (tokens take no seat) | no |
+| 15 | Rerun the bootstrap to set the real secrets and redeploy | `npm run setup:prod -- --cloudflare-only` | free | no |
+| 16 | Optional: Basin Catalog snapshot expiration (leave compaction off) | `cd apps/worker && npx wrangler basin catalog snapshot-expiration --help` | free | no |
+| 17 | Check (it also confirms each service token reaches the Worker with exactly its roles) | `npm run doctor -- --prod` | free | no |
 
-Workers AI needs no setup beyond the binding (10,000 neurons per day free, then $0.011 per 1,000 neurons on Workers Paid); a summary is roughly 2k input and 400 output tokens on `llama-3.3-70b-instruct-fp8-fast` (an estimate, not measured). There is no cron trigger, so nothing runs or bills unless you start a run.
+Workers AI needs no setup beyond the binding. On the Free plan the account gets 10,000 neurons per day with no overage: once they are used, calls fail until 00:00 UTC, and the summarizer then falls back to the deterministic template and records why. AI Gateway's core features are free. Queues, Workflows, D1 and R2 usage stays inside the Free amounts (SPEC section 28.6). There is no cron trigger, so nothing runs unless you start a run.
 
-### Google Cloud
+### Google Cloud (shared project `master-magnet-444903-u4`)
 
-| # | What you do | Where | Cost |
-|---|---|---|---|
-| 1 | Google account and Cloud terms | https://console.cloud.google.com/ | free |
-| 2 | A billing account with a card and a $5 budget alert (policy tags and masking need billing; the sandbox cannot do DML) | Billing, Budgets & alerts | expected $0 at this data size |
-| 3 | Install the CLI (`gcloud` and `bq`) | `brew install --cask gcloud-cli` | free |
-| 4 | Initialize and authenticate | `gcloud init`, `gcloud auth login`, `gcloud auth application-default login` | free |
-| 5 | Create the project and link billing | `gcloud projects create datatrust-<suffix> --name=DataTrust`, `gcloud config set project datatrust-<suffix>`, `gcloud billing accounts list`, `gcloud billing projects link datatrust-<suffix> --billing-account=<ID>` | free |
-| 6 | Set the ADC quota project | `gcloud auth application-default set-quota-project datatrust-<suffix>` | free |
-| 7 | Put `DATATRUST_GCP_PROJECT=datatrust-<suffix>` and `DATATRUST_BQ_LOCATION=US` in `.env.prod` | `.env.prod` | free |
-| 8 | Run the Google Cloud bootstrap: APIs, four datasets with a 7-day time-travel window, the `datatrust-analyst` and `datatrust-prober` service accounts and their grants, the policy-tag taxonomy and masking policies, `prod validate` (compile, `dbt build --empty`, probe dry runs), the real build, and the masking verification as the analyst | `npm run setup:prod -- --gcp-only` | about $0 |
-| 9 | Check, then run the production smoke test (one clean run and five fault runs through the deployed Queues and Workflows on BigQuery, Workers AI summaries, the Iceberg row read back, Access checks) | `npm run doctor -- --prod`, then `npm run prod:smoke` | about $0 plus a few cents of Workers AI |
+| # | Step | Command or URL | Cost | Done (2026-10-10) |
+|---|---|---|---|---|
+| 1 | Use the shared project `master-magnet-444903-u4` (BigQuery location US); `gcloud` and `bq` installed and logged in, application default credentials created | `gcloud config list` | free | yes |
+| 2 | Enable billing on the project (a billing account is linked but billing is off: reactivate or relink it) and add a $5 budget alert scoped to the project. The BigQuery sandbox rejects INSERT, MERGE and DELETE and expires tables after 60 days, and policy tags and masking need billing | https://console.cloud.google.com/billing?project=master-magnet-444903-u4 | expected $0: 1 TiB of queries per month is free and every DataTrust query is capped | no |
+| 3 | Set the ADC quota project | `gcloud auth application-default set-quota-project master-magnet-444903-u4` | free | unknown |
+| 4 | `.env.prod`: `DATATRUST_GCP_PROJECT=master-magnet-444903-u4`, `DATATRUST_BQ_LOCATION=US` | edit `.env.prod` | free | no |
+| 5 | Run the Google Cloud bootstrap: enables `datacatalog`, `iam` and `iamcredentials` (`bigquery` and `bigquerydatapolicy` are already on); creates only `datatrust_raw`, `datatrust_staging`, `datatrust_marts` and `datatrust_restricted` (7-day time travel), the `datatrust-analyst` and `datatrust-prober` service accounts, the `datatrust-classification` taxonomy and its masking policies; then `prod validate` (compile, `dbt build --empty`, probe dry runs), the real build and the masking verification as the analyst | `npm run setup:prod -- --gcp-only` | about $0, every query capped | no |
+| 6 | Check, then run the production smoke test (one clean run and five fault runs through the deployed Queues and Workflows on BigQuery, Workers AI summaries, the Iceberg rows committed and read back, Access checks) | `npm run doctor -- --prod`, then `npm run prod:smoke` | about $0 | no |
+| 7 | Optional: run the production runner on GitHub Actions with Workload Identity Federation | [`docs/prod-runner-wif.md`](docs/prod-runner-wif.md) | free | no |
 
-Your Google identity needs Owner on the project (or BigQuery Admin, Data Catalog Policy Tag Admin, Data Policy Admin and Service Account Admin). Owner does not include Fine-Grained Reader, which the bootstrap grants explicitly to your active `gcloud` account (set `DATATRUST_GCP_USER` to use another) so dbt tests can read real values. The masking rules are v1 data policies bound to the three policy tags.
+Your Google identity needs Owner on the project (or BigQuery Admin, Data Catalog Policy Tag Admin, Data Policy Admin and Service Account Admin). Owner does not include Fine-Grained Reader, which the bootstrap grants explicitly on the DataTrust policy tags only, to your active `gcloud` account (set `DATATRUST_GCP_USER` to use another) so dbt tests can read real values, together with Service Account Token Creator on the two DataTrust service accounts (never on the project). The only project-level grant DataTrust adds is BigQuery Job User for its two service accounts, which lets them run jobs but reads no data. The masking rules are v1 data policies bound to the three policy tags.
 
 Once both parts are done, production runs work like the local loop, with the runner on your machine:
 
@@ -299,9 +297,7 @@ uv run datatrust runner --env prod --target bigquery --watch             # termi
 uv run datatrust run --env prod --seed 101 --scenario S01 --wait         # terminal 2: start a run as operator, wait for the incident
 ```
 
-The dashboard is the Worker URL in a browser; Access signs you in with your email.
-
-Optional: to run the production runner on GitHub Actions instead of your machine, without a service-account key, follow [`docs/prod-runner-wif.md`](docs/prod-runner-wif.md) (Workload Identity Federation; off unless you start it).
+The production runner also commits the audit lake to Basin Catalog every 15 minutes and when it stops (`uv run datatrust lake commit --catalog basin` does the same by hand). The dashboard is the Worker URL in a browser; Access signs you in with your email.
 
 Only `npm run prod:smoke` may move a status label above to "executed in production"; it writes `results/prod-smoke-<date>.*` with the commands, run ids, the Workers AI grounding pass rate and fallback rate, the Iceberg row count and BigQuery bytes billed.
 

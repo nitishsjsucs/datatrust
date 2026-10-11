@@ -130,3 +130,49 @@ def test_setup_prod_never_lets_wrangler_edit_the_committed_config():
     assert len(creates) == 2
     for line in re.findall(r"wr (?:d1 create|r2 bucket create)[^\n]*", text):
         assert "--update-config=false" in line, line
+
+
+def test_setup_prod_uses_no_workers_paid_feature():
+    """Production runs on the Workers Free plan (SPEC 28): no Basin Pipelines stream, sink or pipeline, and
+    exactly the five datatrust-* queues."""
+    import re
+
+    text = (config.REPO_ROOT / "scripts" / "setup-prod.sh").read_text()
+    commands = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    assert not any("basin pipelines" in line for line in commands)
+    assert "--stream" not in text
+    queues = re.search(r"for q in ([^;]+); do", text).group(1).split()
+    assert queues == [
+        "datatrust-check-results",
+        "datatrust-lineage-events",
+        "datatrust-investigate",
+        "datatrust-audit-events",
+        "datatrust-dlq",
+    ]
+    assert tuple(queues) == doctor.QUEUES
+
+
+def test_doctor_checks_the_free_plan_config_and_not_pipelines():
+    template = (config.REPO_ROOT / "apps" / "worker" / "wrangler.prod.template.jsonc").read_text()
+    assert doctor.paid_only_keys(template) == []
+    paid = template.replace('  "ai": {', '  "pipelines": [],\n  "limits": {"cpu_ms": 50},\n  "ai": {')
+    assert doctor.paid_only_keys(paid) == ["pipelines", "limits"]
+    source = (config.REPO_ROOT / "pipelines" / "datatrust" / "doctor.py").read_text()
+    assert '"pipelines", "streams"' not in source and "Workers Paid plan (manual check)" not in source
+
+
+def test_wizard_never_asks_for_workers_paid_and_prefills_known_values():
+    text = (config.REPO_ROOT / "scripts" / "prod-wizard.sh").read_text()
+    stages = text.split("# STAGES: author this section", 1)[1]
+    assert "/workers/plans" not in stages and "Workers Paid plan (" not in stages
+    assert "Pipelines stream" not in stages
+    assert "do not subscribe to Workers Paid" in stages
+    for key in (
+        "CLOUDFLARE_ACCOUNT_ID",
+        "ACCESS_TEAM_DOMAIN",
+        "DATATRUST_GCP_PROJECT",
+        "DATATRUST_BQ_LOCATION",
+    ):
+        assert f"prefill {key} " in stages, key
+    assert 'KNOWN_ACCESS_TEAM_DOMAIN="https://old-truth-a7dc.cloudflareaccess.com"' in stages
+    assert 'KNOWN_GCP_PROJECT="master-magnet-444903-u4"' in stages
