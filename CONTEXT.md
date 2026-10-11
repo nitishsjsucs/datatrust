@@ -11,6 +11,12 @@ in time) or `error`. One ValidationRunWorkflow instance per run, with the run id
 (outbound only): `dbt_build` (generate, inject, load, `dbt-ol build`) and `diagnostics` (run probes). A
 **lease** carries a token; every job call must present it. A job is leased at most three times.
 
+**Principal** and **role**: who calls the Worker, resolved from the verified Access JWT. Humans are matched on
+email, service tokens on `common_name` (the Client ID). Roles: `viewer` (read runs and incidents),
+`operator` (also start runs and post alerts) and `runner` (lease jobs, post results, lineage and alerts). In
+production the service token `datatrust-runner` holds only `runner`; `datatrust-operator` holds `operator`
+and `viewer` for the CLI (`datatrust run --env prod`) and the smoke test.
+
 **Check**: one of the 40 dbt test nodes named `dq_*`, listed in `checks/registry.yml` with a category
 (uniqueness, referential, interval, stage_transition, compensation, reconciliation), a tested node and
 columns, and for singular SQL tests the further nodes it reads (`also`). A **CheckResult** is one check's

@@ -4,7 +4,7 @@ Lineage-aware data quality and root-cause analysis for workforce data (HR, recru
 
 DataTrust builds a synthetic workforce warehouse with dbt, guards it with schema contracts and 40 data checks, captures column-level lineage as OpenLineage events, and when checks or metrics fail it traces the failure upstream, runs read-only diagnostic SQL probes, ranks the likely root cause, and writes an incident summary from sanitized evidence. Validation and investigation are coordinated by Cloudflare Queues and Workflows; summaries come from Workers AI in production.
 
-> **Status: v1 core implemented; production not yet executed.** Built against [SPEC.md](SPEC.md). Everything runs locally on stand-ins (DuckDB for BigQuery, Miniflare for Cloudflare, a local LLM or template for Workers AI), and CI is configured to run the same checks once the repo is pushed. The production path is implemented and waits for the account setup below. The status table never claims more than the repo has run.
+> **Status: v1 core implemented; production not yet executed.** Built against [SPEC.md](SPEC.md). Everything runs locally on stand-ins (DuckDB for BigQuery, Miniflare for Cloudflare, a local LLM or template for Workers AI), and CI is configured to run the same checks once the repo is pushed (a scripted rehearsal of all four CI jobs passed in a Linux container on 2026-10-10; the first GitHub Actions run has not happened yet). The production path is implemented and waits for the account setup below. The status table never claims more than the repo has run.
 
 All data is synthetic. No real employee or candidate data is used anywhere; emails use the reserved `example.com` domain.
 
@@ -25,7 +25,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Basin Pipelines, Basin Catalog (Iceberg) | implemented, not executed (local pyiceberg SQL catalog stand-in executed: `uv run datatrust lake sync`) |
 | BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check) |
 | Incident dashboard (stretch) | executed locally under `wrangler dev` (Miniflare) as Worker static assets, 2026-10-10 |
-| `setup:prod` and `doctor` | implemented; `npm run doctor` (local) executed; `npm run doctor -- --prod` and `setup:prod` executed only up to their local preconditions (no Cloudflare or Google Cloud account connected) |
+| `setup:prod`, `setup:wizard` and `doctor` | implemented; `npm run doctor` (local) executed; `npm run doctor -- --prod` and `setup:prod` executed only up to their local preconditions (no Cloudflare or Google Cloud account connected); the wizard has not been run end to end |
 
 ## Synthetic dataset
 
