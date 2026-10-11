@@ -190,3 +190,77 @@ def write_report(
     mpath = out_dir / f"{name}.md"
     mpath.write_text(markdown(report))
     return jpath, mpath
+
+
+def write_e2e_report(
+    records: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    seeds: list[int],
+    command: str,
+    wall_seconds: float,
+    parity: list[dict[str, Any]] | None,
+    tag: str | None = None,
+    date: str | None = None,
+) -> tuple[Path, Path]:
+    date = date or dt.date.today().isoformat()
+    name = f"bench-{date}-e2e" + (f"-{tag}" if tag else "")
+    injected = [r for r in records if r["scenario"]]
+    detected = sum(1 for r in injected if r["detected"])
+    top3 = sum(1 for r in injected if r["groundTruth"] in r["ranked"][:3])
+    top1 = sum(1 for r in injected if r["ranked"][:1] == [r["groundTruth"]])
+    clean_fp = sum(len(r["failing"]) for r in records if not r["scenario"])
+    summary = {
+        "injectedTrials": len(injected),
+        "detected": detected,
+        "top1": top1,
+        "top3": top3,
+        "cleanFalsePositives": clean_fp,
+        "parityChecked": parity is not None,
+        "parityMismatches": parity,
+    }
+    report = {
+        "meta": {
+            "mode": "e2e",
+            "date": date,
+            "command": command,
+            "gitCommit": git_commit(),
+            "seeds": seeds,
+            "wallSeconds": round(wall_seconds, 1),
+            "warehouse": WAREHOUSE,
+            "worker": "wrangler dev --local (Miniflare, workerd): local stand-in for Cloudflare Workers, Queues, Workflows, D1 and R2",
+            "versions": versions(),
+        },
+        "summary": summary,
+        "records": records,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    jpath = out_dir / f"{name}.json"
+    jpath.write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
+    lines = [
+        f"# DataTrust benchmark, e2e mode, {date}",
+        "",
+        f"- Command: `{command}`",
+        f"- Git commit: `{report['meta']['gitCommit']}`",
+        f"- Worker: {report['meta']['worker']}",
+        f"- Warehouse: {WAREHOUSE}",
+        f"- Wall time: {report['meta']['wallSeconds']} s",
+        "",
+        f"- Detected: {detected}/{len(injected)}; ground truth in top 3: {top3}/{len(injected)}; top 1: {top1}/{len(injected)}",
+        f"- Clean false positives: {clean_fp}",
+        "- Offline parity (identical top-3 lists): "
+        + ("not checked" if parity is None else ("yes" if not parity else f"no, {len(parity)} mismatches")),
+        "",
+        "| Trial | Run status | Failing checks | Ground-truth rank | Summary provider | Seconds |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in records:
+        gt = r["groundTruth"]
+        pos = (r["ranked"].index(gt) + 1) if gt and gt in r["ranked"] else ("n/a" if not gt else "miss")
+        lines.append(
+            f"| {r['trial']} | {r['status']} | {', '.join(r['failing']) or '-'} | {pos} | "
+            f"{r['summaryProvider'] or '-'} | {r['wallSeconds']} |"
+        )
+    mpath = out_dir / f"{name}.md"
+    mpath.write_text("\n".join(lines) + "\n")
+    return jpath, mpath

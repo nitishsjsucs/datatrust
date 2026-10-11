@@ -40,8 +40,11 @@ packages = ["pipelines/datatrust"]
 
 [tool.pytest.ini_options]
 testpaths = ["pipelines/tests"]
-addopts = "-ra -m 'not bench'"
-markers = ["bench: runs benchmark trials; run with `uv run pytest -m bench` (CI bench-offline job)"]
+addopts = "-ra -m 'not bench and not e2e'"
+markers = [
+    "bench: runs benchmark trials; run with `uv run pytest -m bench` (CI bench-offline job)",
+    "e2e: needs the local Worker on DATATRUST_API_URL; run with `npm run bench:e2e` or `uv run pytest -m e2e`",
+]
 
 [tool.ruff]
 line-length = 110

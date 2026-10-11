@@ -85,3 +85,27 @@ jobs:
         with:
           name: bench-offline-seed101
           path: bench-out/
+
+  e2e:
+    # Every trial through wrangler dev --local (Miniflare): Queues, both Workflows, the runner and the template
+    # summarizer; S01, T14 and S04 on seed 101, plus the parity test against the offline mode.
+    needs: [node, python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @datatrust/rca
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: bash scripts/bench-e2e.sh --pytest
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-logs
+          path: .dev/logs/

@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 14 of 19 (core) done: `feat(llm): sanitizer, grounding validator and summarizers`.
+Commit 15 of 19 (core) done: `feat(bench): end-to-end mode through wrangler dev with parity check`.
 
 ## Done
 
@@ -23,10 +23,12 @@ Commit 14 of 19 (core) done: `feat(llm): sanitizer, grounding validator and summ
 - 12. Queues (`dt-check-results`, `dt-lineage-events`, `dt-investigate`, `dt-dlq` with retries and DLQ) and consumers, `ValidationRunWorkflow` (register, enqueue build, wait for `build-complete` with 6 h timeout, `await-ingested` with 10 exponential retries, summarize, dispatch, finalize) and `InvestigationWorkflow` (load context, trace, plan, diagnostics job, wait 1 h, rank with frozen weights, sanitized evidence, template summary, persist to D1 and R2 with provenance), write routes (`POST /api/runs`, runner lease/artifacts/complete with lease tokens, `POST /api/v1/lineage`, `POST /api/alerts`), deterministic investigation ids, `rca` evidence builder. Tests: `queues.test.ts`, `validation-run.test.ts`, `investigation.test.ts` (real S01 trial fixture: raw.hires ranked first), `runner.test.ts` (lease, attempts sweep, stale tokens, 422 on unsanitized probe results, alerts). Verified by hand under `wrangler dev --local`: `POST /api/runs` created a workflow and the runner token leased its `dbt_build` job; processes killed, ports free.
 - 13. `runner/client.py` (dev JWT or Access service-token headers, retries with exponential backoff on 5xx and network errors, 4xx fatal), `runner/loop.py` (dbt_build: synth, scenario + decoys when a scenario is given, load, dbt-ol build, mart snapshots on green runs, relations and slim run_results artifacts, OpenLineage in batches of 50, complete; diagnostics: probes on the runner's own warehouse and relations, read-only, `rca sanitize`, complete), `datatrust runner --once|--watch`, `scripts/dev-up.sh` / `dev-down.sh` (process groups in `.dev/pids`, port checks for 8792/9242/8160), `npm run dev:up|dev:down|dev:reset`, `test_runner_client.py`. Verified by hand on 2026-10-10: `npm run dev:up`, `POST /api/runs {seed 101, scenario S01}`, two `datatrust runner --once` calls (build: 40 checks, U05 failing, 136 OpenLineage events; diagnostics: 46 probes) produced incident `inc_<run>_checks_00000000` ranking `source.datatrust.raw.hires` first with diagnostic SQL and local-stand-in provenance; `npm run dev:down` stopped everything and confirmed 8792, 9242 and 8160 free.
 - 14. `packages/rca/src/summary/` (zod `IncidentSummary` + JSON Schema, `{ev:key.field}` renderer with integer/percent/ratio formats, grounding validator with the six SPEC 13.7 rules, deterministic template draft, prompt and repair prompt listing keys and fields without values), rca CLI `evidence|prompt|validate|template`; Worker `llm/` (grounded summarize loop: draft, one repair quoting violations, template fallback; Workers AI with JSON mode through AI Gateway; OpenAI-compatible local; template; production refuses non-Workers-AI), `recovery.ts` (bq cp / local restore / rebuild hints), `datatrust restore --from-snapshot`, harness builds evidence, prompt and template summary per trial, `test_no_pii_in_prompts.py` (marked `bench`, run by CI bench-offline: 20 seed-101 prompts and summaries free of names, emails, phones, birth dates and salaries, plus a planted-leak control), `summary-validate.test.ts`, `summarizer.test.ts` (AI binding and local fetch mocked). `dev-up.sh --llm` switches the Worker to the local LLM. Observed by hand on 2026-10-10 with Qwen3-1.7B through wrangler dev (S01, T14, S04 on seed 101): all three drafts failed grounding twice (bare digits, invented SQL as a diagnostic id, wrong evidence keys) and fell back to the template, which is the designed behavior; this is an observation, not a reported result.
+- 15. `bench/e2e.py` (POST /api/runs as operator, runner loop in-process, polling run and incident state, records), `datatrust bench --mode e2e [--parity]`, e2e report writer, `scripts/bench-e2e.sh` (dev-up, trap dev-down), `npm run bench:e2e`, `test_e2e_parity.py` (marked `e2e`), CI `e2e` job, portable port checks (`lsof` or `ss`). Verified on 2026-10-10: `npm run bench:e2e -- --pytest` passed (S01, T14, S04 incidents with expected fields; top-3 identical to offline); a full seed-101 e2e run before this commit gave 20/20 detected, 20/20 top-3, parity yes (results rerun at the clean commit in 15b).
 
 ## Next
 
-- 15. `feat(bench): end-to-end mode through wrangler dev with parity check` (e2e harness, CI e2e job).
+- 15b (extra). `docs: end-to-end benchmark results through Miniflare` (rerun `npm run bench:e2e` at the clean commit and commit `results/bench-<date>-e2e.*`).
+- 16. `feat(lake): event sink with Basin Pipelines and local pyiceberg catalog`.
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
@@ -34,7 +36,7 @@ Commit 14 of 19 (core) done: `feat(llm): sanitizer, grounding validator and summ
 - `npm run test:rca`: 49 passed
 - `npm run test:worker`: 50 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 120 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed
+- `uv run pytest`: 120 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
 
 ## Deviations from SPEC.md
 

@@ -102,9 +102,8 @@ def _cmd_bench(args: argparse.Namespace) -> int:
     from datatrust.bench.scenarios import SCENARIOS
     from datatrust.rca_cli import rca
 
-    if args.mode != "offline":
-        print("e2e mode lands with the Worker (SPEC 23, commit 15)", file=sys.stderr)
-        return 2
+    if args.mode == "e2e":
+        return _bench_e2e(args)
     seeds = _parse_seeds(args.seeds)
     scenario_ids = args.scenarios.split(",") if args.scenarios else None
     t0 = time.perf_counter()
@@ -146,6 +145,43 @@ def _cmd_bench(args: argparse.Namespace) -> int:
             return 1
         print("gate passed", file=sys.stderr)
     return 0
+
+
+def _bench_e2e(args: argparse.Namespace) -> int:
+    import os
+    import time
+
+    from datatrust import config
+    from datatrust.bench.e2e import parity, run_e2e
+    from datatrust.bench.harness import run_bench, trial_specs
+    from datatrust.bench.report import write_e2e_report
+    from datatrust.bench.scenarios import SCENARIOS
+
+    seeds = _parse_seeds(args.seeds)
+    scenario_ids = args.scenarios.split(",") if args.scenarios else [s.id for s in SCENARIOS]
+    base_url = os.environ.get("DATATRUST_API_URL", "http://127.0.0.1:8792")
+    t0 = time.perf_counter()
+    records = run_e2e(seeds, scenario_ids, base_url=base_url)
+    wall = time.perf_counter() - t0
+    mismatches = None
+    if args.parity:
+        offline = run_bench(
+            trial_specs(seeds, scenario_ids, clean=False), workers=args.workers, progress=False
+        )
+        mismatches = parity(records, offline)
+    command = args.command_label or "uv run datatrust " + " ".join(sys.argv[1:])
+    jpath, mpath = write_e2e_report(
+        records,
+        out_dir=Path(args.out) if args.out else config.RESULTS_DIR,
+        seeds=seeds,
+        command=command,
+        wall_seconds=wall,
+        parity=mismatches,
+        tag=args.tag,
+    )
+    print(mpath.read_text())
+    print(json.dumps({"json": str(jpath), "md": str(mpath)}))
+    return 1 if mismatches else 0
 
 
 def _cmd_tune(args: argparse.Namespace) -> int:
@@ -259,6 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--work-dir", help="scratch directory for trials (default .data/bench)")
     p.add_argument("--keep", action="store_true", help="keep each trial's warehouse and dbt target")
     p.add_argument("--gate", help="baseline JSON; fail on clean false positives or a drop of more than 0.05")
+    p.add_argument("--parity", action="store_true", help="e2e: also run the offline trials and compare top-3")
     p.add_argument("--command-label", help=argparse.SUPPRESS)
     p.set_defaults(func=_cmd_bench)
 

@@ -4,7 +4,10 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIDS="$ROOT/.dev/pids"
-port_busy() { lsof -iTCP:"$1" -sTCP:LISTEN -n -P >/dev/null 2>&1; }
+port_busy() { # lsof on macOS, ss on Linux runners
+  if command -v lsof >/dev/null 2>&1; then lsof -iTCP:"$1" -sTCP:LISTEN -n -P >/dev/null 2>&1
+  else ss -ltn "sport = :$1" | grep -q LISTEN; fi
+}
 
 stop() { # signal pidfile
   local pid

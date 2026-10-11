@@ -17,7 +17,10 @@ for arg in "$@"; do
 done
 MODEL="${DATATRUST_LLM_MODEL_PATH:-$HOME/Developer/projects/_models/Qwen3-1.7B-Q4_0-rtn.gguf}"
 
-port_busy() { lsof -iTCP:"$1" -sTCP:LISTEN -n -P >/dev/null 2>&1; }
+port_busy() { # lsof on macOS, ss on Linux runners
+  if command -v lsof >/dev/null 2>&1; then lsof -iTCP:"$1" -sTCP:LISTEN -n -P >/dev/null 2>&1
+  else ss -ltn "sport = :$1" | grep -q LISTEN; fi
+}
 wait_http() { # url seconds
   local url="$1" deadline=$((SECONDS + $2))
   until curl -fsS -o /dev/null "$url" 2>/dev/null; do
