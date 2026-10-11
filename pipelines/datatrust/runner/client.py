@@ -135,11 +135,22 @@ class WorkerClient:
         url = os.environ.get("DATATRUST_API_URL", "http://127.0.0.1:8792").rstrip("/")
         return WorkerClient(url, Auth.local(role))
 
-    def request(self, method: str, path: str, *, json: Any = None, headers: dict[str, str] | None = None):
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any = None,
+        headers: dict[str, str] | None = None,
+        retry: bool = True,
+    ):
+        """One API call. 5xx answers and network errors are retried with exponential backoff unless `retry`
+        is False (a call that must not run twice, such as starting a run); 4xx answers raise at once."""
         url = f"{self.base_url}{path}"
         all_headers = {**self.auth.headers, **(headers or {})}
         last: Exception | None = None
-        for attempt in range(self.max_attempts):
+        attempts = self.max_attempts if retry else 1
+        for attempt in range(attempts):
             try:
                 res = self.session.request(method, url, json=json, headers=all_headers, timeout=self.timeout)
             except requests.RequestException as err:
@@ -150,7 +161,7 @@ class WorkerClient:
                         raise WorkerHTTPError(res.status_code, path, res.text)
                     return res
                 last = WorkerHTTPError(res.status_code, path, res.text)
-            if attempt < self.max_attempts - 1:
+            if attempt < attempts - 1:
                 self.sleep(self.backoff * (2**attempt))
         assert last is not None
         raise last
@@ -190,10 +201,12 @@ class WorkerClient:
     # ------------------------------------------------------------------ operator and viewer calls
 
     def create_run(self, target: str, seed: int, scenario: str | None = None) -> str:
+        """Start a run (operator). Never retried: when only the answer was lost, a retry would start a second
+        run. The Worker answers 409 while another BigQuery run is in flight (one at a time, SPEC 13.1)."""
         body: dict[str, Any] = {"target": target, "seed": seed}
         if scenario:
             body["scenario"] = scenario
-        return self.request("POST", "/api/runs", json=body).json()["runId"]
+        return self.request("POST", "/api/runs", json=body, retry=False).json()["runId"]
 
     def get_run(self, run_id: str) -> dict[str, Any]:
         return self.request("GET", f"/api/runs/{run_id}").json()

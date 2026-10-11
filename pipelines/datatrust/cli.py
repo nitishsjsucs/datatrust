@@ -287,16 +287,31 @@ def _cmd_runner(args: argparse.Namespace) -> int:
     return 0
 
 
+# `datatrust run` exit status when the Worker refused a BigQuery run because another is in flight (409).
+RUN_IN_FLIGHT_EXIT = 3
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     """Start a validation run as an operator (local dev JWT, or the datatrust-operator service token in
     production) and optionally wait for its outcome. A runner must be leasing jobs for the run to progress."""
     import time
 
-    from datatrust.runner.client import WorkerClient
+    from datatrust.runner.client import WorkerClient, WorkerHTTPError
 
     client = WorkerClient.from_env("operator", args.env)
     target = args.target or ("bigquery" if args.env == "prod" else "duckdb")
-    run_id = client.create_run(target, args.seed, args.scenario)
+    try:
+        run_id = client.create_run(target, args.seed, args.scenario)
+    except WorkerHTTPError as err:
+        if err.status != 409:
+            raise
+        busy = json.loads(err.body or "{}")
+        print(
+            f"not started: BigQuery runs go one at a time and {busy.get('runId')} is {busy.get('status')}; "
+            "start this run once it has finished (and, if it failed, once its incident exists)",
+            file=sys.stderr,
+        )
+        return RUN_IN_FLIGHT_EXIT
     print(json.dumps({"runId": run_id, "target": target, "seed": args.seed, "scenario": args.scenario}))
     if not args.wait:
         return 0

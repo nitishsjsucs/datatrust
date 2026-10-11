@@ -2,19 +2,38 @@ import { Hono } from 'hono';
 import { type HonoEnv, requireRole } from '../hono';
 import { ulid } from '../ids';
 import { CreateRunSchema } from '../schemas';
-import { getRun, insertRun, listCheckResults } from '../store/repo';
+import { bigQueryRunInFlight, finishRun, getRun, insertBigQueryRunIfIdle, insertRun, listCheckResults } from '../store/repo';
 
 export const runs = new Hono<HonoEnv>();
 
-/** Insert the run row first, so an immediate GET never 404s, then create the workflow (SPEC 13.1). */
+/**
+ * Insert the run row first, so an immediate GET never 404s, then create the workflow (SPEC 13.1). BigQuery
+ * runs go one at a time: every one builds the same datasets, so another is refused with 409 while one is in
+ * flight (queued, running, or failed and still being investigated). If the workflow cannot be created, the
+ * row is closed as 'error' rather than left 'queued' for ever.
+ */
 runs.post('/', requireRole('operator'), async (c) => {
   const body = CreateRunSchema.safeParse(await c.req.json().catch(() => null));
   if (!body.success) return c.json({ error: 'invalid_body' }, 400);
   const runId = `run_${ulid()}`;
+  const target = body.data.target;
   const seed = body.data.seed ?? 101;
   const scenario = body.data.scenario ?? null;
-  await insertRun(c.env.DB, { runId, target: body.data.target, seed, scenario });
-  await c.env.VALIDATION_RUN.create({ id: runId, params: { runId, target: body.data.target, seed, scenario } });
+  if (target === 'bigquery') {
+    if (!(await insertBigQueryRunIfIdle(c.env.DB, { runId, seed, scenario }))) {
+      const busy = await bigQueryRunInFlight(c.env.DB);
+      return c.json({ error: 'bigquery_run_in_flight', runId: busy?.run_id ?? null, status: busy?.status ?? null }, 409);
+    }
+  } else {
+    await insertRun(c.env.DB, { runId, target, seed, scenario });
+  }
+  try {
+    await c.env.VALIDATION_RUN.create({ id: runId, params: { runId, target, seed, scenario } });
+  } catch (err) {
+    console.error(`runs: workflow for ${runId} not created`, err);
+    await finishRun(c.env.DB, runId, 'error');
+    return c.json({ error: 'workflow_not_created', runId }, 500);
+  }
   return c.json({ runId }, 201);
 });
 

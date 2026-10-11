@@ -207,6 +207,15 @@ def test_prune_posts_the_bounded_request_and_returns_the_report():
     assert headers["Cf-Access-Jwt-Assertion"] == "t0ken"
 
 
+def test_create_run_is_never_retried():
+    """A lost answer to POST /api/runs must not start a second run."""
+    with FakeWorker([(503, {"error": "internal"}), (201, {"runId": "run_second"})]) as w:
+        with pytest.raises(WorkerHTTPError) as err:
+            client(w.url).create_run("bigquery", 101, "S01")
+    assert err.value.status == 503
+    assert len(w.seen) == 1
+
+
 def test_a_job_whose_lease_was_lost_is_dropped_and_the_runner_continues(monkeypatch):
     from datatrust.runner import loop
 
@@ -232,3 +241,22 @@ def test_other_http_errors_still_stop_the_runner(monkeypatch):
             loop.run_once(client(w.url), target="duckdb", kinds=["dbt_build"], runner_id="r1")
     assert not loop.lease_lost(WorkerHTTPError(403, "/api/runs", ""))
     assert loop.lease_lost(WorkerHTTPError(409, "/api/runner/jobs/job_1/complete", ""))
+
+
+def test_datatrust_run_explains_a_bigquery_run_in_flight(monkeypatch, capsys):
+    import argparse
+
+    from datatrust import cli
+    from datatrust.runner import client as client_mod
+
+    busy = {"error": "bigquery_run_in_flight", "runId": "run_busy", "status": "running"}
+    with FakeWorker([(409, busy)]) as w:
+        monkeypatch.setattr(
+            client_mod.WorkerClient, "from_env", staticmethod(lambda role, env: client(w.url))
+        )
+        args = argparse.Namespace(
+            env="prod", target="bigquery", seed=101, scenario=None, wait=False, timeout=60
+        )
+        assert cli._cmd_run(args) == cli.RUN_IN_FLIGHT_EXIT == 3
+    assert "run_busy is running" in capsys.readouterr().err
+    assert len(w.seen) == 1

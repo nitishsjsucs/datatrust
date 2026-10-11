@@ -884,11 +884,11 @@ All routes except `/healthz` require a verified Access JWT (section 15). Roles: 
 | Method and path | Role | Body / result |
 |---|---|---|
 | `GET /healthz` | none | `{ok, environment, version}`; no data |
-| `POST /api/runs` | operator | `{target: 'duckdb'\|'bigquery', seed?: number, scenario?: string}` inserts the `runs` row (status `queued`) in the handler, then creates ValidationRunWorkflow `run_<ulid>`; returns `{runId}`, so an immediate GET never 404s |
+| `POST /api/runs` | operator | `{target: 'duckdb'\|'bigquery', seed?: number, scenario?: string}` inserts the `runs` row (status `queued`) in the handler, then creates ValidationRunWorkflow `run_<ulid>`; returns `{runId}`, so an immediate GET never 404s. If the workflow cannot be created the row is closed as `error` (500). BigQuery runs go one at a time (2026-10-11 review): every one loads and builds the same `datatrust_*` datasets, so while another BigQuery run is queued or running (at most 8 hours), failed without its incident yet (at most 2 hours), or has an open diagnostics job, the insert is refused in the same statement and the answer is 409 `{error: 'bigquery_run_in_flight', runId, status}` |
 | `GET /api/runs/:runId` | viewer | run status, check counts, incident id |
 | `POST /api/runner/lease` | runner | `{runnerId, kinds: ('dbt_build'\|'diagnostics')[], target}` returns 200 `{job}` or 204 |
 | `POST /api/runner/jobs/:jobId/artifacts` | runner | `{kind: 'run_results'\|'relations'\|'probe_results', data}` stored in R2 `runs/<runId>/<kind>.json` |
-| `POST /api/runner/jobs/:jobId/complete` | runner | `{status, checkResults?, probeResults?, expectedLineageEvents?, error?}`; enqueues and sends the matching workflow event |
+| `POST /api/runner/jobs/:jobId/complete` | runner | `{status, checkResults?, probeResults?, expectedLineageEvents?, error?}`; enqueues and sends the matching workflow event. Safe to retry (2026-10-11 review): the same lease token and status after a completion that landed re-sends the event without enqueueing again (409 for another status); an instance that is gone or finished is logged, not an error |
 | `POST /api/v1/lineage` | runner | one OpenLineage RunEvent or an array of at most 10 events and 256 KB (413 otherwise, section 28.5.2); headers `X-DataTrust-Job-Id` and `X-DataTrust-Lease-Token` required (openlineage-python `HttpConfig.custom_headers` can send them); 403 unless that job is `dbt_build`, currently `leased` with that token; the event is filed under the job's `run_id`; 202 |
 | `POST /api/alerts` | runner, operator | `{runId, metricNode, column?, observed, expected}`; 404 unless the run exists; enqueues on datatrust-investigate with `trigger: 'alert'` |
 | `GET /api/incidents` | viewer | list, filter by runId |

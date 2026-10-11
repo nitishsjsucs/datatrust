@@ -63,6 +63,64 @@ export async function insertRun(
     .run();
 }
 
+/**
+ * How long a BigQuery run counts as in flight (SPEC 13.1): queued or running for at most the build wait plus
+ * the ingest retries (so a run whose workflow died blocks for 8 hours at most), and failed without its
+ * incident for at most the diagnostics wait plus margin. Open BigQuery diagnostics jobs (also from alerts)
+ * count too.
+ */
+export const BIGQUERY_RUN_IN_FLIGHT_MS = 8 * 60 * 60 * 1000;
+export const BIGQUERY_INVESTIGATION_IN_FLIGHT_MS = 2 * 60 * 60 * 1000;
+
+const BIGQUERY_BUSY = `EXISTS (SELECT 1 FROM runs WHERE target = 'bigquery' AND (
+    (status IN ('queued', 'running') AND created_at > ?5)
+    OR (status = 'failed' AND incident_id IS NULL AND finished_at > ?6)))
+  OR EXISTS (SELECT 1 FROM jobs WHERE status IN ('queued', 'leased') AND kind = 'diagnostics'
+    AND json_extract(payload_json, '$.target') = 'bigquery' AND created_at > ?6)`;
+
+/**
+ * Insert a BigQuery run only while no other BigQuery run is in flight, in ONE statement (so two concurrent
+ * requests cannot both pass): every BigQuery run loads and builds the same `datatrust_*` datasets, so a
+ * second build would change the tables the first run's diagnostics probe. Returns false when refused.
+ */
+export async function insertBigQueryRunIfIdle(
+  db: D1Database,
+  r: { runId: string; seed: number | null; scenario: string | null },
+  now = Date.now(),
+): Promise<boolean> {
+  const res = await db
+    .prepare(
+      `INSERT INTO runs (run_id, target, seed, scenario, status, created_at)
+       SELECT ?1, 'bigquery', ?2, ?3, 'queued', ?4 WHERE NOT (${BIGQUERY_BUSY})`,
+    )
+    .bind(
+      r.runId,
+      r.seed,
+      r.scenario,
+      new Date(now).toISOString(),
+      new Date(now - BIGQUERY_RUN_IN_FLIGHT_MS).toISOString(),
+      new Date(now - BIGQUERY_INVESTIGATION_IN_FLIGHT_MS).toISOString(),
+    )
+    .run();
+  return (res.meta.changes ?? 0) > 0;
+}
+
+/** The BigQuery run (or the run of an open BigQuery diagnostics job) that blocks a new one, for the 409. */
+export async function bigQueryRunInFlight(db: D1Database, now = Date.now()): Promise<{ run_id: string; status: string } | null> {
+  return db
+    .prepare(
+      `SELECT run_id, status FROM runs WHERE target = 'bigquery' AND (
+         (status IN ('queued', 'running') AND created_at > ?1)
+         OR (status = 'failed' AND incident_id IS NULL AND finished_at > ?2))
+       UNION ALL
+       SELECT run_id, 'investigating' AS status FROM jobs WHERE status IN ('queued', 'leased') AND kind = 'diagnostics'
+         AND json_extract(payload_json, '$.target') = 'bigquery' AND created_at > ?2
+       LIMIT 1`,
+    )
+    .bind(new Date(now - BIGQUERY_RUN_IN_FLIGHT_MS).toISOString(), new Date(now - BIGQUERY_INVESTIGATION_IN_FLIGHT_MS).toISOString())
+    .first<{ run_id: string; status: string }>();
+}
+
 export async function getRun(db: D1Database, runId: string): Promise<RunRow | null> {
   return db.prepare(`SELECT * FROM runs WHERE run_id = ?`).bind(runId).first<RunRow>();
 }

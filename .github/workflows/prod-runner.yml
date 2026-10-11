@@ -77,6 +77,7 @@ jobs:
         env:
           CF_ACCESS_OPERATOR_CLIENT_ID: ${{ secrets.CF_ACCESS_OPERATOR_CLIENT_ID }}
           CF_ACCESS_OPERATOR_CLIENT_SECRET: ${{ secrets.CF_ACCESS_OPERATOR_CLIENT_SECRET }}
-        run: uv run datatrust run --env prod --target bigquery --seed 101
+        # Exit status 3: another BigQuery run is in flight (one at a time); draining its jobs is still useful.
+        run: uv run datatrust run --env prod --target bigquery --seed 101 || test $? -eq 3
       - name: drain queued jobs
         run: uv run datatrust runner --env prod --target bigquery --watch --idle-exit 600
