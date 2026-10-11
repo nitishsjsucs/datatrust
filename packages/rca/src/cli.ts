@@ -13,9 +13,18 @@
  *   evaluate         {trials, weights}                                    -> {top1, top3, mrr, n}
  *   loso             {dev, test}                                          -> {pooled, perScenario}
  *   coverage         {graph|events, relations}                            -> {covered, total, share}
+ *   evidence         {incidentId, runId, trigger, checks, ranked, probeResults, relations} -> SanitizedEvidence
+ *   prompt           {evidence}                                           -> {messages}
+ *   validate         {draft, evidence}                                    -> {ok, violations}
+ *   template         {evidence}                                           -> {draft, rendered}
  */
 import { readFileSync } from 'node:fs';
+import { buildEvidence, type SanitizedEvidence } from './evidence/evidence';
 import { findUnsanitized, sanitizeProbeResults } from './evidence/sanitize';
+import { buildPrompt } from './summary/prompt';
+import { renderSummary } from './summary/render';
+import { templateDraft } from './summary/template';
+import { validateSummary } from './summary/validate';
 import { buildLineageGraph, columnLineageCoverage } from './lineage/graph';
 import { baselineOrders } from './rca/baselines';
 import { planProbes } from './rca/plan';
@@ -23,7 +32,7 @@ import { rankAll } from './rca/rank';
 import { traceUpstream } from './rca/trace';
 import { evaluate, leaveOneScenarioOut, tune } from './rca/tune';
 import { FROZEN_WEIGHTS } from './rca/weights';
-import type { CheckResult, LineageGraph, ProbeResult, RelationsMap } from './types';
+import type { CheckResult, LineageGraph, ProbeResult, RankedCandidate, RelationsMap } from './types';
 
 type Input = Record<string, unknown>;
 
@@ -80,6 +89,25 @@ async function run(command: string, input: Input): Promise<unknown> {
       return columnLineageCoverage(graphOf(input));
     case 'weights':
       return FROZEN_WEIGHTS;
+    case 'evidence':
+      return buildEvidence({
+        incidentId: String(input['incidentId'] ?? 'incident'),
+        runId: String(input['runId'] ?? 'run'),
+        trigger: input['trigger'] === 'alert' ? 'alert' : 'checks',
+        checks: input['checks'] as CheckResult[],
+        ranked: input['ranked'] as RankedCandidate[],
+        probeResults: input['probeResults'] as ProbeResult[],
+        relations: input['relations'] as RelationsMap,
+      });
+    case 'prompt':
+      return { messages: buildPrompt(input['evidence'] as SanitizedEvidence) };
+    case 'validate':
+      return validateSummary(input['draft'], input['evidence'] as SanitizedEvidence);
+    case 'template': {
+      const ev = input['evidence'] as SanitizedEvidence;
+      const draft = templateDraft(ev);
+      return { draft, rendered: renderSummary(draft, ev) };
+    }
     default:
       throw new Error(`unknown command ${command}`);
   }

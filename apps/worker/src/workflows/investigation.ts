@@ -19,7 +19,8 @@ import {
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { jsonStep, RETRY_LOAD } from './steps';
 import type { AppEnv } from '../env';
-import { createSummarizer } from '../llm/summarizer';
+import { createSummarizer, summarizeGrounded } from '../llm/summarizer';
+import { recoveryCommands } from '../recovery';
 import type { Alert } from '../schemas';
 import {
   baselineChecksums,
@@ -163,13 +164,19 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
       });
     });
 
-    const summary = await jsonStep(step, 'summarize', async () => createSummarizer(env).summarize(evidence));
+    const summary = await jsonStep(step, 'summarize', async () => summarizeGrounded(createSummarizer(env), evidence));
 
     await jsonStep(step, 'persist-incident', async () => {
       const provenance = {
         environment: env.ENVIRONMENT,
         warehouse: ctx.target === 'bigquery' ? 'bigquery' : 'duckdb (local stand-in for BigQuery)',
-        summarizer: { provider: summary.provider, model: summary.model },
+        summarizer: {
+          provider: summary.provider,
+          model: summary.model,
+          firstDraftGrounded: summary.firstDraftGrounded,
+          repaired: summary.repaired,
+          fallback: summary.fallback,
+        },
         lakeSink: env.EVENTS ? 'basin-pipelines' : 'r2-ndjson (local stand-in for Basin Pipelines)',
         weights: FROZEN_WEIGHTS,
         probes: ranking.probeStatus,
@@ -189,6 +196,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
         diagnosticSql: evidence.probes.map((p) => ({ key: p.key, probeId: p.probeId, sql: p.sql })),
         summary: summary.summary,
         summaryDraft: summary.draft,
+        recovery: recoveryCommands({ target: ctx.target, runId, ranked: ranking.ranked, relations: ctx.relations }),
         summaryProvider: summary.provider,
         summaryModel: summary.model,
         summaryAttempts: summary.attempts,
@@ -200,7 +208,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
       await env.ARTIFACTS.put(evidenceKey, JSON.stringify(incident), {
         httpMetadata: { contentType: 'application/json' },
       });
-      await env.ARTIFACTS.put(`prompts/${incidentId}.json`, JSON.stringify(summary.prompt ?? null), {
+      await env.ARTIFACTS.put(`prompts/${incidentId}.json`, JSON.stringify({ prompt: summary.prompt, violations: summary.violations }), {
         httpMetadata: { contentType: 'application/json' },
       });
       await upsertIncident(db, {

@@ -129,6 +129,20 @@ def run_trial(
             },
         )
         coverage = rca("coverage", {"graph": graph})
+        evidence = rca(
+            "evidence",
+            {
+                "incidentId": f"inc_{spec.trial_id}",
+                "runId": spec.trial_id,
+                "trigger": "checks",
+                "checks": checks,
+                "ranked": ranked["ranked"],
+                "probeResults": sanitized,
+                "relations": rel,
+            },
+        )
+        prompt = rca("prompt", {"evidence": evidence})
+        template = rca("template", {"evidence": evidence})
         timings["rank"] = time.perf_counter() - t4
         record.update(
             {
@@ -144,6 +158,9 @@ def run_trial(
                     s: sum(1 for r in sanitized if r["status"] == s) for s in ("ok", "error", "missing")
                 },
                 "lineageCoverage": coverage,
+                # Kept in memory for the PII prompt test; dropped from saved reports (report.slim).
+                "promptText": "\n".join(m["content"] for m in prompt["messages"]),
+                "summaryText": json.dumps(template["rendered"]),
             }
         )
     record["timings"] = {k: round(v, 3) for k, v in timings.items()}

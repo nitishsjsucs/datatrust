@@ -40,7 +40,8 @@ packages = ["pipelines/datatrust"]
 
 [tool.pytest.ini_options]
 testpaths = ["pipelines/tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not bench'"
+markers = ["bench: runs benchmark trials; run with `uv run pytest -m bench` (CI bench-offline job)"]
 
 [tool.ruff]
 line-length = 110

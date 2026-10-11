@@ -198,6 +198,32 @@ def _cmd_runner(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_restore(args: argparse.Namespace) -> int:
+    """Local stand-in for BigQuery time travel: copy a mart snapshot into <node>_restored_<ts>."""
+    import datetime as dt
+    import re
+
+    import duckdb
+
+    from datatrust import config
+
+    if not re.match(r"^[A-Za-z0-9_]+$", args.run) or not re.match(r"^[a-z_][a-z0-9_]*$", args.node):
+        print("unsafe run id or node name", file=sys.stderr)
+        return 2
+    snap = config.snapshot_dir() / args.run / f"{args.node}.parquet"
+    if not snap.exists():
+        print(f"no snapshot at {snap}", file=sys.stderr)
+        return 1
+    db = Path(args.duckdb_path).resolve() if args.duckdb_path else config.duckdb_path()
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%d%H%M%S")
+    table = f"{args.node}_restored_{stamp}"
+    with duckdb.connect(str(db)) as con:
+        con.execute(f'create table "marts"."{table}" as select * from read_parquet(?)', [str(snap)])
+        n = con.execute(f'select count(*) from "marts"."{table}"').fetchone()
+    print(json.dumps({"restored": f"marts.{table}", "rows": n[0] if n else 0, "from": str(snap)}))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="datatrust", description=__doc__)
     parser.add_argument("--version", action="version", version=f"datatrust {__version__}")
@@ -250,6 +276,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-jobs", type=int)
     p.add_argument("--idle-exit", type=float, help="stop after this many seconds without a job")
     p.set_defaults(func=_cmd_runner)
+
+    p = sub.add_parser("restore", help="restore a mart from a local Parquet snapshot (time-travel stand-in)")
+    p.add_argument("--from-snapshot", dest="run", required=True, help="run id of the green run")
+    p.add_argument("node", help="mart model name, e.g. fct_hires")
+    p.add_argument("--duckdb-path", help=DUCKDB_HELP)
+    p.set_defaults(func=_cmd_restore)
 
     p = sub.add_parser("baseline", help="extract the gate numbers from a benchmark report")
     p.add_argument("--from", dest="from_path", required=True)

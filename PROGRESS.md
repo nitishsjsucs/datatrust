@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 13 of 19 (core) done: `feat(runner): lease protocol for dbt builds and diagnostics`.
+Commit 14 of 19 (core) done: `feat(llm): sanitizer, grounding validator and summarizers`.
 
 ## Done
 
@@ -22,18 +22,19 @@ Commit 13 of 19 (core) done: `feat(runner): lease protocol for dbt builds and di
 - 11. `apps/worker`: `wrangler.jsonc` / `wrangler.test.jsonc` (D1, R2, vars, `secrets.required`), generated `worker-configuration.d.ts` (`wrangler types --strict-vars=false`), `src/env.ts` (AppEnv + production guard), `src/auth/{access,roles}.ts` (jose RS256, remote JWKS in production, local JWKS in dev, service-token `common_name`), `src/store/repo.ts` (all D1 SQL incl. single-statement lease), read routes (`/healthz`, `/api/whoami`, `/api/runs/:id`, `/api/incidents`, `/api/lineage/:runId/upstream`), `migrations/0001_init.sql`, vitest with `@cloudflare/vitest-plugin` and D1 migrations; `test/access.test.ts` (14 cases: the 12 from SPEC 15 plus `ACCESS_AUD=unset` and the full production guard), `test/api.test.ts`; `scripts/dev-keys.mjs`, `scripts/dev-token.mjs`. CI runs `wrangler types --check` and `wrangler deploy --dry-run`. Verified by hand: `wrangler dev --local` on 8792/9242 answered `/healthz` and `/api/whoami` with a dev token, 401 without; process killed, ports free.
 - 12. Queues (`dt-check-results`, `dt-lineage-events`, `dt-investigate`, `dt-dlq` with retries and DLQ) and consumers, `ValidationRunWorkflow` (register, enqueue build, wait for `build-complete` with 6 h timeout, `await-ingested` with 10 exponential retries, summarize, dispatch, finalize) and `InvestigationWorkflow` (load context, trace, plan, diagnostics job, wait 1 h, rank with frozen weights, sanitized evidence, template summary, persist to D1 and R2 with provenance), write routes (`POST /api/runs`, runner lease/artifacts/complete with lease tokens, `POST /api/v1/lineage`, `POST /api/alerts`), deterministic investigation ids, `rca` evidence builder. Tests: `queues.test.ts`, `validation-run.test.ts`, `investigation.test.ts` (real S01 trial fixture: raw.hires ranked first), `runner.test.ts` (lease, attempts sweep, stale tokens, 422 on unsanitized probe results, alerts). Verified by hand under `wrangler dev --local`: `POST /api/runs` created a workflow and the runner token leased its `dbt_build` job; processes killed, ports free.
 - 13. `runner/client.py` (dev JWT or Access service-token headers, retries with exponential backoff on 5xx and network errors, 4xx fatal), `runner/loop.py` (dbt_build: synth, scenario + decoys when a scenario is given, load, dbt-ol build, mart snapshots on green runs, relations and slim run_results artifacts, OpenLineage in batches of 50, complete; diagnostics: probes on the runner's own warehouse and relations, read-only, `rca sanitize`, complete), `datatrust runner --once|--watch`, `scripts/dev-up.sh` / `dev-down.sh` (process groups in `.dev/pids`, port checks for 8792/9242/8160), `npm run dev:up|dev:down|dev:reset`, `test_runner_client.py`. Verified by hand on 2026-10-10: `npm run dev:up`, `POST /api/runs {seed 101, scenario S01}`, two `datatrust runner --once` calls (build: 40 checks, U05 failing, 136 OpenLineage events; diagnostics: 46 probes) produced incident `inc_<run>_checks_00000000` ranking `source.datatrust.raw.hires` first with diagnostic SQL and local-stand-in provenance; `npm run dev:down` stopped everything and confirmed 8792, 9242 and 8160 free.
+- 14. `packages/rca/src/summary/` (zod `IncidentSummary` + JSON Schema, `{ev:key.field}` renderer with integer/percent/ratio formats, grounding validator with the six SPEC 13.7 rules, deterministic template draft, prompt and repair prompt listing keys and fields without values), rca CLI `evidence|prompt|validate|template`; Worker `llm/` (grounded summarize loop: draft, one repair quoting violations, template fallback; Workers AI with JSON mode through AI Gateway; OpenAI-compatible local; template; production refuses non-Workers-AI), `recovery.ts` (bq cp / local restore / rebuild hints), `datatrust restore --from-snapshot`, harness builds evidence, prompt and template summary per trial, `test_no_pii_in_prompts.py` (marked `bench`, run by CI bench-offline: 20 seed-101 prompts and summaries free of names, emails, phones, birth dates and salaries, plus a planted-leak control), `summary-validate.test.ts`, `summarizer.test.ts` (AI binding and local fetch mocked). `dev-up.sh --llm` switches the Worker to the local LLM. Observed by hand on 2026-10-10 with Qwen3-1.7B through wrangler dev (S01, T14, S04 on seed 101): all three drafts failed grounding twice (bare digits, invented SQL as a diagnostic id, wrong evidence keys) and fell back to the template, which is the designed behavior; this is an observation, not a reported result.
 
 ## Next
 
-- 14. `feat(llm): sanitizer, grounding validator and summarizers` (placeholder drafts and renderer, Workers AI, OpenAI-compatible local, template; PII prompt test).
+- 15. `feat(bench): end-to-end mode through wrangler dev with parity check` (e2e harness, CI e2e job).
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
 - `npm run typecheck`: pass
-- `npm run test:rca`: 37 passed
-- `npm run test:worker`: 40 passed
+- `npm run test:rca`: 49 passed
+- `npm run test:worker`: 50 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 120 passed
+- `uv run pytest`: 120 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed
 
 ## Deviations from SPEC.md
 
@@ -47,6 +48,6 @@ Commit 13 of 19 (core) done: `feat(runner): lease protocol for dbt builds and di
 - An extra commit between plan commits 9 and 10 freezes the weights and adds the ADRs, so the history shows the weights fixed before the test seeds ran.
 - Worker secrets are declared with `secrets.required` in the wrangler config, so `wrangler types` output does not depend on a machine's `.dev.vars` (otherwise `wrangler types --check` would differ between the Mac and CI). `/api/whoami` (any role) was added for the smoke and doctor checks.
 - Workflow step results are serialized to JSON strings explicitly (`workflows/steps.ts`), which keeps step outputs visibly serializable and avoids TypeScript's deep `Serializable<T>` instantiation on lineage types. Tests that inspect step results parse the JSON.
-- The incident summary in this commit comes from a minimal template summarizer; placeholder drafts, grounding validation, Workers AI and the local LLM land in commit 14.
+- The grounding validator reads a root cause given as a candidate key (`candidate.1`) as that candidate's node, and treats the run and incident ids as known identifiers.
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.

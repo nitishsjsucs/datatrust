@@ -78,6 +78,8 @@ jobs:
       - run: >-
           uv run datatrust bench --mode offline --seeds 101 --workers 2 --out bench-out
           --gate results/baseline-seed101.json
+      - name: no PII in any seed-101 prompt (SPEC 13.8)
+        run: uv run pytest -m bench
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Start the local stack (SPEC 16): wrangler dev --local on 127.0.0.1:8792 (inspector 9242), and with --llm
-# also llama-server (Qwen3-1.7B) on 127.0.0.1:8160. PIDs (process groups) go to .dev/pids/; logs to .dev/logs/.
+# also llama-server (Qwen3-1.7B) on 127.0.0.1:8160, with the Worker's SUMMARIZER switched to the local
+# OpenAI-compatible stand-in. PIDs (process groups) go to .dev/pids/; logs to .dev/logs/.
 # Stop everything with `npm run dev:down`.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,11 +32,14 @@ done
 [[ -f "$ROOT/apps/worker/.dev.vars" ]] || node "$ROOT/scripts/dev-keys.mjs"
 (cd "$ROOT/apps/worker" && npx wrangler d1 migrations apply datatrust --local >"$LOGS/migrations.log" 2>&1)
 
+EXTRA_VARS=()
+if ((WITH_LLM)); then EXTRA_VARS=(--var "SUMMARIZER:openai-compatible-local"); fi
+
 set -m # background jobs get their own process group, so dev-down can stop wrangler and workerd together
 (
   cd "$ROOT/apps/worker"
   exec npx wrangler dev --local --ip 127.0.0.1 --port 8792 --inspector-port 9242 \
-    --show-interactive-dev-session=false
+    --show-interactive-dev-session=false ${EXTRA_VARS[@]+"${EXTRA_VARS[@]}"}
 ) >"$LOGS/wrangler.log" 2>&1 &
 echo $! >"$PIDS/wrangler.pid"
 if ! wait_http http://127.0.0.1:8792/healthz 90; then

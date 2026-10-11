@@ -55,6 +55,8 @@ def slim(record: dict[str, Any]) -> dict[str, Any]:
     if feats:
         rec["features"] = {"column": feats.get("column", [])}
     rec.pop("top", None)
+    rec.pop("promptText", None)
+    rec.pop("summaryText", None)
     return rec
 
 
