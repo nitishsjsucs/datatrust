@@ -506,3 +506,23 @@ def test_smoke_report_records_bytes_billed_and_versions():
     assert bytes_billed_since(s, start, client=Broken()) == "unavailable (PermissionError)"
     v = versions()
     assert v["wrangler"] == "4.149.0" and v["dbt-core"] == "1.12.5" and v["dbt-bigquery"] == "1.12.1"
+
+
+def test_smoke_needs_1940_neurons_of_workers_ai_headroom():
+    """SPEC 28.5.5: five fault runs may reserve 388 neurons each; the Free plan has no overage."""
+    from datatrust.prod.smoke import SMOKE_NEURON_HEADROOM, SmokeStopped, check_ai_headroom
+
+    assert SMOKE_NEURON_HEADROOM == 1940
+
+    class Ops:
+        def __init__(self, headroom):
+            self.headroom = headroom
+
+        def ai_budget(self):
+            reserved = 2000 - self.headroom
+            return {"day": "2026-10-11", "cap": 2000, "reserved": reserved, "headroom": self.headroom}
+
+    assert check_ai_headroom(Ops(2000))["headroom"] == 2000
+    assert check_ai_headroom(Ops(1940))["headroom"] == 1940
+    with pytest.raises(SmokeStopped, match="rerun after 00:00 UTC"):
+        check_ai_headroom(Ops(1939))

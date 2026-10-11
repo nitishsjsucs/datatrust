@@ -56,6 +56,7 @@
     "LOCAL_LLM_URL": "",
     "WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "AI_GATEWAY_ID": "datatrust",
+    "AI_DAILY_NEURON_CAP": "2000",
     "ACCESS_TEAM_DOMAIN": "${ACCESS_TEAM_DOMAIN}",
     "ACCESS_ISSUER": "",
     "LAKE_SETTLE_SECONDS": "120",

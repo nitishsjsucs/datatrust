@@ -61,44 +61,80 @@ function isJsonObject(v: unknown): boolean {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
-export async function summarizeGrounded(s: Summarizer, ev: SanitizedEvidence): Promise<SummaryOutcome> {
-  const prompt = buildPrompt(ev);
-  let violations: string[] = [];
-  let previous = '';
-  let calls = 0;
-  let firstDraftJson = false;
-  const maxCalls = s.provider === 'template' ? 1 : 2;
-  while (calls < maxCalls) {
-    calls += 1;
-    let raw: unknown;
-    try {
-      raw = await s.draft(calls === 1 ? prompt : buildRepairPrompt(ev, previous, violations), ev);
-    } catch (err) {
-      violations = [`provider error: ${err instanceof Error ? err.name : 'Error'}`];
-      break; // a failing provider is not asked again; fall back
-    }
-    const obj = asObject(raw);
-    if (calls === 1) firstDraftJson = isJsonObject(obj);
-    const v = validateSummary(obj, ev);
-    if (v.ok && v.summary) {
-      return {
-        provider: s.provider,
-        model: s.model,
-        prompt,
-        draft: v.summary,
-        summary: renderSummary(v.summary, ev),
-        attempts: calls,
-        firstDraftJson,
-        firstDraftGrounded: calls === 1,
-        repaired: calls === 2,
-        fallback: false,
-        fallbackReason: null,
-        violations: [],
-      };
-    }
-    violations = v.violations;
-    previous = asText(raw);
+/** One provider call and its grounding check: a unit the Worker can run as its own Workflow step. */
+export interface DraftAttempt {
+  /** The provider's answer as text (quoted back in a repair prompt), or null when the call failed. */
+  raw: string | null;
+  /** Whether the answer parsed as a JSON object. */
+  json: boolean;
+  ok: boolean;
+  draft: IncidentSummary | null;
+  violations: string[];
+  /** Provider error name; a failing provider is not asked again. */
+  error: string | null;
+}
+
+/** Messages for call 1 (the prompt) or call 2 (the repair prompt quoting the first answer's violations). */
+export function promptFor(ev: SanitizedEvidence, call: 1 | 2, previous: DraftAttempt | null = null): ChatMessage[] {
+  return call === 1 ? buildPrompt(ev) : buildRepairPrompt(ev, previous?.raw ?? '', previous?.violations ?? []);
+}
+
+export async function attemptDraft(s: Summarizer, messages: ChatMessage[], ev: SanitizedEvidence): Promise<DraftAttempt> {
+  let raw: unknown;
+  try {
+    raw = await s.draft(messages, ev);
+  } catch (err) {
+    const name = err instanceof Error ? err.name : 'Error';
+    return { raw: null, json: false, ok: false, draft: null, violations: [`provider error: ${name}`], error: name };
   }
+  const obj = asObject(raw);
+  const v = validateSummary(obj, ev);
+  return {
+    raw: asText(raw),
+    json: isJsonObject(obj),
+    ok: v.ok && !!v.summary,
+    draft: v.ok && v.summary ? v.summary : null,
+    violations: v.ok ? [] : v.violations,
+    error: null,
+  };
+}
+
+/** A repair call follows only an LLM draft that answered but failed grounding. */
+export function needsRepair(s: Pick<Summarizer, 'provider'>, first: DraftAttempt): boolean {
+  return s.provider !== 'template' && !first.ok && first.error === null;
+}
+
+/**
+ * The outcome of the calls made: the first grounded draft, rendered, or the deterministic template with the
+ * reason. `refusal` (for example `daily_neuron_cap`) names why a call was not made at all.
+ */
+export function finalizeOutcome(
+  s: Pick<Summarizer, 'provider' | 'model'>,
+  ev: SanitizedEvidence,
+  attempts: DraftAttempt[],
+  refusal: string | null = null,
+): SummaryOutcome {
+  const prompt = buildPrompt(ev);
+  const firstDraftJson = attempts[0]?.json ?? false;
+  const accepted = attempts.findIndex((a) => a.ok && a.draft);
+  if (accepted >= 0) {
+    const draft = attempts[accepted]!.draft!;
+    return {
+      provider: s.provider,
+      model: s.model,
+      prompt,
+      draft,
+      summary: renderSummary(draft, ev),
+      attempts: accepted + 1,
+      firstDraftJson,
+      firstDraftGrounded: accepted === 0,
+      repaired: accepted === 1,
+      fallback: false,
+      fallbackReason: null,
+      violations: [],
+    };
+  }
+  const violations = refusal ? [refusal] : (attempts.at(-1)?.violations ?? []);
   const draft = templateDraft(ev);
   return {
     provider: s.provider,
@@ -106,14 +142,22 @@ export async function summarizeGrounded(s: Summarizer, ev: SanitizedEvidence): P
     prompt,
     draft,
     summary: renderSummary(draft, ev),
-    attempts: calls,
+    attempts: attempts.length,
     firstDraftJson,
     firstDraftGrounded: false,
     repaired: false,
     fallback: true,
-    fallbackReason: violations.slice(0, 3).join('; ') || 'unknown',
+    fallbackReason: refusal ?? (violations.slice(0, 3).join('; ') || 'unknown'),
     violations,
   };
+}
+
+/** Draft, one repair quoting the violations if needed, then the template fallback (SPEC 13.6, 13.7). */
+export async function summarizeGrounded(s: Summarizer, ev: SanitizedEvidence): Promise<SummaryOutcome> {
+  const first = await attemptDraft(s, promptFor(ev, 1), ev);
+  const attempts = [first];
+  if (needsRepair(s, first)) attempts.push(await attemptDraft(s, promptFor(ev, 2, first), ev));
+  return finalizeOutcome(s, ev, attempts);
 }
 
 /** Deterministic template (CI, and the fallback for LLM drafts that fail grounding). */

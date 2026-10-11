@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import localText from '../wrangler.jsonc?raw';
 import templateText from '../wrangler.prod.template.jsonc?raw';
 import testText from '../wrangler.test.jsonc?raw';
+import { NEURON_RATES, PAID_ONLY_MODELS } from '../src/llm/budget';
 import { QUEUES } from '../src/queues/router';
 
 /** JSONC to JSON: drop // and block comments outside strings (URLs inside strings keep their slashes). */
@@ -97,6 +98,16 @@ describe('production configuration fits the Workers Free plan', () => {
   it('settles lake objects for 120 s in production', () => {
     const vars = rendered()['vars'] as Record<string, string>;
     expect(vars['LAKE_SETTLE_SECONDS']).toBe('120');
+  });
+
+  it('uses a Workers AI model with a pinned neuron rate, not a paid-billing model, under a cap of at most 2,500', () => {
+    const vars = rendered()['vars'] as Record<string, string>;
+    const model = vars['WORKERS_AI_MODEL']!;
+    expect(NEURON_RATES[model]).toBeDefined();
+    expect(PAID_ONLY_MODELS).not.toContain(model);
+    const cap = Number(vars['AI_DAILY_NEURON_CAP']);
+    expect(Number.isInteger(cap) && cap > 0 && cap <= 2500).toBe(true);
+    expect(cap).toBe(2000);
   });
 
   it('keeps the local and test configs on the same queues and workflows as production', () => {

@@ -5,8 +5,11 @@ production". Implemented, not executed: it needs the Cloudflare and Google Cloud
 2. the real runner (BigQuery target, service token datatrust-runner) in a background thread, while runs are
    started and read with the second service token datatrust-operator;
 3. one clean run on seed 101 that must pass with 40 checks and no incident;
-4. five fault runs (S01, S03, S04, T14, T20) through the deployed Queues and Workflows, each producing an
-   incident with summary_provider = workers-ai; records grounding pass rate and fallback rate;
+4. checks GET /api/ai/budget for at least 1,940 neurons of Workers AI headroom in the UTC day (five incidents
+   at the 388-neuron worst case; the Free plan has no overage) and stops with "rerun after 00:00 UTC"
+   otherwise; then five fault runs (S01, S03, S04, T14, T20) through the deployed Queues and Workflows, each
+   producing an incident with summary_provider = workers-ai; records grounding pass rate, fallback rate and
+   the neurons reserved and used;
 5. `datatrust lake commit --catalog basin` (settled R2 lake objects into Basin Catalog, once per event_id),
    then reads the run_completed events of all six runs back with pyiceberg RestCatalog, repeating both for up
    to 5 minutes (audit batches close within 30 s and objects settle after 120 s);
@@ -31,6 +34,25 @@ from datatrust import config
 from datatrust.prod.settings import GcpSettings, load_env_prod
 
 FAULTS = ("S01", "S03", "S04", "T14", "T20")
+# Worst-case neurons one incident can reserve (187 for the draft and 201 for a repair, SPEC 28.5.5).
+NEURONS_PER_INCIDENT = 388
+SMOKE_NEURON_HEADROOM = NEURONS_PER_INCIDENT * len(FAULTS)
+
+
+class SmokeStopped(RuntimeError):
+    """The smoke cannot continue today; the message says when to rerun."""
+
+
+def check_ai_headroom(ops: Any, need: int = SMOKE_NEURON_HEADROOM) -> dict[str, Any]:
+    """GET /api/ai/budget (operator) must show `need` neurons of headroom for the UTC day."""
+    budget = ops.ai_budget()
+    if int(budget.get("headroom", 0)) < need:
+        raise SmokeStopped(
+            f"Workers AI headroom {budget.get('headroom')} neurons is below the {need} the five fault runs "
+            f"may reserve (cap {budget.get('cap')}, reserved {budget.get('reserved')} on {budget.get('day')} "
+            "UTC); rerun after 00:00 UTC"
+        )
+    return budget
 
 
 def _claims(jwt: str) -> dict[str, Any]:
@@ -200,6 +222,14 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
     try:
         runs = []
         for scenario in (None, *FAULTS):
+            if scenario == FAULTS[0]:
+                try:
+                    report["aiBudgetBefore"] = check_ai_headroom(ops)
+                except SmokeStopped as stop:
+                    report["stopped"] = str(stop)
+                    report["runs"] = runs
+                    report["ok"] = False
+                    return report
             run_id = ops.create_run("bigquery", 101, scenario)
             run = wait_for_run(ops, run_id, runner)
             incident = ops.get_incident(run["incidentId"]) if run.get("incidentId") else None
@@ -236,6 +266,11 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
     report["access"] = access_checks(base_url)
     report["bigquery_bytes_billed"] = bytes_billed_since(settings, started)
     report["versions"] = versions()
+    report["aiBudgetAfter"] = ops.ai_budget()
+    report["neurons"] = {
+        "reserved": report["aiBudgetAfter"].get("reserved", 0) - report["aiBudgetBefore"].get("reserved", 0),
+        "used": report["aiBudgetAfter"].get("used", 0) - report["aiBudgetBefore"].get("used", 0),
+    }
     report["workers_ai_model"] = next(
         ((r["summarizer"] or {}).get("model") for r in faults if r.get("summarizer")), None
     )
@@ -260,6 +295,8 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
         f"- Access: unauthenticated {report['access']['unauthenticated_status']}, "
         f"service token {report['access']['service_token_status']}, runner token cannot start runs: "
         f"{report['access']['runner_token_cannot_start_runs']}\n"
+        f"- Workers AI neurons for the smoke: reserved {report['neurons']['reserved']}, used "
+        f"{report['neurons']['used']} (daily cap {report['aiBudgetAfter'].get('cap')})\n"
         f"- Workers AI model: {report['workers_ai_model']}; BigQuery bytes billed since start: "
         f"{report['bigquery_bytes_billed']}\n"
         f"- Versions: {', '.join(f'{k} {v}' for k, v in report['versions'].items())}\n"

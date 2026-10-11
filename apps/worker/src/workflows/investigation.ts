@@ -19,9 +19,10 @@ import {
   traceUpstream,
 } from '@datatrust/rca';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
-import { jsonStep, RETRY_LOAD } from './steps';
+import { jsonStep, RETRY_AI, RETRY_LOAD } from './steps';
 import type { AppEnv } from '../env';
-import { createSummarizer, summarizeGrounded } from '../llm/summarizer';
+import { finalizeSummary, shouldRepair, summarizeAttempt } from '../llm/attempt';
+import { createSummarizer } from '../llm/summarizer';
 import { auditEvent, auditEventId, createSink, lakeDescription } from '../sinks/event-sink';
 import { recoveryCommands } from '../recovery';
 import type { Alert } from '../schemas';
@@ -84,6 +85,9 @@ export async function readRelations(env: AppEnv, runId: string): Promise<Relatio
   if (!obj) throw new Error(`relations artifact missing for ${runId}`);
   return (await obj.json()) as RelationsMap;
 }
+
+/** The summarizer factory, a seam so tests can stand in for the Workers AI binding inside the workflow. */
+export const summarizers = { create: createSummarizer };
 
 /** Step load-context: five D1 statements (SPEC 28.5.3, pinned by d1-statements.test.ts) and one R2 read. */
 export async function loadContext(env: AppEnv, p: InvestigationParams): Promise<Context> {
@@ -192,7 +196,13 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
       });
     });
 
-    const summary = await jsonStep(step, 'summarize', async () => summarizeGrounded(createSummarizer(env), evidence));
+    // One AI call per step (SPEC 28.5.5): a later failure replays these results instead of calling again.
+    const summarizer = summarizers.create(env);
+    const first = await jsonStep(step, 'summarize-draft', async () => summarizeAttempt(env, summarizer, evidence, 1, null), RETRY_AI);
+    const second = shouldRepair(summarizer, first)
+      ? await jsonStep(step, 'summarize-repair', async () => summarizeAttempt(env, summarizer, evidence, 2, first), RETRY_AI)
+      : null;
+    const summary = await jsonStep(step, 'summarize-finalize', async () => finalizeSummary(summarizer, evidence, first, second));
 
     await jsonStep(step, 'persist-incident', async () => {
       const provenance = {
@@ -204,6 +214,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
           firstDraftGrounded: summary.firstDraftGrounded,
           repaired: summary.repaired,
           fallback: summary.fallback,
+          neurons: summary.neurons,
         },
         lakeSink: lakeDescription(env),
         weights: FROZEN_WEIGHTS,

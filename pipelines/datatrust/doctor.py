@@ -419,6 +419,17 @@ def cloudflare_checks() -> list[Check]:
         )
     rendered = WORKER / "wrangler.prod.jsonc"
     if rendered.exists() and "${" not in rendered.read_text():
+        cap = re.search(r'"AI_DAILY_NEURON_CAP":\s*"(\d+)"', rendered.read_text())
+        out.append(
+            Check("ok", "AI_DAILY_NEURON_CAP rendered", f"{cap.group(1)} neurons per UTC day")
+            if cap and 0 < int(cap.group(1)) <= 2500
+            else Check(
+                "missing",
+                "AI_DAILY_NEURON_CAP rendered",
+                "absent or above DataTrust's 2,500-neuron share",
+                "npm run setup:prod -- --cloudflare-only (re-renders the template)",
+            )
+        )
         team_unset = "unset.cloudflareaccess.com" in rendered.read_text()
         out.append(
             Check(
@@ -503,6 +514,7 @@ def cloudflare_checks() -> list[Check]:
                 )
             )
             out.extend(service_token_checks(url))
+            out.append(ai_budget_check(url))
         else:
             out.append(
                 Check(
@@ -607,6 +619,37 @@ def service_token_checks(url: str, get: Callable[..., Any] | None = None) -> lis
             )
         )
     return out
+
+
+def ai_budget_check(url: str, get: Callable[..., Any] | None = None) -> Check:
+    """GET /api/ai/budget answers for the operator token and shows today's Workers AI headroom (SPEC 28.5.5)."""
+    cid, secret = os.environ.get("CF_ACCESS_OPERATOR_CLIENT_ID"), os.environ.get("CF_ACCESS_OPERATOR_CLIENT_SECRET")
+    if not (cid and secret):
+        return Check("missing", "Workers AI budget endpoint", "operator service token not set", "README Cloudflare step 14")
+    if get is None:
+        import requests
+
+        get = requests.get
+    res = get(
+        f"{url}/api/ai/budget",
+        headers={"CF-Access-Client-Id": cid, "CF-Access-Client-Secret": secret},
+        allow_redirects=False,
+        timeout=30,
+    )
+    if res.status_code != 200:
+        return Check(
+            "missing",
+            "Workers AI budget endpoint",
+            f"HTTP {res.status_code}",
+            "rerun npm run setup:prod -- --cloudflare-only (migration 0002_ai_budget and AI_DAILY_NEURON_CAP)",
+        )
+    b = res.json()
+    return Check(
+        "ok",
+        "Workers AI budget endpoint",
+        f"{b.get('day')} UTC: reserved {b.get('reserved')}, used {b.get('used')}, cap {b.get('cap')}, "
+        f"headroom {b.get('headroom')} (the smoke needs 1,940)",
+    )
 
 
 def governance_checks(project: str, location: str) -> list[Check]:

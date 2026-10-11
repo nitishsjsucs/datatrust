@@ -394,7 +394,11 @@ def _cmd_prod(args: argparse.Namespace) -> int:
             report = smoke(skip_validate=args.skip_validate)
             print(
                 json.dumps(
-                    {k: report.get(k) for k in ("ok", "clean_ok", "workers_ai_incidents", "fallback_rate")}
+                    {
+                        k: report.get(k)
+                        for k in ("ok", "stopped", "clean_ok", "workers_ai_incidents", "fallback_rate")
+                    }
+                    | {"neurons": report.get("neurons")}
                 )
             )
             return 0 if report.get("ok") else 1

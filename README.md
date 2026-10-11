@@ -77,7 +77,7 @@ Protocol: weights are tuned only on dev seeds 1-3 and frozen (ADR-0004) before t
 
 ## Incident summaries
 
-Summaries are written from sanitized evidence only. The model never writes numbers: it cites `{ev:<key>.<field>}` placeholders and the Worker substitutes the values. A draft is accepted only if it matches the schema, every placeholder resolves, no digit appears outside placeholders and known identifiers, the root cause is a top-five candidate, its references exist, and nothing looks like PII. A failed draft gets one repair request that quotes the violations; after that the deterministic template is used and the fallback is recorded on the incident. Recovery commands (BigQuery time-travel `bq cp`, or the local snapshot restore) are attached by the server, never written by the model.
+Summaries are written from sanitized evidence only. The model never writes numbers: it cites `{ev:<key>.<field>}` placeholders and the Worker substitutes the values. A draft is accepted only if it matches the schema, every placeholder resolves, no digit appears outside placeholders and known identifiers, the root cause is a top-five candidate, its references exist, and nothing looks like PII. A failed draft gets one repair request that quotes the violations; after that the deterministic template is used and the fallback is recorded on the incident. Each model call is its own Workflow step (`summarize-draft`, `summarize-repair`, then `summarize-finalize` without a call), so a later failure replays the stored answer instead of calling the model again. On the Workers Free plan every Workers AI call first reserves its worst case in a daily neuron ledger in D1 (`AI_DAILY_NEURON_CAP`, 2,000 per UTC day, a fifth of the account's free 10,000); when the reservation is refused no call is made and the incident gets the template with reason `daily_neuron_cap`. `GET /api/ai/budget` shows the day's ledger. Recovery commands (BigQuery time-travel `bq cp`, or the local snapshot restore) are attached by the server, never written by the model.
 
 | Provider | Where | Status |
 |---|---|---|
@@ -122,9 +122,9 @@ flowchart LR
     WFV{{"ValidationRunWorkflow"}}
     WFI{{"InvestigationWorkflow"}}
     RCA["rca core (TypeScript)<br/>trace, plan, rank, sanitize"]
-    D1[("D1: runs, jobs, checks,<br/>lineage, incidents")]
+    D1[("D1: runs, jobs, checks, lineage,<br/>incidents, ai_budget")]
     R2[("R2: datatrust-artifacts<br/>incl. immutable lake/ NDJSON")]
-    SUM["Summarizer"]
+    SUM["Summarizer<br/>daily neuron ledger"]
     SINK["QueueSink"]
   end
 
@@ -177,7 +177,7 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 | Column masking | none (stand-in: sanitizer and tests) | BigQuery policy tags and data masking policies |
 | Time travel / recovery | per-run Parquet snapshots of marts (stand-in) | `FOR SYSTEM_TIME AS OF`, 7-day window, `bq cp table@<ms>` restore |
 | Iceberg lake | the same Queue, consumer and R2 `lake/` objects as production, then **pyiceberg SqlCatalog on SQLite (stand-in for Basin Catalog)** | Queue `datatrust-audit-events` to immutable NDJSON objects in R2, added to the Basin Catalog Iceberg table `datatrust.audit_events` on R2 `datatrust-lake` by `datatrust lake commit --catalog basin` (pyiceberg REST catalog; the production runner runs it every 15 minutes and on exit). Basin Pipelines is Workers Paid only and is not used |
-| LLM summaries | **llama-server (Qwen3-1.7B Q4_0) on 127.0.0.1:8160 (stand-in)** or a deterministic template (CI) | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust` |
+| LLM summaries | **llama-server (Qwen3-1.7B Q4_0) on 127.0.0.1:8160 (stand-in)** or a deterministic template (CI) | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust`, at most 2,000 neurons per UTC day by a D1 ledger (beyond it the template, with reason `daily_neuron_cap`) |
 | Auth | locally generated RS256 keypair and JWKS | Cloudflare Access (team JWKS) |
 | Runner identity | local dev JWT (role `runner`) | Access service token `datatrust-runner` (role `runner` only) |
 | Operator identity (start runs, read incidents) | local dev JWT (role `operator`) | your Access login in the browser, or Access service token `datatrust-operator` for the CLI and the smoke |
@@ -274,7 +274,7 @@ cp .env.example .env.prod && chmod 600 .env.prod
 | 16 | Optional: Basin Catalog snapshot expiration (leave compaction off) | `cd apps/worker && npx wrangler basin catalog snapshot-expiration --help` | free | no |
 | 17 | Check (it also confirms each service token reaches the Worker with exactly its roles) | `npm run doctor -- --prod` | free | no |
 
-Workers AI needs no setup beyond the binding. On the Free plan the account gets 10,000 neurons per day with no overage: once they are used, calls fail until 00:00 UTC, and the summarizer then falls back to the deterministic template and records why. AI Gateway's core features are free. Queues, Workflows, D1 and R2 usage stays inside the Free amounts (SPEC section 28.6). There is no cron trigger, so nothing runs unless you start a run.
+Workers AI needs no setup beyond the binding. On the Free plan the account gets 10,000 neurons per day with no overage, shared by four repos, so DataTrust caps itself at 2,000 per UTC day with a ledger in D1: a summary reserves at most 388 neurons (187 for the draft, 201 for a repair), and once the cap or the account allowance is reached the summarizer falls back to the deterministic template and records why. The smoke test first checks for 1,940 neurons of headroom. AI Gateway's core features are free. Queues, Workflows, D1 and R2 usage stays inside the Free amounts (SPEC section 28.6). There is no cron trigger, so nothing runs unless you start a run.
 
 ### Google Cloud (shared project `master-magnet-444903-u4`)
 

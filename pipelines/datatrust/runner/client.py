@@ -206,3 +206,7 @@ class WorkerClient:
 
     def whoami(self) -> dict[str, Any]:
         return self.request("GET", "/api/whoami").json()
+
+    def ai_budget(self) -> dict[str, Any]:
+        """Today's (UTC) Workers AI neuron ledger and cap (operator role, SPEC 28.5.5)."""
+        return self.request("GET", "/api/ai/budget").json()

@@ -176,3 +176,25 @@ def test_wizard_never_asks_for_workers_paid_and_prefills_known_values():
         assert f"prefill {key} " in stages, key
     assert 'KNOWN_ACCESS_TEAM_DOMAIN="https://old-truth-a7dc.cloudflareaccess.com"' in stages
     assert 'KNOWN_GCP_PROJECT="master-magnet-444903-u4"' in stages
+
+
+def test_doctor_reads_the_workers_ai_budget_with_the_operator_token(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.delenv("CF_ACCESS_OPERATOR_CLIENT_ID", raising=False)
+    assert doctor.ai_budget_check("https://w.example").status == "missing"
+    monkeypatch.setenv("CF_ACCESS_OPERATOR_CLIENT_ID", "op.access")
+    monkeypatch.setenv("CF_ACCESS_OPERATOR_CLIENT_SECRET", "s")
+    seen = {}
+
+    def get(url, headers, **_):
+        seen.update(url=url, headers=headers)
+        body = {"day": "2026-10-11", "reserved": 0, "used": 0, "cap": 2000, "headroom": 2000}
+        return SimpleNamespace(status_code=200, json=lambda: body)
+
+    check = doctor.ai_budget_check("https://w.example", get=get)
+    assert check.status == "ok" and "headroom 2000" in check.detail
+    assert seen["url"] == "https://w.example/api/ai/budget"
+    assert seen["headers"]["CF-Access-Client-Id"] == "op.access"
+    bad = doctor.ai_budget_check("https://w.example", get=lambda *a, **k: SimpleNamespace(status_code=404))
+    assert bad.status == "missing" and "0002_ai_budget" in bad.fix

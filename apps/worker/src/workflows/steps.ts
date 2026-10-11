@@ -23,3 +23,8 @@ export const RETRY_INGEST: WorkflowStepConfig = {
 export const RETRY_LOAD: WorkflowStepConfig = {
   retries: { limit: 5, delay: '2 seconds', backoff: 'exponential' },
 };
+
+/** AI steps retry once at most; a provider error is returned, not thrown, so it never repeats a call. */
+export const RETRY_AI: WorkflowStepConfig = {
+  retries: { limit: 1, delay: '5 seconds', backoff: 'constant' },
+};

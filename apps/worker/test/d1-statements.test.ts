@@ -5,10 +5,12 @@
  */
 import { createExecutionContext, createMessageBatch, getQueueResult } from 'cloudflare:test';
 import { env as baseEnv } from 'cloudflare:workers';
-import { buildLineageGraph, type CheckResult } from '@datatrust/rca';
+import { buildEvidence, buildLineageGraph, type CheckResult } from '@datatrust/rca';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { AppEnv } from '../src/env';
 import worker from '../src/index';
+import { summarizeAttempt } from '../src/llm/attempt';
+import { WorkersAISummarizer } from '../src/llm/workers-ai';
 import { QUEUES } from '../src/queues/router';
 import {
   finishRun,
@@ -159,6 +161,15 @@ describe('D1 statements per invocation', () => {
       ['summarize-run', (e) => summarizeRun(e.DB, runId), 1],
       ['finalize', (e) => finishRun(e.DB, runId, 'failed', { pass: 39, fail: 1, error: 0, skip: 0 }), 1],
       ['load-context', (e) => loadContext(e, { runId, incidentId: 'inc_d1', trigger: 'checks' }), 5],
+      [
+        'summarize-draft (Workers AI: reserve and settle)',
+        async (e) => {
+          const ai = { run: async () => ({ response: '{}', usage: { prompt_tokens: 900, completion_tokens: 200 } }) } as unknown as Ai;
+          const ev = buildEvidence({ incidentId: 'inc_d1', runId, trigger: 'checks', checks: s01.checks, ranked: [], probeResults: [], relations: s01.relations });
+          return summarizeAttempt(e, new WorkersAISummarizer(ai, '@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'datatrust'), ev, 1, null);
+        },
+        2,
+      ],
       [
         'persist-incident',
         (e) =>
