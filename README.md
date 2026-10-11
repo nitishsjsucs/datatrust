@@ -23,8 +23,9 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | implemented, not executed (tests mock the AI binding, including the daily neuron ledger and the one-call-per-step Workflow under Miniflare; the local stand-ins are llama-server with Qwen3-1.7B and a deterministic template) |
 | Audit lake: Queue to R2 objects, Basin Catalog commit | implemented, not executed in production. Local path executed in Miniflare on 2026-10-10: queue `datatrust-audit-events`, immutable R2 `lake/` objects, `/api/lake/export`, then `uv run datatrust lake commit` (exactly once per `event_id`) into the pyiceberg SQL catalog (stand-in for Basin Catalog) |
-| BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check) |
+| BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check). Optional SQL check on the goccy BigQuery emulator, which is not BigQuery (ZetaSQL analyzer, SQLite execution, empty tables): `bash scripts/bq-emulator-check.sh` on 2026-10-11 built all 29 models with their enforced contracts and passed 37 of the 40 tests; the emulator stopped during the other 3 (X02 to X04), so they have no result ([`results/bq-emulator-2026-10-11.md`](results/bq-emulator-2026-10-11.md)) |
 | Workers Free plan budget: configuration, D1 statement counts, CPU per code path, usage model | executed locally, 2026-10-11: `npm run test:worker` (`free-plan.test.ts`, `d1-statements.test.ts`, `budget.test.ts`), `npm run budget:cpu -- --gate 8`, `uv run pytest pipelines/tests/test_free_budget.py`; the CPU gate passes on GitHub's ubuntu-latest x64 runners (largest median 7.30 ms on a slow runner before the JWT warm-up, 4.47 ms after; see Workers Free plan budget); production usage not yet observed |
+| Lineage prune for old runs (`datatrust prune`, D1 stays under 500 MB) | executed in Miniflare only: `prune.test.ts` (`npm run test:worker`) and one call against `wrangler dev` on 2026-10-11 (nothing old enough to prune); not executed in production |
 | Incident dashboard (stretch) | executed locally under `wrangler dev` (Miniflare) as Worker static assets, 2026-10-10 |
 | `setup:prod`, `setup:wizard` and `doctor` | implemented; `npm run doctor` (local) executed; `npm run doctor -- --prod` executed read-only against the real Cloudflare and Google Cloud logins on 2026-10-11 (31 required items missing, listed under Production setup); `setup:prod` and the wizard have not been run (they create resources, which is the operator's step) |
 
@@ -358,7 +359,7 @@ Costs: $0 on Cloudflare (Workers Free, R2 and Basin Catalog inside their free am
 
 ## Results
 
-All numbers below were produced by this repo's scripts on 2026-10-10 on the local warehouse stand-in, **DuckDB 1.5.6 via dbt-duckdb 1.11.0, not BigQuery**. Nothing in this section ran on Cloudflare or Google Cloud.
+All numbers below were produced by this repo's scripts on the local warehouse stand-in, **DuckDB 1.5.6 via dbt-duckdb 1.11.0, not BigQuery**: first on 2026-10-10, and rerun on 2026-10-11 after the Free plan changes with identical results. Nothing in this section ran on Cloudflare or Google Cloud.
 
 Command (test seeds 101-105, weights frozen beforehand from dev seeds 1-3, ADR-0004):
 

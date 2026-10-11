@@ -49,7 +49,9 @@ docker build -q -t "$IMG" scripts/bqemu >/dev/null
 docker rm -f "$RUN" >/dev/null 2>&1
 docker run -d --name "$RUN" --network "$NET" --memory 700m "$IMG" sleep 10800 >/dev/null
 emu
-git archive HEAD | docker exec -i "$RUN" bash /bqemu/setup.sh
+# The commit the containers build from, recorded in the report (later commits during the run do not count).
+COMMIT="$(git rev-parse --short HEAD)"
+git archive "$COMMIT" | docker exec -i "$RUN" bash /bqemu/setup.sh
 
 # One model at a time, in dependency order (the emulator restarts before each).
 ORDER="$(docker exec "$RUN" bash -c "cd /work && uv run dbt ls --resource-type model --output json --output-keys 'name depends_on' -q --project-dir dbt --profiles-dir /tmp/emu --target-path /tmp/emu/ls --log-path /tmp/emu/logs" | python3 -c '
@@ -90,13 +92,12 @@ for t in $TESTS; do
   echo "$t: $r" | tee -a "$WORK/tests.txt"
 done
 
-uv run python - "$WORK" "$MODELS" "$EMU_IMAGE" <<'PY'
-import datetime as dt, json, subprocess, sys
+uv run python - "$WORK" "$MODELS" "$EMU_IMAGE" "$COMMIT" <<'PY'
+import datetime as dt, json, sys
 from pathlib import Path
-work, models, image = Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+work, models, image, commit = Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4]
 model_rows = [l.split(": ", 1) for l in (work / "models.txt").read_text().splitlines() if ": " in l]
 tests = [l.split(": ", 1) for l in (work / "tests.txt").read_text().splitlines() if ": " in l]
-commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
 date = dt.date.today().isoformat()
 out = {
     "date": date, "commit": commit, "command": "bash scripts/bq-emulator-check.sh", "emulator": image,
