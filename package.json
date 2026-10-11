@@ -1,0 +1,27 @@
+{
+  "name": "datatrust",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lineage-aware data quality and root-cause analysis for workforce data",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/rca",
+    "apps/worker"
+  ],
+  "scripts": {
+    "setup": "npm ci && uv sync --locked",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test:rca && npm run test:worker && uv run pytest",
+    "test:rca": "npm run test -w @datatrust/rca",
+    "test:worker": "npm run test -w @datatrust/worker"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

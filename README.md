@@ -113,7 +113,15 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 
 ## Local setup
 
-Planned. Prerequisites will be Node 24 or newer, npm, [uv](https://docs.astral.sh/uv/) and Python 3.12. Commands land with the scaffold commit.
+Prerequisites: Node 22 or newer (CI uses Node 24 from `.nvmrc`), npm, [uv](https://docs.astral.sh/uv/) and Python 3.12 (uv installs it if missing). No cloud account is needed for the local path.
+
+```sh
+npm run setup        # npm ci && uv sync --locked
+npm run typecheck    # TypeScript strict, all workspaces
+npm test             # vitest (packages/rca, apps/worker) and pytest
+```
+
+More commands are added here as the components land.
 
 ## Production setup
 
