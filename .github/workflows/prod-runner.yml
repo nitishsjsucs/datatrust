@@ -36,6 +36,7 @@ jobs:
       DATATRUST_API_URL: ${{ vars.DATATRUST_API_URL }}
       DATATRUST_GCP_PROJECT: ${{ vars.DATATRUST_GCP_PROJECT }}
       DATATRUST_BQ_LOCATION: ${{ vars.DATATRUST_BQ_LOCATION }}
+      # service token datatrust-runner (role runner only)
       CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
       CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       EVIDENCE_HMAC_KEY: ${{ secrets.EVIDENCE_HMAC_KEY }}
@@ -52,7 +53,7 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - id: gcp
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.DATATRUST_WIF_PROVIDER }}
           service_account: ${{ vars.DATATRUST_RUNNER_SA }}
@@ -63,10 +64,12 @@ jobs:
           mkdir -p .prod
           printf '%s\n' "$DBT_VARS_YAML" > .prod/dbt_vars.yml
       - name: optionally start a clean run
+        # Starting a run needs the operator role, which the runner token does not have (SPEC 15), so this
+        # step uses the second service token datatrust-operator.
         if: inputs.start_run
-        run: |
-          curl -fsS -X POST "$DATATRUST_API_URL/api/runs" \
-            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            -H 'content-type: application/json' -d '{"target":"bigquery","seed":101}'
+        env:
+          CF_ACCESS_OPERATOR_CLIENT_ID: ${{ secrets.CF_ACCESS_OPERATOR_CLIENT_ID }}
+          CF_ACCESS_OPERATOR_CLIENT_SECRET: ${{ secrets.CF_ACCESS_OPERATOR_CLIENT_SECRET }}
+        run: uv run datatrust run --env prod --target bigquery --seed 101
       - name: drain queued jobs
         run: uv run datatrust runner --env prod --target bigquery --watch --idle-exit 600

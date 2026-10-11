@@ -52,10 +52,18 @@ class Auth:
         return Auth({"Cf-Access-Jwt-Assertion": token or mint_dev_token(role)})
 
     @staticmethod
-    def service_token() -> Auth:
-        cid, secret = os.environ.get("CF_ACCESS_CLIENT_ID"), os.environ.get("CF_ACCESS_CLIENT_SECRET")
+    def service_token(role: str = "runner") -> Auth:
+        """Access service-token headers. The runner uses `datatrust-runner` (CF_ACCESS_CLIENT_*), which maps
+        to the runner role only; starting runs and reading incidents (operator, viewer) uses the second token
+        `datatrust-operator` (CF_ACCESS_OPERATOR_CLIENT_*)."""
+        prefix = "CF_ACCESS_CLIENT" if role == "runner" else "CF_ACCESS_OPERATOR_CLIENT"
+        cid, secret = os.environ.get(f"{prefix}_ID"), os.environ.get(f"{prefix}_SECRET")
         if not cid or not secret:
-            raise RuntimeError("CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are required for --env prod")
+            token = "datatrust-runner" if role == "runner" else "datatrust-operator"
+            raise RuntimeError(
+                f"{prefix}_ID and {prefix}_SECRET (service token {token}) are required for --env prod; "
+                "put them in .env.prod (README, production setup)"
+            )
         return Auth({"CF-Access-Client-Id": cid, "CF-Access-Client-Secret": secret})
 
 
@@ -84,9 +92,22 @@ class WorkerClient:
 
     @staticmethod
     def from_env(role: str = "runner", env: str = "local") -> WorkerClient:
+        """Local: the Worker under `wrangler dev` with a dev JWT for `role`. Production: .env.prod is loaded
+        (without overriding the shell), DATATRUST_API_URL must name the deployed Worker, and the Access
+        service token for `role` is sent."""
+        if env == "prod":
+            from datatrust.prod.settings import load_env_prod
+
+            load_env_prod()
+            url = os.environ.get("DATATRUST_API_URL", "").rstrip("/")
+            if not url.startswith("https://"):
+                raise RuntimeError(
+                    "DATATRUST_API_URL must be the deployed Worker URL "
+                    "(https://datatrust.<subdomain>.workers.dev); setup:prod writes it to .env.prod"
+                )
+            return WorkerClient(url, Auth.service_token(role))
         url = os.environ.get("DATATRUST_API_URL", "http://127.0.0.1:8792").rstrip("/")
-        auth = Auth.service_token() if env == "prod" else Auth.local(role)
-        return WorkerClient(url, auth)
+        return WorkerClient(url, Auth.local(role))
 
     def request(self, method: str, path: str, *, json: Any = None, headers: dict[str, str] | None = None):
         url = f"{self.base_url}{path}"

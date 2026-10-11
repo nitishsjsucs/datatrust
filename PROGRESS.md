@@ -37,6 +37,16 @@ All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incid
 - 22 (stretch). `.github/workflows/nightly.yml`: daily and on demand, the five-seed offline benchmark with the frozen weights and the LOSO figure, gated against `results/baseline.json` (no clean false positives; detection and top-3 within 0.05), report uploaded as an artifact. Not yet run (nothing pushed).
 - 23 (stretch). `.github/workflows/prod-runner.yml` (manual runs; the schedule acts only when the repository variable `DATATRUST_SCHEDULED_RUNNER` is `true`; `google-github-actions/auth@v2` with Workload Identity Federation, Access service-token secrets, `datatrust runner --env prod --target bigquery --watch --idle-exit 600`; dbt vars passed through an environment variable, not interpolated into the script) and `docs/prod-runner-wif.md` (service account, dataset and project grants, workload identity pool and GitHub OIDC provider restricted to the repository, GitHub variables and secrets). Implemented, not executed; the `@v2` major of the auth action is assumed, not checked against today's release list.
 
+- Builder 2, production-path audit (no cloud account exists, so each fix is checked against the installed wrangler 4.149 source, the Google client libraries and fetched docs, and covered by offline tests):
+  - BigQuery masking: `governance.py` created the data policies with the v2 client, where `policy_tag` is output only ("supported only for V1 data policies"; v2 policies attach to columns and use `grantees`). The tags would have had no masking rule and the analyst would have been denied instead of masked. Now the v1 `DataPolicyServiceClient` binds each SHA256, DATE_YEAR_MASK and ALWAYS_NULL policy to its tag; apply refuses a policy bound to another tag; a test asserts the v1 type and binding.
+  - Roles: the smoke (and the prod-runner workflow's optional run start) created runs with the `datatrust-runner` token, which maps to the runner role only, so `POST /api/runs` would have answered 403. A second service token `datatrust-operator` (`CF_ACCESS_OPERATOR_CLIENT_ID`/`_SECRET`, roles operator and viewer) now starts runs and reads incidents; `prod/worker_secrets.py` builds `ROLE_MAP_JSON` (setup-prod calls `datatrust prod worker-secrets`); the smoke also asserts the runner token gets 403 on `POST /api/runs`; doctor checks each token's roles through `/api/whoami`.
+  - `datatrust runner --env prod` never loaded `.env.prod` and fell back to `http://127.0.0.1:8792`; `WorkerClient.from_env(..., "prod")` now loads it and requires an https Worker URL.
+  - `governance apply` granted Fine-Grained Reader to `DATATRUST_OPERATOR_EMAIL` (the Cloudflare Access login); it now uses the gcloud account (`DATATRUST_GCP_USER` overrides) and setup-prod no longer rewrites the operator email.
+  - setup-prod: a generated `EVIDENCE_HMAC_KEY` was not exported to the secrets writer (KeyError on a first run); the deploy output was piped through `tee`, which makes wrangler non-interactive, so on a new account without a workers.dev subdomain the deploy would fail instead of asking (now the terminal stays attached and the URL comes from `WRANGLER_OUTPUT_FILE_PATH`, and is saved as `DATATRUST_API_URL`); `basin catalog get` prints "is not enabled" when off, which the `enabled|active` grep (and doctor) read as enabled (now both look for the `Warehouse:` line; parsers tested against the wrangler 4.149 message and format).
+  - Smoke: a runner thread that died (auth, network) left each run waiting 30 minutes; the error now stops the smoke.
+  - New `datatrust run [--env local|prod] [--scenario S01] [--wait]` (start a run as operator, print the outcome), `datatrust prod governance apply --extra-reader`, `npm run lake:sync` (SPEC 18.3). `docs/prod-runner-wif.md`: the CI runner needs BigQuery Data Owner (policy tags need `bigquery.tables.setCategory`) and Project Viewer (`datacatalog.taxonomies.get`), per the column-level security docs. `google-github-actions/auth` moved to `@v3` (latest release v3.0.0, checked with `gh api` on 2026-10-10).
+  - Verified by hand on 2026-10-10: `uv run datatrust run --scenario S01 --wait` against `npm run dev:up` with a background runner produced the S01 incident (raw.hires first); stack and runner stopped, ports free.
+
 ## Next
 
 Core v1 is complete locally. What remains:
@@ -45,15 +55,15 @@ Core v1 is complete locally. What remains:
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e); not yet observed.
 - Stretch: all four items done (20-23).
 
-## Check status (at the final commit, 2026-10-10, macOS; CI not yet run because nothing is pushed)
+## Check status (at the latest commit, 2026-10-10, macOS; CI not yet run because nothing is pushed)
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 50 passed
 - `npm run test:worker`: 57 passed
 - `npm run test -w @datatrust/web`: 4 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 155 passed (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
-- `npx wrangler types --strict-vars=false --check` (apps/worker): up to date
+- `uv run pytest`: 164 passed (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
+- `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template
 
 ## Deviations from SPEC.md
 
@@ -71,3 +81,4 @@ Core v1 is complete locally. What remains:
 - Project-level IAM (BigQuery Job User for the prober and analyst, Service Account Token Creator for Nitish) is granted by gcloud in `setup-prod.sh` rather than `governance.py`, because it needs the Resource Manager and IAM APIs; dataset-level reader grants are in `governance.py`. `datatrust prod reset --yes` deletes the tables in the four datasets (it never runs unless Nitish asks).
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.
+- Builder 2: data masking uses the v1 Data Policy API (SPEC 17 names the v2 client, whose `policy_tag` is output only). A second Access service token `datatrust-operator` (operator and viewer) exists because SPEC 15 gives the only service token the runner role while SPEC 18.4 has the smoke create runs. Fine-Grained Reader goes to the gcloud account rather than `DATATRUST_OPERATOR_EMAIL`. Extra CLI command `datatrust run`.

@@ -2,13 +2,15 @@
 production". Implemented, not executed: it needs the Cloudflare and Google Cloud setup in the README.
 
 1. prod validate (skippable with --skip-validate when it passed the same day);
-2. the real runner (BigQuery target, Access service token) in a background thread;
+2. the real runner (BigQuery target, service token datatrust-runner) in a background thread, while runs are
+   started and read with the second service token datatrust-operator;
 3. one clean run on seed 101 that must pass with 40 checks and no incident;
 4. five fault runs (S01, S03, S04, T14, T20) through the deployed Queues and Workflows, each producing an
    incident with summary_provider = workers-ai; records grounding pass rate and fallback rate;
 5. reads the run_completed events of all six runs back from Basin Catalog (pyiceberg RestCatalog,
    polling up to 10 minutes);
-6. Access: an unauthenticated request is denied, a service-token request succeeds, decoded claims recorded;
+6. Access: an unauthenticated request is denied, a service-token request succeeds, the runner token cannot
+   start a run, decoded claims recorded;
 7. writes results/prod-smoke-<date>.json and .md.
 """
 
@@ -42,6 +44,10 @@ def access_checks(base_url: str) -> dict[str, Any]:
         "CF-Access-Client-Secret": os.environ["CF_ACCESS_CLIENT_SECRET"],
     }
     svc = requests.get(f"{base_url}/api/whoami", headers=headers, timeout=30)
+    # The runner token must not be able to start runs (least privilege, SPEC 15).
+    forbidden = requests.post(
+        f"{base_url}/api/runs", headers=headers, json={"target": "bigquery", "seed": 101}, timeout=30
+    )
     # The Worker answers /api/whoami with the principal it decoded from the Access JWT; Access may also return
     # the token as the CF_Authorization cookie, whose claims are recorded when present.
     token = svc.cookies.get("CF_Authorization")
@@ -51,18 +57,66 @@ def access_checks(base_url: str) -> dict[str, Any]:
         "service_token_status": svc.status_code,
         "service_token_principal": svc.json() if svc.ok else None,
         "service_token_claims": _claims(token) if token else None,
+        "runner_token_cannot_start_runs": forbidden.status_code == 403,
     }
+
+
+class RunnerThread(threading.Thread):
+    """The real runner (BigQuery target, service token datatrust-runner) in the background. An exception in a
+    job handler is reported to the workflow by run_once; anything else (auth, network) stops the thread and
+    is re-raised by the smoke instead of letting it wait for runs that can never finish."""
+
+    def __init__(self, client: Any) -> None:
+        super().__init__(daemon=True)
+        self.client = client
+        self.stop = threading.Event()
+        self.error: BaseException | None = None
+        self.jobs: list[dict[str, Any]] = []
+
+    def run(self) -> None:
+        from datatrust.runner.loop import run_once
+
+        try:
+            while not self.stop.is_set():
+                report = run_once(
+                    self.client, target="bigquery", kinds=["dbt_build", "diagnostics"], runner_id="prod-smoke"
+                )
+                if report is None:
+                    self.stop.wait(3)
+                else:
+                    self.jobs.append(report)
+        except BaseException as err:  # noqa: BLE001 - surfaced by wait_for_run
+            self.error = err
+
+
+def wait_for_run(ops: Any, run_id: str, runner: RunnerThread, timeout_s: float = 1800) -> dict[str, Any]:
+    """Poll until the run is final (and, when it failed, until its incident exists)."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        if runner.error is not None:
+            raise RuntimeError(f"runner stopped: {type(runner.error).__name__}: {runner.error}")
+        run = ops.get_run(run_id)
+        if run["status"] in ("passed", "failed", "stale", "error") and (
+            run["status"] != "failed" or run.get("incidentId")
+        ):
+            return run
+        if time.monotonic() > deadline:
+            raise TimeoutError(f"{run_id} still {run['status']} after {timeout_s:.0f} s")
+        time.sleep(5)
 
 
 def smoke(skip_validate: bool = False) -> dict[str, Any]:
     from datatrust.lake.iceberg_basin import run_completed_events
     from datatrust.prod.validate import validate
     from datatrust.runner.client import WorkerClient
-    from datatrust.runner.loop import run_once
 
     load_env_prod()
     settings = GcpSettings.from_env()
-    base_url = os.environ["DATATRUST_API_URL"]
+    # Two Access service tokens: datatrust-runner leases jobs (runner role only), datatrust-operator starts
+    # runs and reads incidents (operator and viewer).
+    client = WorkerClient.from_env("runner", "prod")
+    ops = WorkerClient.from_env("operator", "prod")
+    base_url = client.base_url
     started = dt.datetime.now(dt.UTC)
     report: dict[str, Any] = {
         "date": started.date().isoformat(),
@@ -76,36 +130,14 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
             report["ok"] = False
             return report
 
-    client = WorkerClient.from_env("runner", "prod")
-    stop = threading.Event()
-
-    def runner_thread() -> None:
-        while not stop.is_set():
-            if (
-                run_once(
-                    client, target="bigquery", kinds=["dbt_build", "diagnostics"], runner_id="prod-smoke"
-                )
-                is None
-            ):
-                stop.wait(3)
-
-    t = threading.Thread(target=runner_thread, daemon=True)
-    t.start()
+    runner = RunnerThread(client)
+    runner.start()
     try:
         runs = []
         for scenario in (None, *FAULTS):
-            run_id = client.create_run("bigquery", 101, scenario)
-            deadline = time.monotonic() + 1800
-            while True:
-                run = client.get_run(run_id)
-                if run["status"] in ("passed", "failed", "stale", "error") and (
-                    run["status"] != "failed" or run.get("incidentId")
-                ):
-                    break
-                if time.monotonic() > deadline:
-                    raise TimeoutError(run_id)
-                time.sleep(5)
-            incident = client.get_incident(run["incidentId"]) if run.get("incidentId") else None
+            run_id = ops.create_run("bigquery", 101, scenario)
+            run = wait_for_run(ops, run_id, runner)
+            incident = ops.get_incident(run["incidentId"]) if run.get("incidentId") else None
             runs.append(
                 {
                     "scenario": scenario,
@@ -120,9 +152,10 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
                 }
             )
     finally:
-        stop.set()
-        t.join(timeout=60)
+        runner.stop.set()
+        runner.join(timeout=60)
     report["runs"] = runs
+    report["runnerJobs"] = runner.jobs
     faults = [r for r in runs if r["scenario"]]
     report["clean_ok"] = runs[0]["status"] == "passed" and runs[0]["checkCounts"]["pass"] == 40
     report["workers_ai_incidents"] = sum(1 for r in faults if r["summaryProvider"] == "workers-ai")
@@ -148,6 +181,7 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
         and rows >= len(ids)
         and report["access"]["unauthenticated_denied"]
         and report["access"]["service_token_status"] == 200
+        and report["access"]["runner_token_cannot_start_runs"]
     )
     out = config.RESULTS_DIR / f"prod-smoke-{report['date']}"
     out.with_suffix(".json").write_text(json.dumps(report, indent=1, default=str) + "\n")

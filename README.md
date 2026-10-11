@@ -175,7 +175,8 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 | Iceberg lake | **pyiceberg SqlCatalog on SQLite (stand-in for Basin Catalog)** | Basin Pipelines stream to a Basin Catalog Iceberg table |
 | LLM summaries | **llama-server (Qwen3-1.7B Q4_0) on 127.0.0.1:8160 (stand-in)** or a deterministic template (CI) | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust` |
 | Auth | locally generated RS256 keypair and JWKS | Cloudflare Access (team JWKS) |
-| Runner identity | local dev JWT (role `runner`) | Access service token `datatrust-runner` |
+| Runner identity | local dev JWT (role `runner`) | Access service token `datatrust-runner` (role `runner` only) |
+| Operator identity (start runs, read incidents) | local dev JWT (role `operator`) | your Access login in the browser, or Access service token `datatrust-operator` for the CLI and the smoke |
 | Probe identity | DuckDB connection opened read-only | impersonated service account `datatrust-prober`, dry run plus byte cap |
 | Lineage | `dbt-ol` file transport, uploaded by the runner | same |
 
@@ -219,11 +220,13 @@ curl -s -H "Cf-Access-Jwt-Assertion: $OP" http://127.0.0.1:8792/api/incidents/<i
 npm run dev:down                                     # stops everything dev:up started and confirms the ports are free
 ```
 
+The same in two commands: `uv run datatrust runner --watch --idle-exit 60` in one terminal, and `uv run datatrust run --scenario S01 --wait` in another (it posts the run as operator with a local dev token and prints the run status, failing checks, top three candidates and summary title once the incident exists).
+
 `npm run bench:e2e` runs the seed-101 benchmark through all of the above (20 scenarios, each through Queues and both Workflows) and checks that the incident top-3 lists equal the offline mode's; `npm run bench:e2e -- --pytest` is the CI subset (S01, T14, S04). Both stop everything they started.
 
 The Worker also serves a read-only incident dashboard (`apps/web`, React 19 and Vite 8, built with `npm run build`) at http://127.0.0.1:8792/: the incident list, then per incident the summary, failing checks, ranked candidates with their features, the column-level lineage path, the supporting diagnostic SQL, recovery commands and the provenance with every local stand-in labelled. Locally, paste a token from `npm run -s dev:token -- --role viewer` into the "Local dev token" box; in production Cloudflare Access signs the browser in.
 
-Audit events (check results, completed runs, incidents) go to the lake. Locally the Worker writes NDJSON to its R2 bucket and `uv run datatrust lake sync` appends them to a pyiceberg SQL catalog under `.data/lake/` (stand-in for Basin Catalog); `uv run datatrust lake query` reads the Iceberg table through DuckDB.
+Audit events (check results, completed runs, incidents) go to the lake. Locally the Worker writes NDJSON to its R2 bucket and `npm run lake:sync` (`uv run datatrust lake sync`) appends them to a pyiceberg SQL catalog under `.data/lake/` (stand-in for Basin Catalog); `uv run datatrust lake query` reads the Iceberg table through DuckDB.
 
 `npm run dev:up -- --llm` also starts llama-server (Qwen3-1.7B) on 127.0.0.1:8160; set `DATATRUST_LLM_MODEL_PATH` if the GGUF lives elsewhere.
 
@@ -252,12 +255,12 @@ cp .env.example .env.prod && chmod 600 .env.prod
 | 7 | Optional: an API token with account permissions "AI Gateway Read" and "AI Gateway Edit", saved as `DATATRUST_CF_API_TOKEN` (otherwise create the gateway in the dashboard: AI, AI Gateway, Create Gateway, name `datatrust`) | https://dash.cloudflare.com/profile/api-tokens | free |
 | 8 | An R2 API token for Basin Catalog (R2, Manage API tokens, Create Account API token, Admin Read & Write), saved as `BASIN_CATALOG_TOKEN` | dashboard: R2 | free |
 | 9 | Set `DATATRUST_OPERATOR_EMAIL` to the email you will log in to Access with | `.env.prod` | free |
-| 10 | Run the Cloudflare bootstrap. It creates D1, both R2 buckets, the catalog, four queues, the Pipelines stream, sink and pipeline, the AI Gateway, renders `wrangler.prod.jsonc`, applies the D1 migrations and deploys the Worker with its secrets. The first deploy is fail-closed (every API call answers 401) and the script stops with "rerun after Access is configured" | `npm run setup:prod -- --cloudflare-only` | Pipelines and catalog usage inside the included amounts |
+| 10 | Run the Cloudflare bootstrap. It creates D1, both R2 buckets, the catalog, four queues, the Pipelines stream, sink and pipeline, the AI Gateway, renders `wrangler.prod.jsonc`, applies the D1 migrations (confirm the prompt) and deploys the Worker with its secrets, then saves the Worker URL as `DATATRUST_API_URL`. On a new account the first deploy asks to register a workers.dev subdomain: answer yes and pick a name. The first deploy is fail-closed (every API call answers 401) and the script stops with "rerun after Access is configured" | `npm run setup:prod -- --cloudflare-only` | Pipelines and catalog usage inside the included amounts |
 | 11 | Protect the Worker with Access: Workers & Pages, datatrust, Settings, Domains & Routes, **Enable Cloudflare Access** on the workers.dev route, then Manage Cloudflare Access and allow your email | dashboard | free |
 | 12 | Copy the Application Audience (AUD) tag into `ACCESS_AUD`, and `https://<team>.cloudflareaccess.com` into `ACCESS_TEAM_DOMAIN` | Zero Trust, Access, Applications | free |
-| 13 | Create service token `datatrust-runner` (1 year), save `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (the secret is shown once), and add a second policy on the datatrust Access app with action **Service Auth** that includes this token | Zero Trust, Access, Service credentials | free |
+| 13 | Create two service tokens (1 year each; each secret is shown once): `datatrust-runner`, saved as `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (the runner; it can only lease jobs and post results), and `datatrust-operator`, saved as `CF_ACCESS_OPERATOR_CLIENT_ID` and `CF_ACCESS_OPERATOR_CLIENT_SECRET` (starts runs and reads incidents from the CLI and the smoke test). Then add a second policy on the datatrust Access app with action **Service Auth** that includes both tokens | Zero Trust, Access, Service credentials | free |
 | 14 | Rerun the bootstrap to set the real secrets and redeploy | `npm run setup:prod -- --cloudflare-only` | free |
-| 15 | Check | `npm run doctor -- --prod` | free |
+| 15 | Check (it also confirms each service token reaches the Worker with exactly its roles) | `npm run doctor -- --prod` | free |
 
 Workers AI needs no setup beyond the binding (10,000 neurons per day free, then $0.011 per 1,000 neurons on Workers Paid); a summary is roughly 2k input and 400 output tokens on `llama-3.3-70b-instruct-fp8-fast` (an estimate, not measured). There is no cron trigger, so nothing runs or bills unless you start a run.
 
@@ -275,7 +278,16 @@ Workers AI needs no setup beyond the binding (10,000 neurons per day free, then 
 | 8 | Run the Google Cloud bootstrap: APIs, four datasets with a 7-day time-travel window, the `datatrust-analyst` and `datatrust-prober` service accounts and their grants, the policy-tag taxonomy and masking policies, `prod validate` (compile, `dbt build --empty`, probe dry runs), the real build, and the masking verification as the analyst | `npm run setup:prod -- --gcp-only` | about $0 |
 | 9 | Check, then run the production smoke test (one clean run and five fault runs through the deployed Queues and Workflows on BigQuery, Workers AI summaries, the Iceberg row read back, Access checks) | `npm run doctor -- --prod`, then `npm run prod:smoke` | about $0 plus a few cents of Workers AI |
 
-Your Google identity needs Owner on the project (or BigQuery Admin, Data Catalog Policy Tag Admin, Data Policy Admin and Service Account Admin). Owner does not include Fine-Grained Reader, which the bootstrap grants you explicitly so dbt tests can read real values.
+Your Google identity needs Owner on the project (or BigQuery Admin, Data Catalog Policy Tag Admin, Data Policy Admin and Service Account Admin). Owner does not include Fine-Grained Reader, which the bootstrap grants explicitly to your active `gcloud` account (set `DATATRUST_GCP_USER` to use another) so dbt tests can read real values. The masking rules are v1 data policies bound to the three policy tags.
+
+Once both parts are done, production runs work like the local loop, with the runner on your machine:
+
+```sh
+uv run datatrust runner --env prod --target bigquery --watch             # terminal 1: BigQuery, service token datatrust-runner
+uv run datatrust run --env prod --seed 101 --scenario S01 --wait         # terminal 2: start a run as operator, wait for the incident
+```
+
+The dashboard is the Worker URL in a browser; Access signs you in with your email.
 
 Optional: to run the production runner on GitHub Actions instead of your machine, without a service-account key, follow [`docs/prod-runner-wif.md`](docs/prod-runner-wif.md) (Workload Identity Federation; off unless you start it).
 

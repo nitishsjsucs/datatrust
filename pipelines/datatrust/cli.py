@@ -249,6 +249,40 @@ def _cmd_runner(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_run(args: argparse.Namespace) -> int:
+    """Start a validation run as an operator (local dev JWT, or the datatrust-operator service token in
+    production) and optionally wait for its outcome. A runner must be leasing jobs for the run to progress."""
+    import time
+
+    from datatrust.runner.client import WorkerClient
+
+    client = WorkerClient.from_env("operator", args.env)
+    target = args.target or ("bigquery" if args.env == "prod" else "duckdb")
+    run_id = client.create_run(target, args.seed, args.scenario)
+    print(json.dumps({"runId": run_id, "target": target, "seed": args.seed, "scenario": args.scenario}))
+    if not args.wait:
+        return 0
+    deadline = time.monotonic() + args.timeout
+    while True:
+        run = client.get_run(run_id)
+        final = run["status"] in ("passed", "failed", "stale", "error")
+        if final and (run["status"] != "failed" or run.get("incidentId")):
+            break
+        if time.monotonic() > deadline:
+            msg = f"timed out: {run_id} is still {run['status']} (is a runner leasing jobs?)"
+            print(msg, file=sys.stderr)
+            return 1
+        time.sleep(3)
+    out: dict = {k: run.get(k) for k in ("runId", "status", "checkCounts", "failing", "incidentId")}
+    if run.get("incidentId"):
+        inc = client.get_incident(run["incidentId"])
+        out["topCandidates"] = [c.get("node") for c in (inc.get("ranked") or [])[:3]]
+        out["summaryTitle"] = (inc.get("summary") or {}).get("title")
+        out["summaryProvider"] = inc.get("summaryProvider")
+    print(json.dumps(out, indent=2))
+    return 0 if run["status"] in ("passed", "failed") else 1
+
+
 def _cmd_restore(args: argparse.Namespace) -> int:
     """Local stand-in for BigQuery time travel: copy a mart snapshot into <node>_restored_<ts>."""
     import datetime as dt
@@ -307,19 +341,30 @@ def _cmd_prod(args: argparse.Namespace) -> int:
 
             settings = GcpSettings.from_env()
             if args.action == "apply":
-                import os
+                from datatrust.prod.settings import gcp_user_email
 
-                email = os.environ.get("DATATRUST_OPERATOR_EMAIL")
-                if not email:
-                    raise NotConfigured(
-                        "set DATATRUST_OPERATOR_EMAIL in .env.prod (your Google account email)"
-                    )
-                state = governance.apply(settings, email)
+                state = governance.apply(settings, gcp_user_email(), extra_readers=args.extra_reader)
                 print(json.dumps(state.__dict__, indent=2))
                 return 0
             results = governance.verify(settings)
             print(json.dumps(results, indent=2))
             return 0 if all(r["ok"] for r in results) else 1
+        if args.prod_command == "worker-secrets":
+            from datatrust.prod.worker_secrets import write_worker_secrets
+
+            secrets = write_worker_secrets(Path(args.out))
+            roles = json.loads(secrets["ROLE_MAP_JSON"])
+            print(
+                json.dumps(
+                    {
+                        "out": args.out,
+                        "accessAud": "unset" if secrets["ACCESS_AUD"] == "unset" else "set",
+                        "humans": len(roles["emails"]),
+                        "serviceTokens": len(roles["serviceTokens"]),
+                    }
+                )
+            )
+            return 0
         if args.prod_command == "validate":
             from datatrust.prod.validate import main as validate_main
 
@@ -424,6 +469,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--idle-exit", type=float, help="stop after this many seconds without a job")
     p.set_defaults(func=_cmd_runner)
 
+    p = sub.add_parser("run", help="start a validation run as an operator (POST /api/runs), optionally wait")
+    p.add_argument("--env", choices=["local", "prod"], default="local")
+    p.add_argument("--target", choices=["duckdb", "bigquery"], help="default: duckdb local, bigquery prod")
+    p.add_argument("--seed", type=int, default=101)
+    p.add_argument("--scenario", help="fault scenario id, e.g. S01 (default: a clean run)")
+    p.add_argument("--wait", action="store_true", help="poll until the run and its incident are final")
+    p.add_argument("--timeout", type=float, default=1800)
+    p.set_defaults(func=_cmd_run)
+
     p = sub.add_parser("restore", help="restore a mart from a local Parquet snapshot (time-travel stand-in)")
     p.add_argument("--from-snapshot", dest="run", required=True, help="run id of the green run")
     p.add_argument("node", help="mart model name, e.g. fct_hires")
@@ -441,6 +495,15 @@ def build_parser() -> argparse.ArgumentParser:
     prod = p.add_subparsers(dest="prod_command", required=True)
     g = prod.add_parser("governance", help="BigQuery taxonomy, policy tags, masking and IAM")
     g.add_argument("action", choices=["apply", "verify"])
+    g.add_argument(
+        "--extra-reader",
+        action="append",
+        default=[],
+        metavar="MEMBER",
+        help="also grant Fine-Grained Reader on the policy tags, e.g. serviceAccount:<ci runner sa>",
+    )
+    ws = prod.add_parser("worker-secrets", help="write the Worker secrets JSON for wrangler --secrets-file")
+    ws.add_argument("--out", required=True)
     prod.add_parser(
         "validate", help="compile, build --empty, probe dry runs and banned-construct check on BigQuery"
     )

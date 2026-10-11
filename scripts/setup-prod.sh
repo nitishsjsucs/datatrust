@@ -135,16 +135,35 @@ if ((DO_CF)); then
   done
 
   say "3. Basin Catalog on datatrust-lake"
+  # `wrangler basin catalog get` has no --json. When enabled it prints "Catalog URI:", "Warehouse:" and
+  # "Status:" lines; when not, a sentence containing "is not enabled" (wrangler 4.149 source), so the check
+  # looks for the Warehouse line, never for the word "enabled".
+  CATALOG_PARSER="$(cat <<'PYCAT'
+import re, sys
+text = re.sub(r"\x1b\[[0-9;]*m", "", sys.stdin.read())
+if "not enabled" in text:
+    sys.exit(0)
+wh = re.search(r"^\s*Warehouse:\s*(\S+)\s*$", text, re.M)
+uri = re.search(r"^\s*Catalog URI:\s*(https://\S+)\s*$", text, re.M)
+if wh and uri:
+    print(wh.group(1), uri.group(1))
+PYCAT
+)"
   CATALOG="$(wr basin catalog get datatrust-lake 2>&1 || true)"
-  if ! grep -qi "enabled\|active" <<<"$CATALOG"; then
+  INFO="$(printf '%s\n' "$CATALOG" | python3 -c "$CATALOG_PARSER")"
+  if [[ -z "$INFO" ]]; then
     run wr basin catalog enable datatrust-lake
     CATALOG="$(wr basin catalog get datatrust-lake 2>&1 || true)"
+    INFO="$(printf '%s\n' "$CATALOG" | python3 -c "$CATALOG_PARSER")"
+  else
+    note "catalog already enabled"
   fi
-  WAREHOUSE="$(grep -iE 'warehouse' <<<"$CATALOG" | grep -oE '[A-Za-z0-9_-]+_datatrust-lake|[0-9a-f]{32}_datatrust-lake' | head -1 || true)"
-  CATALOG_URI="$(grep -oE 'https://catalog\.cloudflarestorage\.com/[A-Za-z0-9_/-]+' <<<"$CATALOG" | head -1 || true)"
-  if [[ -n "$WAREHOUSE" && -n "$CATALOG_URI" ]]; then
+  if [[ -n "$INFO" ]]; then
+    WAREHOUSE="${INFO%% *}"
+    CATALOG_URI="${INFO#* }"
     env_set BASIN_WAREHOUSE "$WAREHOUSE"
     env_set BASIN_CATALOG_URI "$CATALOG_URI"
+    export BASIN_WAREHOUSE="$WAREHOUSE" BASIN_CATALOG_URI="$CATALOG_URI"
     note "warehouse $WAREHOUSE, catalog $CATALOG_URI"
   elif [[ -z "${BASIN_WAREHOUSE:-}" || -z "${BASIN_CATALOG_URI:-}" ]]; then
     note "could not parse the catalog details from:"
@@ -214,41 +233,56 @@ if ((DO_CF)); then
     env_set EVIDENCE_HMAC_KEY "$EVIDENCE_HMAC_KEY"
     note "generated EVIDENCE_HMAC_KEY (saved to .env.prod for the runner)"
   fi
-  if ((DRY == 0)); then
-    python3 - "$PROD/secrets.json" <<'PY'
-import json, os, sys
-emails = {os.environ["DATATRUST_OPERATOR_EMAIL"].lower(): ["operator", "viewer"]} if os.environ.get("DATATRUST_OPERATOR_EMAIL") else {}
-tokens = {os.environ["CF_ACCESS_CLIENT_ID"].lower(): ["runner"]} if os.environ.get("CF_ACCESS_CLIENT_ID") else {}
-secrets = {
-    "EVIDENCE_HMAC_KEY": os.environ["EVIDENCE_HMAC_KEY"],
-    "ROLE_MAP_JSON": json.dumps({"emails": emails, "serviceTokens": tokens}),
-    "ACCESS_AUD": os.environ.get("ACCESS_AUD") or "unset",
-}
-fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    json.dump(secrets, f)
-PY
-  fi
-  note "secrets file written (mode 600); ACCESS_AUD=${ACCESS_AUD:-unset}"
+  export EVIDENCE_HMAC_KEY
+  # ROLE_MAP_JSON: your Access email -> operator+viewer; datatrust-runner -> runner; datatrust-operator ->
+  # operator+viewer (pipelines/datatrust/prod/worker_secrets.py).
+  run uv run --locked datatrust prod worker-secrets --out "$PROD/secrets.json"
+  note "ACCESS_AUD=${ACCESS_AUD:-unset}"
 
   say "11. Deploy the Worker with its secrets"
   run npm run -s build # RCA bundle and the dashboard assets (apps/web/dist) the Worker serves
   if ((DRY)); then
     note "[dry-run] wrangler deploy -c apps/worker/wrangler.prod.jsonc --secrets-file .prod/secrets.json"
   else
-    DEPLOY_LOG="$(wr deploy -c "$ROOT/apps/worker/wrangler.prod.jsonc" --secrets-file "$PROD/secrets.json" 2>&1 | tee /dev/stderr)"
-    URL="$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' <<<"$DEPLOY_LOG" | head -1 || true)"
-    [[ -n "$URL" ]] && state_set worker_url "$URL" && env_set DATATRUST_API_URL "$URL"
+    # Output stays on the terminal (not piped), so on a new account wrangler can ask to register the
+    # workers.dev subdomain; the deployed URL is read from wrangler's structured output file instead.
+    OUT_FILE="$PROD/wrangler-deploy.ndjson"
+    rm -f "$OUT_FILE"
+    WRANGLER_OUTPUT_FILE_PATH="$OUT_FILE" wr deploy -c "$ROOT/apps/worker/wrangler.prod.jsonc" \
+      --secrets-file "$PROD/secrets.json"
+    URL="$(python3 - "$OUT_FILE" <<'PY2'
+import json, os, re, sys
+url = ""
+lines = open(sys.argv[1]).read().splitlines() if os.path.exists(sys.argv[1]) else []
+for line in lines:
+    entry = json.loads(line)
+    if entry.get("type") == "deploy":
+        for target in entry.get("targets") or []:
+            m = re.search(r"https://[a-z0-9.-]+\.workers\.dev", str(target))
+            if m:
+                url = m.group(0)
+print(url)
+PY2
+)"
+    if [[ -n "$URL" ]]; then
+      state_set worker_url "$URL"
+      env_set DATATRUST_API_URL "$URL"
+      note "Worker URL $URL (saved to .env.prod as DATATRUST_API_URL)"
+    else
+      note "could not read the workers.dev URL from $OUT_FILE; set DATATRUST_API_URL in .env.prod by hand"
+    fi
   fi
 
-  if [[ -z "${ACCESS_AUD:-}" || "${ACCESS_AUD}" == "unset" ]]; then
-    say "12. Cloudflare Access is not configured yet"
+  if [[ -z "${ACCESS_AUD:-}" || "${ACCESS_AUD}" == "unset" || -z "${CF_ACCESS_CLIENT_ID:-}" || -z "${CF_ACCESS_OPERATOR_CLIENT_ID:-}" ]]; then
+    say "12. Cloudflare Access is not fully configured yet"
     note "The Worker is deployed fail-closed: every API call answers 401 until ACCESS_AUD is set."
     note "Worker URL: $(state_get worker_url)"
-    note "Next (README, production setup, steps 11-14):"
+    note "Next (README, production setup, Cloudflare steps 11-14):"
     note "  - Workers & Pages > datatrust > Settings > Domains & Routes: Enable Cloudflare Access on the workers.dev route, allow your email"
     note "  - copy the Application Audience (AUD) tag into ACCESS_AUD and https://<team>.cloudflareaccess.com into ACCESS_TEAM_DOMAIN"
-    note "  - create service token datatrust-runner, save CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET, add a Service Auth policy"
+    note "  - create service tokens datatrust-runner and datatrust-operator; save CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET"
+    note "    (runner) and CF_ACCESS_OPERATOR_CLIENT_ID / CF_ACCESS_OPERATOR_CLIENT_SECRET (operator); add one Service Auth"
+    note "    policy on the datatrust Access app that includes both tokens"
     note "  - rerun: npm run setup:prod -- --cloudflare-only"
     note "rerun after Access is configured"
     ((DO_GCP)) || exit 0
@@ -293,9 +327,10 @@ if ((DO_GCP)); then
       --role=roles/bigquery.jobUser --condition=None >/dev/null
   done
 
-  say "18. Governance: taxonomy, policy tags, masking, IAM"
-  env_set DATATRUST_OPERATOR_EMAIL "${DATATRUST_OPERATOR_EMAIL:-$USER_EMAIL}"
-  export DATATRUST_OPERATOR_EMAIL="${DATATRUST_OPERATOR_EMAIL:-$USER_EMAIL}"
+  say "18. Governance: taxonomy, policy tags, masking (v1 data policies bound to the tags), IAM"
+  # Fine-Grained Reader goes to the Google identity that runs dbt (the gcloud account), not to the
+  # Cloudflare Access email in DATATRUST_OPERATOR_EMAIL, which may be a different address.
+  export DATATRUST_GCP_USER="$USER_EMAIL"
   run uv run datatrust prod governance apply
 
   say "19. Validate the BigQuery path (compile, build --empty, probe dry runs)"

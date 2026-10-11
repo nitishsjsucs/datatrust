@@ -106,6 +106,15 @@ def names_in(data: Any) -> set[str]:
     return out
 
 
+def catalog_enabled(returncode: int, text: str) -> bool:
+    """`wrangler basin catalog get` prints a "Warehouse:" line when the catalog is enabled, and a sentence
+    containing "is not enabled" otherwise (exit code 0 in both cases)."""
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    return (
+        returncode == 0 and "not enabled" not in text and re.search(r"^\s*Warehouse:", text, re.M) is not None
+    )
+
+
 def port_free(port: int) -> bool:
     with socket.socket() as s:
         s.settimeout(0.3)
@@ -214,6 +223,9 @@ ENV_KEYS: tuple[tuple[str, str], ...] = (
     ("ACCESS_AUD", "Application Audience tag of the datatrust Access app (README Cloudflare step 12)"),
     ("CF_ACCESS_CLIENT_ID", "service token datatrust-runner (README Cloudflare step 13)"),
     ("CF_ACCESS_CLIENT_SECRET", "service token datatrust-runner (README Cloudflare step 13)"),
+    ("CF_ACCESS_OPERATOR_CLIENT_ID", "service token datatrust-operator (README Cloudflare step 13)"),
+    ("CF_ACCESS_OPERATOR_CLIENT_SECRET", "service token datatrust-operator (README Cloudflare step 13)"),
+    ("DATATRUST_API_URL", "the deployed Worker URL; setup:prod writes it after the first deploy (step 10)"),
     ("DATATRUST_GCP_PROJECT", "your Google Cloud project id (README Google Cloud step 7)"),
 )
 
@@ -340,7 +352,7 @@ def cloudflare_checks() -> list[Check]:
     cat = wrangler("basin", "catalog", "get", "datatrust-lake")
     out.append(
         Check("ok", "Basin Catalog on datatrust-lake")
-        if cat.returncode == 0 and "enabled" in (cat.stdout.lower() + cat.stderr.lower())
+        if catalog_enabled(cat.returncode, cat.stdout + cat.stderr)
         else Check(
             "missing",
             "Basin Catalog on datatrust-lake",
@@ -500,23 +512,7 @@ def cloudflare_checks() -> list[Check]:
                     "enable Cloudflare Access on the workers.dev route (README step 11)",
                 )
             )
-            cid, secret = os.environ.get("CF_ACCESS_CLIENT_ID"), os.environ.get("CF_ACCESS_CLIENT_SECRET")
-            if cid and secret:
-                svc = requests.get(
-                    f"{url}/api/whoami",
-                    headers={"CF-Access-Client-Id": cid, "CF-Access-Client-Secret": secret},
-                    timeout=30,
-                )
-                out.append(
-                    Check("ok", "service token request", f"HTTP 200, principal {svc.json()}")
-                    if svc.status_code == 200
-                    else Check(
-                        "missing",
-                        "service token request",
-                        f"HTTP {svc.status_code}",
-                        "add a Service Auth policy for datatrust-runner (README step 13)",
-                    )
-                )
+            out.extend(service_token_checks(url))
         else:
             out.append(
                 Check(
@@ -547,6 +543,116 @@ def cloudflare_checks() -> list[Check]:
             )
         )
     return out
+
+
+def service_token_checks(url: str, get: Callable[..., Any] | None = None) -> list[Check]:
+    """Each Access service token reaches the Worker and maps to exactly the roles it should have: the runner
+    token to `runner` only, the operator token to `operator` and `viewer` (ROLE_MAP_JSON, SPEC 15)."""
+    if get is None:
+        import requests
+
+        get = requests.get
+    out: list[Check] = []
+    for label, prefix, want in (
+        ("datatrust-runner", "CF_ACCESS_CLIENT", {"runner"}),
+        ("datatrust-operator", "CF_ACCESS_OPERATOR_CLIENT", {"operator", "viewer"}),
+    ):
+        cid, secret = os.environ.get(f"{prefix}_ID"), os.environ.get(f"{prefix}_SECRET")
+        if not (cid and secret):
+            out.append(
+                Check(
+                    "missing",
+                    f"service token {label}",
+                    f"{prefix}_ID / {prefix}_SECRET not set",
+                    "README Cloudflare step 13",
+                )
+            )
+            continue
+        res = get(
+            f"{url}/api/whoami",
+            headers={"CF-Access-Client-Id": cid, "CF-Access-Client-Secret": secret},
+            allow_redirects=False,
+            timeout=30,
+        )
+        if res.status_code != 200:
+            fix = {
+                401: "Access let the request through but the Worker rejected the JWT: check ACCESS_AUD and "
+                "ACCESS_TEAM_DOMAIN, then rerun npm run setup:prod -- --cloudflare-only",
+                403: "the Worker does not know this token: rerun npm run setup:prod -- --cloudflare-only so "
+                "ROLE_MAP_JSON includes it",
+            }.get(
+                res.status_code,
+                f"add {label} to the Service Auth policy of the datatrust Access app (README step 13)",
+            )
+            out.append(Check("missing", f"service token {label}", f"HTTP {res.status_code}", fix))
+            continue
+        principal = res.json()
+        roles = set(principal.get("roles") or [])
+        out.append(
+            Check("ok", f"service token {label}", f"principal {principal.get('id')}, roles {sorted(roles)}")
+            if roles == want
+            else Check(
+                "missing",
+                f"service token {label} roles",
+                f"roles {sorted(roles)}, expected {sorted(want)}",
+                "rerun npm run setup:prod -- --cloudflare-only (rewrites ROLE_MAP_JSON)",
+            )
+        )
+    return out
+
+
+def governance_checks(project: str, location: str) -> list[Check]:
+    """Taxonomy, its three policy tags, and one v1 masking data policy bound to each tag."""
+    try:
+        from google.cloud import bigquery_datapolicies_v1 as dp
+        from google.cloud import datacatalog_v1 as dc
+
+        from datatrust.prod.governance import TAGS, TAXONOMY
+
+        parent = f"projects/{project}/locations/{location.lower()}"
+        ptm = dc.PolicyTagManagerClient()
+        tax = next((t for t in ptm.list_taxonomies(parent=parent) if t.display_name == TAXONOMY), None)
+        if tax is None:
+            return [
+                Check(
+                    "missing", f"taxonomy {TAXONOMY}", "not found", "uv run datatrust prod governance apply"
+                )
+            ]
+        tags = {t.display_name: t.name for t in ptm.list_policy_tags(parent=tax.name)}
+        bound = {
+            p.policy_tag.rsplit("/", 1)[-1]
+            for p in dp.DataPolicyServiceClient().list_data_policies(parent=parent)
+            if p.policy_tag
+        }
+        out = [Check("ok", f"taxonomy {TAXONOMY}", tax.name)]
+        for key in TAGS:
+            if key not in tags:
+                out.append(
+                    Check(
+                        "missing", f"policy tag {key}", "not found", "uv run datatrust prod governance apply"
+                    )
+                )
+            elif tags[key].rsplit("/", 1)[-1] not in bound:
+                out.append(
+                    Check(
+                        "missing",
+                        f"masking policy on {key}",
+                        "no data policy bound to the tag",
+                        "uv run datatrust prod governance apply",
+                    )
+                )
+            else:
+                out.append(Check("ok", f"policy tag {key} with masking policy"))
+        return out
+    except Exception as err:  # noqa: BLE001
+        return [
+            Check(
+                "missing",
+                "policy tags and masking policies",
+                f"{type(err).__name__}: {str(err)[:200]}",
+                "uv run datatrust prod governance apply",
+            )
+        ]
 
 
 # ------------------------------------------------------------------------------------------------ Google Cloud
@@ -679,6 +785,7 @@ def gcp_checks() -> list[Check]:
                 "npm run setup:prod -- --gcp-only (grants Service Account Token Creator)",
             )
         )
+    out.extend(governance_checks(project, os.environ.get("DATATRUST_BQ_LOCATION", "US")))
     try:
         from datatrust.prod.settings import dbt_vars
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,8 +24,9 @@ class NotConfigured(RuntimeError):
     """A production prerequisite is missing; the message says exactly what to do."""
 
 
-def load_env_prod(path: Path = ENV_PROD) -> dict[str, str]:
+def load_env_prod(path: Path | None = None) -> dict[str, str]:
     """Parse KEY=VALUE lines (quotes stripped) into os.environ without overriding what is already set."""
+    path = path or ENV_PROD
     values: dict[str, str] = {}
     if path.exists():
         for line in path.read_text().splitlines():
@@ -75,3 +77,24 @@ def dbt_vars() -> dict[str, str]:
 
 def dbt_vars_arg() -> str:
     return yaml.safe_dump(dbt_vars(), default_flow_style=True).strip()
+
+
+def gcp_user_email() -> str:
+    """The Google identity that runs dbt and owns the project: DATATRUST_GCP_USER, else the active gcloud
+    account. It receives Fine-Grained Reader (dbt tests read real values) and Token Creator on the service
+    accounts. Never DATATRUST_OPERATOR_EMAIL, which is the Cloudflare Access login and may be another address.
+    """
+    email = os.environ.get("DATATRUST_GCP_USER", "").strip()
+    if not email:
+        try:
+            email = subprocess.run(
+                ["gcloud", "config", "get-value", "account"], capture_output=True, text=True, timeout=60
+            ).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            email = ""
+    if "@" not in email:
+        raise NotConfigured(
+            "no Google account found: run `gcloud auth login`, or set DATATRUST_GCP_USER to the account "
+            "that runs dbt"
+        )
+    return email

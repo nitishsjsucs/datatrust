@@ -17,14 +17,18 @@ NUM=$(gcloud projects describe $P --format='value(projectNumber)')
 gcloud iam service-accounts create datatrust-runner-ci --project=$P --display-name="DataTrust CI runner"
 SA=datatrust-runner-ci@$P.iam.gserviceaccount.com
 gcloud projects add-iam-policy-binding $P --member=serviceAccount:$SA --role=roles/bigquery.jobUser --condition=None
+# dbt replaces tables and views and re-applies policy tags with persist_docs. Setting a policy tag needs
+# bigquery.tables.setCategory (BigQuery Data Owner, not Data Editor) and datacatalog.taxonomies.get (Project
+# Viewer or Policy Tags Admin), per the BigQuery column-level security docs.
 for D in datatrust_raw datatrust_staging datatrust_marts datatrust_restricted; do
-  bq add-iam-policy-binding --member=serviceAccount:$SA --role=roles/bigquery.dataEditor $P:$D
+  bq add-iam-policy-binding --member=serviceAccount:$SA --role=roles/bigquery.dataOwner $P:$D
 done
+gcloud projects add-iam-policy-binding $P --member=serviceAccount:$SA --role=roles/viewer --condition=None
 # The runner impersonates datatrust-prober for probes, so it needs Token Creator on the prober
 gcloud iam service-accounts add-iam-policy-binding datatrust-prober@$P.iam.gserviceaccount.com --project=$P \
   --member=serviceAccount:$SA --role=roles/iam.serviceAccountTokenCreator --condition=None
 # dbt tests read masked columns, so the runner also needs Fine-Grained Reader on the three policy tags
-# (add serviceAccount:$SA next to your own user in `datatrust prod governance apply`, or grant it in the console)
+uv run datatrust prod governance apply --extra-reader serviceAccount:$SA
 
 # Workload identity pool and GitHub OIDC provider, restricted to this repository
 gcloud iam workload-identity-pools create github --project=$P --location=global --display-name="GitHub Actions"
@@ -44,8 +48,10 @@ Repository variables: `DATATRUST_API_URL` (the Worker URL), `DATATRUST_GCP_PROJE
 `DATATRUST_DBT_VARS_YAML` (the contents of `.prod/dbt_vars.yml`, policy-tag resource names, not secret), and
 optionally `DATATRUST_SCHEDULED_RUNNER=true`.
 
-Repository secrets: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` (service token `datatrust-runner`) and
-`EVIDENCE_HMAC_KEY` (the same value as the Worker secret, so tokens match).
+Repository secrets: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` (service token `datatrust-runner`),
+`EVIDENCE_HMAC_KEY` (the same value as the Worker secret, so tokens match) and, only if you use the "start a
+run" option, `CF_ACCESS_OPERATOR_CLIENT_ID` and `CF_ACCESS_OPERATOR_CLIENT_SECRET` (service token
+`datatrust-operator`; the runner token cannot start runs).
 
 ## Run it
 

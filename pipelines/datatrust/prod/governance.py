@@ -80,20 +80,33 @@ def ensure_tags(ptm: Any, state: GovernanceState) -> dict[str, str]:
 
 
 def ensure_data_policies(dps: Any, settings: GcpSettings, state: GovernanceState) -> dict[str, str]:
+    """One masking data policy per policy tag, created with the v1 Data Policy API.
+
+    v1, not v2: a data policy is bound to a policy tag only through the v1 `policy_tag` field. In the v2
+    client that field is output only ("supported only for V1 data policies"), because v2 data policies attach
+    directly to columns and use `grantees` instead of IAM. A v2 create would therefore leave the tag without a
+    masking rule, and the analyst would get "Access Denied" on tagged columns instead of masked values.
+    """
     from google.api_core.exceptions import NotFound
-    from google.cloud import bigquery_datapolicies_v2 as dp
+    from google.cloud import bigquery_datapolicies_v1 as dp
 
     parent = f"projects/{settings.project}/locations/{_location(settings)}"
     for key, (rule, _) in TAGS.items():
         policy_id = f"datatrust_{key}"
         name = f"{parent}/dataPolicies/{policy_id}"
         try:
-            dps.get_data_policy(name=name)
+            existing = dps.get_data_policy(name=name)
+            bound = getattr(existing, "policy_tag", "")
+            if bound and bound.rsplit("/", 1)[-1] != state.tags[key].rsplit("/", 1)[-1]:
+                raise RuntimeError(
+                    f"data policy {name} is bound to {bound}, not to policy tag {state.tags[key]}; "
+                    "delete it (bq or the console) and rerun governance apply"
+                )
         except NotFound:
             dps.create_data_policy(
                 parent=parent,
-                data_policy_id=policy_id,
                 data_policy=dp.DataPolicy(
+                    data_policy_id=policy_id,
                     data_policy_type=dp.DataPolicy.DataPolicyType.DATA_MASKING_POLICY,
                     policy_tag=state.tags[key],
                     data_masking_policy=dp.DataMaskingPolicy(
@@ -151,9 +164,17 @@ def write_dbt_vars(state: GovernanceState) -> None:
     DBT_VARS.write_text(yaml.safe_dump({f"pt_{k}": v for k, v in state.tags.items()}, sort_keys=True))
 
 
-def apply(settings: GcpSettings, user_email: str, *, ptm=None, dps=None, bq=None) -> GovernanceState:
+def apply(
+    settings: GcpSettings,
+    user_email: str,
+    *,
+    extra_readers: list[str] | None = None,
+    ptm=None,
+    dps=None,
+    bq=None,
+) -> GovernanceState:
     from google.cloud import bigquery
-    from google.cloud import bigquery_datapolicies_v2 as dp
+    from google.cloud import bigquery_datapolicies_v1 as dp
     from google.cloud import datacatalog_v1 as dc
 
     ptm = ptm or dc.PolicyTagManagerClient()
@@ -163,7 +184,7 @@ def apply(settings: GcpSettings, user_email: str, *, ptm=None, dps=None, bq=None
     ensure_taxonomy(ptm, settings, state)
     ensure_tags(ptm, state)
     ensure_data_policies(dps, settings, state)
-    readers = [f"user:{user_email}", f"serviceAccount:{settings.prober_sa}"]
+    readers = [f"user:{user_email}", f"serviceAccount:{settings.prober_sa}", *(extra_readers or [])]
     for key, tag in state.tags.items():
         if ensure_binding(ptm, tag, FINE_GRAINED_READER, readers):
             state.created.append(f"fine-grained readers on {key}")
