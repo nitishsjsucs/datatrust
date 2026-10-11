@@ -82,5 +82,7 @@ models:
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: internal}}
       - name: payroll_cost_usd
+        description: "Sum of per-person gross pay in USD. Tagged: a department-month with 1 to 4 people paid would expose their pay to the masked analyst (no k >= 5 suppression here)."
         data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
-        config: {meta: {classification: internal}}
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]

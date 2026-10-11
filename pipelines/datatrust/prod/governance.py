@@ -257,6 +257,17 @@ def _assertions(project: str) -> list[Assertion]:
         )
         assert row["n"] == 0, f"{row['n']} unmasked compensation values"
 
+    def null_compensation_aggregates(bq: Any) -> None:
+        # Compensation-derived columns without k >= 5 suppression are tagged too (2026-10-11 review): the
+        # payroll cost metric by department-month and the per-person payroll delta.
+        metric = f"{marts}.metric_payroll_cost_usd_monthly"
+        sql = (
+            f"select (select countif(payroll_cost_usd is not null) from {metric}) "
+            f"+ (select countif(delta_pct is not null) from {marts}.fct_payroll_reconciliation) n"
+        )
+        row = next(iter(_q(bq, sql).result()))
+        assert row["n"] == 0, f"{row['n']} unmasked payroll cost or delta values"
+
     def authorized_view(bq: Any) -> None:
         sql = (
             f"select count(*) n, countif(total_base_salary_usd is null) nulls "
@@ -280,6 +291,10 @@ def _assertions(project: str) -> list[Assertion]:
         Assertion("PII strings are SHA-256 hashed for the analyst", hashed_strings),
         Assertion("birth dates keep the year only", year_only_dates),
         Assertion("per-person compensation is NULL for the analyst", null_compensation),
+        Assertion(
+            "unsuppressed payroll cost and payroll delta are NULL for the analyst",
+            null_compensation_aggregates,
+        ),
         Assertion("the authorized view returns non-null aggregates", authorized_view),
         Assertion("the analyst is denied on datatrust_staging", staging_denied),
     ]

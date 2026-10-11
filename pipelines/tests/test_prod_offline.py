@@ -583,8 +583,9 @@ def test_every_bigquery_query_path_is_capped_and_labelled(monkeypatch, tmp_path)
 
     s = GcpSettings("datatrust-abc123", "US", "p@x", "a@x")
     out = governance.verify(s, bq=Analyst(), sleep=lambda _: None)
-    assert all(r["ok"] for r in out) and len(out) == 5
-    assert len(seen) == 5 and all(_capped_and_labelled(c, governance.VERIFY_MAX_BYTES) for _, c in seen)
+    assert all(r["ok"] for r in out) and len(out) == 6
+    assert any("metric_payroll_cost_usd_monthly" in sql and "delta_pct" in sql for sql, _ in seen)
+    assert len(seen) == 6 and all(_capped_and_labelled(c, governance.VERIFY_MAX_BYTES) for _, c in seen)
 
     # The smoke's bytes figure counts only DataTrust's jobs, with a capped query.
     bytes_seen = {}

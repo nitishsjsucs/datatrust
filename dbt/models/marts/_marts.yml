@@ -282,8 +282,10 @@ models:
         config: {meta: {classification: compensation}}
         policy_tags: ["{{ var('pt_compensation') }}"]
       - name: delta_pct
+        description: "Per-person actual vs expected gross pay, derived from the tagged amounts, so tagged too."
         data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
-        config: {meta: {classification: internal}}
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
       - name: rate_to_usd
         data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
         config: {meta: {classification: public}}
