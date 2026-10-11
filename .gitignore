@@ -1,0 +1,35 @@
+# local state and secrets
+.data/
+.dev/
+.prod/
+.env.prod
+.env
+.dev.vars
+apps/worker/.dev.vars
+wrangler.prod.jsonc
+apps/worker/wrangler.prod.jsonc
+logs/
+*.log
+
+# toolchains
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# build outputs
+dist/
+target/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+.wrangler/
+apps/worker/.wrangler/
+*.tsbuildinfo
+
+# editors and OS
+.DS_Store
+.idea/
+.vscode/
