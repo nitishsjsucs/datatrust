@@ -3,9 +3,9 @@
 The Cloudflare account and the Google Cloud project are shared by four repos, so every account-wide daily
 allowance is budgeted at a 25% share for DataTrust. Per-run counts are derived from the code where the code
 fixes them (runner batching, the Worker's message sizes, consumer settings in the production template,
-workflow step names and retry limits) and from the committed seed-101 fixtures; the rest are the measured
-figures of SPEC 28.3, named as such. `test_free_budget.py` pins the result; `uv run python -m
-datatrust.prod.free_budget` prints the table quoted in the README.
+workflow step names and retry limits) and from the committed seed-101 fixtures; the rest are either measured
+locally (MEASURED, SPEC 28.3) or estimates (ESTIMATED), each with its source. `test_free_budget.py` pins the
+result; `uv run python -m datatrust.prod.free_budget` prints the table quoted in the README.
 """
 
 from __future__ import annotations
@@ -84,21 +84,33 @@ CPU_MS_PER_INVOCATION = 10
 QUEUE_OPS_PER_MESSAGE = 3  # write, read, delete; one each per 64 KB, and every message stays below 64 KB
 QUEUE_MESSAGE_OPERATION_BYTES = 64 * 1024
 
-# Measured figures (SPEC 28.3), not derivable from the code.
+# Measured figures (SPEC 28.3): from the local Miniflare D1 and R2 state of 71 e2e runs and from the committed
+# seed-101 fixtures and prompts. Not derivable from the code.
 MEASURED = {
     "lineage_edges_per_run": 275,  # 50 dataset and 225 column edges, local Miniflare state of 71 runs
     "largest_event_bytes": 21_000,  # largest single seed-101 dbt-ol event
-    "d1_rows_written_other": 16 + 5 + 3 + 6,  # jobs, runs, incident, neuron ledger (index entries counted)
-    "d1_rows_read_per_run": 9_000,  # with 3,000 runs stored
-    "r2_class_a_per_run": 150,
-    "r2_class_b_per_run": 175,
-    "r2_mb_per_run": 0.94,
-    "logs_per_run": 250,
-    "run_seconds": 750,  # a BigQuery run in the smoke: about 12.5 minutes, the operator polls throughout
-    "neurons_typical_per_incident": 86,  # one Workers AI call, Qwen3 token counts plus 25% (SPEC 28.3)
-    "neurons_worst_per_incident": 382,  # two calls with full 700-token outputs
-    "largest_prompt_chars": 3_909,
+    "r2_class_a_per_run": 150,  # about 135 lineage objects plus run artifacts written per run (local R2 state)
+    "r2_mb_per_run": 0.94,  # local R2 state over 71 runs
+    "largest_prompt_chars": 3_909,  # the 20 seed-101 summary prompts
     "largest_repair_prompt_chars": 5_430,
+}
+# Estimates (2026-10-11 review: these were filed under MEASURED before). Each says what it rests on; none was
+# observed on Cloudflare or BigQuery, where nothing has run yet.
+ESTIMATED = {
+    # Counted from the schema (rows plus index entries for jobs, runs, the incident and the neuron ledger).
+    "d1_rows_written_other": 16 + 5 + 3 + 6,
+    # Extrapolated from the 71 local runs to 3,000 stored runs (index scans grow with the tables).
+    "d1_rows_read_per_run": 9_000,
+    # Reads of lineage objects, artifacts and incidents per run, from the code's access pattern.
+    "r2_class_b_per_run": 175,
+    # No local source for Workers Logs; an allowance for the log lines of one run's requests and steps.
+    "logs_per_run": 250,
+    # An assumed BigQuery run of about 12.5 minutes (the operator polls throughout); BigQuery has not run.
+    "run_seconds": 750,
+    # Qwen3-1.7B token counts of the seed-101 prompts plus 25% for Llama 3.3's tokenizer (SPEC risk 28):
+    # one call typical, two calls with full 700-token outputs worst.
+    "neurons_typical_per_incident": 86,
+    "neurons_worst_per_incident": 382,
 }
 SMOKE_OPERATOR_POLL_SECONDS = 5  # prod/smoke.py wait_for_run
 
@@ -273,8 +285,8 @@ def per_run(failing: bool) -> Run:
             + 2 * retry_limit("RETRY_AI")
         )
     runner = 2 * (2 if failing else 1) + 2 + posts  # leases and completions per job, two artifacts, lineage
-    runner_idle = idle_polls(MEASURED["run_seconds"])
-    operator = MEASURED["run_seconds"] // SMOKE_OPERATOR_POLL_SECONDS + 1 + (1 if failing else 0)
+    runner_idle = idle_polls(ESTIMATED["run_seconds"])
+    operator = ESTIMATED["run_seconds"] // SMOKE_OPERATOR_POLL_SECONDS + 1 + (1 if failing else 0)
     consumers = messages  # one invocation per message, the conservative reading (batches are often larger)
     requests = runner + runner_idle + operator + consumers + steps_worst
     rows = (
@@ -282,7 +294,7 @@ def per_run(failing: bool) -> Run:
         + 2 * events
         + 2 * lineage_nodes_per_run()
         + 2 * checks
-        + MEASURED["d1_rows_written_other"]
+        + ESTIMATED["d1_rows_written_other"]
     )
     return Run(
         lineage_posts=posts,
@@ -292,13 +304,13 @@ def per_run(failing: bool) -> Run:
         workflow_steps_worst=steps_worst,
         requests=requests,
         d1_rows_written=rows,
-        d1_rows_read=MEASURED["d1_rows_read_per_run"],
-        neurons_typical=MEASURED["neurons_typical_per_incident"] if failing else 0,
-        neurons_worst=MEASURED["neurons_worst_per_incident"] if failing else 0,
+        d1_rows_read=ESTIMATED["d1_rows_read_per_run"],
+        neurons_typical=ESTIMATED["neurons_typical_per_incident"] if failing else 0,
+        neurons_worst=ESTIMATED["neurons_worst_per_incident"] if failing else 0,
         r2_class_a=MEASURED["r2_class_a_per_run"],
-        r2_class_b=MEASURED["r2_class_b_per_run"],
+        r2_class_b=ESTIMATED["r2_class_b_per_run"],
         r2_mb=MEASURED["r2_mb_per_run"],
-        logs=MEASURED["logs_per_run"],
+        logs=ESTIMATED["logs_per_run"],
     )
 
 

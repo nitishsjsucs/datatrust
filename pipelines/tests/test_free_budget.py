@@ -100,3 +100,16 @@ def test_pruning_is_in_the_budget():
     assert fb.ts_constant(worker, "PRUNE_MAX_RUNS") * fb.prune_rows_per_run() <= fb.prune_daily_rows()
     assert fb.sustained_runs_per_day_pruned() == 5
     assert "once D1 is full and each new run's lineage is pruned: 5" in fb.markdown()
+
+
+def test_estimates_are_not_filed_as_measurements():
+    """Nothing has run on Cloudflare or BigQuery, so the run length, neurons, Workers Logs, D1 reads at 3,000
+    stored runs and R2 reads are estimates, kept apart from what was measured locally (2026-10-11 review)."""
+    assert not set(fb.MEASURED) & set(fb.ESTIMATED)
+    assert {
+        "run_seconds",
+        "neurons_typical_per_incident",
+        "neurons_worst_per_incident",
+        "logs_per_run",
+        "d1_rows_read_per_run",
+    } <= set(fb.ESTIMATED)
