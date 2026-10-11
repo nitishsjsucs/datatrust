@@ -52,6 +52,13 @@ top-five candidate and nothing looks like PII.
 evidence, diagnostic SQL, summary, recovery commands and **provenance** (warehouse, summarizer, lake sink),
 in D1 and R2. One incident per failing run, plus one per distinct alert.
 
+**Audit event**: one row of the lake (`check_result`, `run_completed`, `incident_created`) with a
+deterministic **event id** (`evt_<runId>_check_<checkId>`, `evt_<runId>_run_completed`,
+`evt_<incidentId>_created`), so a redelivery repeats the id instead of adding a row. Events travel through
+queue `datatrust-audit-events`; its consumer writes each batch as one immutable **lake object**
+(`lake/<date>/<ulid>.ndjson` in R2). An object is **settled** once its ULID time is older than the settle
+window (120 s in production), and only settled objects are exported to the Iceberg table.
+
 **Scenario**: one of the 20 injected defects of the benchmark (S01-S13 change source data, T14-T20 patch
 the dbt project), each with a **ground truth** node. **Decoy**: a benign refactor patch that changes a
 model's checksum but not its output; 0 to 4 per **trial**. A trial is one (seed, scenario) build; dev seeds

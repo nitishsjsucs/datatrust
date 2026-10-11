@@ -130,7 +130,7 @@ describe('production guard', () => {
     }
   });
 
-  it('requires Access, Workers AI and the Pipelines binding in production', async () => {
+  it('requires Access, Workers AI and the audit queue in production', async () => {
     const complete: AppEnv = {
       ...env,
       ENVIRONMENT: 'production',
@@ -138,12 +138,11 @@ describe('production guard', () => {
       SUMMARIZER: 'workers-ai',
       ACCESS_TEAM_DOMAIN: 'https://example-team.cloudflareaccess.com',
       AI: {} as Ai,
-      EVENTS: { send: async () => {} },
     };
     expect((await call('/healthz', complete)).status).toBe(200);
     expect((await call('/healthz', { ...complete, SUMMARIZER: 'template' })).status).toBe(500);
     expect((await call('/healthz', { ...complete, AI: undefined })).status).toBe(500);
-    expect((await call('/healthz', { ...complete, EVENTS: undefined })).status).toBe(500);
+    expect((await call('/healthz', { ...complete, AUDIT_Q: undefined as unknown as Queue })).status).toBe(500);
     // Without a reachable team JWKS the API still fails closed.
     expect((await call('/api/whoami', { ...complete, ACCESS_TEAM_DOMAIN: 'not-a-url' })).status).toBe(401);
   });

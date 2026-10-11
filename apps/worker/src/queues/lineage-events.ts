@@ -4,7 +4,7 @@ import { LineageMessage } from '../schemas';
 import { markLineageProcessed } from '../store/repo';
 
 /**
- * dt-lineage-events: read the OpenLineage event from R2, resolve datasets by (schema, table) against the
+ * datatrust-lineage-events: read the OpenLineage event from R2, resolve datasets by (schema, table) against the
  * run's relations.json, and upsert column and dataset edges (SPEC 9, 13.3).
  */
 export async function handleLineageEvents(batch: MessageBatch<unknown>, env: AppEnv): Promise<void> {
@@ -23,7 +23,7 @@ export async function handleLineageEvents(batch: MessageBatch<unknown>, env: App
     const parsed = LineageMessage.safeParse(msg.body);
     if (!parsed.success) {
       msg.ack();
-      console.error('dt-lineage-events: malformed message');
+      console.error('datatrust-lineage-events: malformed message');
       continue;
     }
     const { runId, eventId, r2Key } = parsed.data;
@@ -41,7 +41,7 @@ export async function handleLineageEvents(batch: MessageBatch<unknown>, env: App
       await markLineageProcessed(env.DB, runId, eventId);
       msg.ack();
     } catch (err) {
-      console.error('dt-lineage-events', err);
+      console.error('datatrust-lineage-events', err);
       msg.retry({ delaySeconds: 2 });
     }
   }

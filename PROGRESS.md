@@ -6,7 +6,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` and 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B` done; 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
-Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13. Done so far: none (resolved the interrupted session's uncommitted changes first).
+Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1.
 
 ## Done
 
@@ -55,9 +55,11 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 2, optional BigQuery SQL check (commits 12d3618, af58fc1): `scripts/bq-emulator-check.sh` builds every model and runs every test one at a time on the goccy BigQuery emulator (ZetaSQL analyzer, SQLite execution) in Docker, on empty raw tables, and writes `results/bq-emulator-<date>.*`. The emulator is not BigQuery, so this only catches SQL that BigQuery's analyzer would reject; `prod validate` remains the real check. It has not produced a committed result. Builder 3 renamed its Docker network, volume and containers to the `datatrust-bqemu*` prefix and added it to the script parse test.
 
+- Builder 3, F1 `feat(lake): audit events through a Queue into immutable R2 objects`: `QueueSink` (schema validation, messages of at most 50 events and 60,000 bytes, so one message is one queue operation) is the only sink in both environments; deterministic event ids (`auditEventId`); consumer `src/queues/audit-events.ts` writes each batch as one new `lake/<date>/<ulid>.ndjson` object and acks malformed messages; `GET /api/lake/export` (runner, both environments; one R2 list with `startAfter` and limit 100, settled objects only via `LAKE_SETTLE_SECONDS`, at most 100 objects and 1 MB, `x-next-after`, `x-more`) replaces `/api/dev/lake-export` (`src/api/dev.ts` removed); `PipelinesSink`, `R2NdjsonSink`, the `EVENTS` binding and `render-prod-config.mjs --stream` removed (the renderer gained `--out`, so the test no longer overwrites a rendered production config); `misconfiguration()` requires `AUDIT_Q`; queues renamed `datatrust-*` in all three wrangler configs, the router (`QUEUES`), setup-prod, doctor and tests, plus `datatrust-audit-events` (batch 10, 30 s, 3 retries, DLQ); `datatrust lake sync` reads the new route. Tests: `event-sink.test.ts` rewritten (chunking, validation, redelivery ids, consumer immutability, export settle boundary, 100-object and 1 MB limits, roles, old route 404), `free-plan.test.ts` part 1 (no Paid-only keys in the rendered template, the five queues and their DLQs, audit settings, local and test configs equal to production), `test_prod_offline.py` (no `pipelines`). Verified by hand on 2026-10-10: `npm run dev:up`, one S03 run with a background runner, then `uv run datatrust lake sync` appended 42 events (40 check_result, 1 run_completed, 1 incident_created) through the queue, consumer and export; `npm run bench:e2e -- --pytest` 2 passed; stack and runner stopped, ports free.
+
 ## Next
 
-- SPEC 23.1, Free plan migration, in order: F1 audit events through a Queue into immutable R2 objects; F2 exactly-once pyiceberg committer; F3 setup, doctor and wizard without Workers Paid; F4 lineage POSTs of ten events; F5 set-based D1 writes and request caps; F6 module-scope collator; F7 daily Workers AI neuron ledger and split summary steps; F8 runner idle backoff; F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
+- SPEC 23.1, Free plan migration, in order (F1 done): F2 exactly-once pyiceberg committer; F3 setup, doctor and wizard without Workers Paid; F4 lineage POSTs of ten events; F5 set-based D1 writes and request caps; F6 module-scope collator; F7 daily Workers AI neuron ledger and split summary steps; F8 runner idle backoff; F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
 - Production execution, after F1 to F3 (Cloudflare) and F10 (Google Cloud), by Nitish's operator: SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux container, not yet observed on ubuntu-latest.
 
@@ -65,11 +67,11 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 53 passed
-- `npm run test:worker`: 58 passed
+- `npm run test:worker`: 66 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 172 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (last run by builder 2)
-- `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template
+- `uv run pytest`: 172 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-10, at F1)
+- `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template (no `pipelines` binding)
 
 ## Deviations from SPEC.md
 
@@ -88,3 +90,4 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.
 - Builder 2: data masking uses the v1 Data Policy API (SPEC 17 names the v2 client, whose `policy_tag` is output only). A second Access service token `datatrust-operator` (operator and viewer) exists because SPEC 15 gives the only service token the runner role while SPEC 18.4 has the smoke create runs. Fine-Grained Reader goes to the gcloud account rather than `DATATRUST_OPERATOR_EMAIL`. Extra CLI command `datatrust run`.
+- Builder 3, F1: `src/api/dev.ts` is gone because its only route moved to `/api/lake/export` (SPEC 5 still lists it). Lake objects settle after `LAKE_SETTLE_SECONDS`, 120 in production (pinned by `free-plan.test.ts`) and 5 in the local and test configs, so a local `lake sync` right after a run sees the objects; the settle window guards against a late put under an earlier key, which takes milliseconds locally. The queue rename in setup-prod and doctor, planned for F3, landed in F1 so every commit keeps the configs and scripts on the same queue names. The README production setup carries a note not to run `setup:prod` until F3 lands.

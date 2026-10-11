@@ -7,7 +7,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloud
 import { jsonStep, RETRY_INGEST } from './steps';
 import type { AppEnv } from '../env';
 import { investigationIds } from '../investigation-ids';
-import { auditEvent, createSink } from '../sinks/event-sink';
+import { auditEvent, auditEventId, createSink } from '../sinks/event-sink';
 import {
   countCheckResults,
   countProcessedLineageEvents,
@@ -125,6 +125,7 @@ export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, Validation
       await finishRun(db, runId, status, summary);
       await createSink(this.env).send([
         auditEvent(this.env, 'run_completed', runId, {
+          event_id: auditEventId.runCompleted(runId),
           status,
           payload: {
             target,

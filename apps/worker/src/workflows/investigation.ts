@@ -22,7 +22,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloud
 import { jsonStep, RETRY_LOAD } from './steps';
 import type { AppEnv } from '../env';
 import { createSummarizer, summarizeGrounded } from '../llm/summarizer';
-import { auditEvent, createSink } from '../sinks/event-sink';
+import { auditEvent, auditEventId, createSink, lakeDescription } from '../sinks/event-sink';
 import { recoveryCommands } from '../recovery';
 import type { Alert } from '../schemas';
 import {
@@ -194,7 +194,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
           repaired: summary.repaired,
           fallback: summary.fallback,
         },
-        lakeSink: createSink(env).kind === 'basin-pipelines' ? 'basin-pipelines' : 'r2-ndjson (local stand-in for Basin Pipelines)',
+        lakeSink: lakeDescription(env),
         weights: FROZEN_WEIGHTS,
         probes: ranking.probeStatus,
         timeTravel: ranking.timeTravel,
@@ -249,6 +249,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
       if (trigger === 'checks') await setRunIncident(db, runId, incidentId);
       await createSink(env).send([
         auditEvent(env, 'incident_created', runId, {
+          event_id: auditEventId.incidentCreated(incidentId),
           status: 'open',
           node: ranking.ranked[0]?.node ?? null,
           payload: {

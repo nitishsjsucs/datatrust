@@ -28,30 +28,30 @@ async function deliver(queue: string, bodies: unknown[]) {
   return getQueueResult(batch, ctx);
 }
 
-describe('dt-check-results', () => {
+describe('datatrust-check-results', () => {
   it('upserts check results idempotently and acks', async () => {
     await insertRun(env.DB, { runId: 'run_q1', target: 'duckdb', seed: 101, scenario: null });
     const chunks = [s01.checks.slice(0, 20), s01.checks.slice(20)];
     const result = await deliver(
-      'dt-check-results',
+      'datatrust-check-results',
       chunks.map((c) => ({ runId: 'run_q1', checkResults: c })),
     );
     expect(result.explicitAcks).toEqual(['m0', 'm1']);
     expect(await countCheckResults(env.DB, 'run_q1')).toBe(40);
-    await deliver('dt-check-results', [{ runId: 'run_q1', checkResults: s01.checks.slice(0, 5) }]);
+    await deliver('datatrust-check-results', [{ runId: 'run_q1', checkResults: s01.checks.slice(0, 5) }]);
     expect(await countCheckResults(env.DB, 'run_q1')).toBe(40);
     const failing = (await listCheckResults(env.DB, 'run_q1')).filter((c) => c.status === 'fail');
     expect(failing.map((c) => c.checkId)).toEqual(['U05']);
   });
 
   it('acks malformed messages without retrying', async () => {
-    const result = await deliver('dt-check-results', [{ nope: true }]);
+    const result = await deliver('datatrust-check-results', [{ nope: true }]);
     expect(result.explicitAcks).toEqual(['m0']);
     expect(result.retryMessages).toEqual([]);
   });
 });
 
-describe('dt-lineage-events', () => {
+describe('datatrust-lineage-events', () => {
   it('turns OpenLineage events in R2 into column and dataset edges in D1', async () => {
     const runId = 'run_q2';
     await env.ARTIFACTS.put(`runs/${runId}/relations.json`, JSON.stringify(s01.relations));
@@ -63,19 +63,19 @@ describe('dt-lineage-events', () => {
       await insertLineageEvent(env.DB, runId, `e${i}`, key);
       bodies.push({ runId, eventId: `e${i}`, r2Key: key });
     }
-    const result = await deliver('dt-lineage-events', bodies);
+    const result = await deliver('datatrust-lineage-events', bodies);
     expect(result.retryMessages).toEqual([]);
     expect(await countProcessedLineageEvents(env.DB, runId)).toBe(s01.events.length);
     expect(await loadLineageGraph(env.DB, runId)).toEqual(buildLineageGraph(s01.events, s01.relations));
   });
 
   it('retries while relations.json is not uploaded yet', async () => {
-    const result = await deliver('dt-lineage-events', [{ runId: 'run_q3', eventId: 'e0', r2Key: 'lineage/run_q3/e0.json' }]);
+    const result = await deliver('datatrust-lineage-events', [{ runId: 'run_q3', eventId: 'e0', r2Key: 'lineage/run_q3/e0.json' }]);
     expect(result.retryMessages.map((m) => m.msgId)).toEqual(['m0']);
   });
 });
 
-describe('dt-investigate', () => {
+describe('datatrust-investigate', () => {
   it('creates one InvestigationWorkflow per (run, trigger, alert) and acks a redelivery', async () => {
     const runId = 'run_q4';
     const ids = await investigationIds(runId, 'checks');
@@ -86,9 +86,9 @@ describe('dt-investigate', () => {
       await m.disableRetryDelays();
     });
     const msg = { runId, incidentId: ids.incidentId, trigger: 'checks' };
-    const first = await deliver('dt-investigate', [msg]);
+    const first = await deliver('datatrust-investigate', [msg]);
     expect(first.explicitAcks).toEqual(['m0']);
-    const again = await deliver('dt-investigate', [msg]);
+    const again = await deliver('datatrust-investigate', [msg]);
     expect(again.explicitAcks).toEqual(['m0']);
     expect(again.retryMessages).toEqual([]);
     await instance.waitForStatus('errored');
@@ -107,12 +107,12 @@ describe('dt-investigate', () => {
   });
 });
 
-describe('dt-dlq', () => {
+describe('datatrust-dlq', () => {
   it('records dead letters in D1', async () => {
-    const result = await deliver('dt-dlq', [{ runId: 'x', poison: true }]);
+    const result = await deliver('datatrust-dlq', [{ runId: 'x', poison: true }]);
     expect(result.explicitAcks).toEqual(['m0']);
     const row = await env.DB.prepare('SELECT queue, body_json FROM dead_letters').first<{ queue: string; body_json: string }>();
-    expect(row?.queue).toBe('dt-dlq');
+    expect(row?.queue).toBe('datatrust-dlq');
     expect(JSON.parse(row!.body_json)).toEqual({ runId: 'x', poison: true });
   });
 });

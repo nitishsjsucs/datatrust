@@ -22,7 +22,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local` and `@cloudflare/vitest-plugin`) only; 2026-10-10 `npm run bench:e2e` (seed 101, 20 scenarios) |
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | implemented, not executed (tests mock the AI binding; the local stand-ins are llama-server with Qwen3-1.7B and a deterministic template) |
-| Basin Pipelines, Basin Catalog (Iceberg) | implemented, not executed (local pyiceberg SQL catalog stand-in executed: `uv run datatrust lake sync`) |
+| Audit lake: Queue to R2 objects, Basin Catalog commit | Queue and R2 objects implemented, not executed in production; the Basin Catalog committer is being added (SPEC 23.1, F2). Local path executed in Miniflare on 2026-10-10: queue `datatrust-audit-events`, immutable R2 `lake/` objects, `/api/lake/export`, then `uv run datatrust lake sync` into the pyiceberg SQL catalog (stand-in for Basin Catalog) |
 | BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check) |
 | Incident dashboard (stretch) | executed locally under `wrangler dev` (Miniflare) as Worker static assets, 2026-10-10 |
 | `setup:prod`, `setup:wizard` and `doctor` | implemented; `npm run doctor` (local) executed; `npm run doctor -- --prod` and `setup:prod` executed only up to their local preconditions (no Cloudflare or Google Cloud account connected); the wizard has not been run end to end |
@@ -108,27 +108,28 @@ flowchart LR
     DBT["dbt-ol build<br/>22 contracts + 40 checks"]
     PROBE["Diagnostic probes<br/>read-only identity"]
     SAN["rca sanitize (Node CLI)<br/>HMAC tokens, aggregates only"]
+    COMMIT["datatrust lake sync<br/>pyiceberg"]
   end
 
   WH[("Warehouse<br/>local: DuckDB stand-in<br/>prod: BigQuery")]
 
-  subgraph CF["Worker 'datatrust' (local: wrangler dev / Miniflare, prod: Workers)"]
+  subgraph CF["Worker 'datatrust' on Workers Free (local: wrangler dev / Miniflare)"]
     API["Hono API<br/>Access JWT verification"]
-    QCR[["Queue dt-check-results"]]
-    QLE[["Queue dt-lineage-events"]]
-    QIN[["Queue dt-investigate"]]
+    QCR[["Queue datatrust-check-results"]]
+    QLE[["Queue datatrust-lineage-events"]]
+    QIN[["Queue datatrust-investigate"]]
+    QAU[["Queue datatrust-audit-events"]]
     WFV{{"ValidationRunWorkflow"}}
     WFI{{"InvestigationWorkflow"}}
     RCA["rca core (TypeScript)<br/>trace, plan, rank, sanitize"]
     D1[("D1: runs, jobs, checks,<br/>lineage, incidents")]
-    R2[("R2: datatrust-artifacts")]
+    R2[("R2: datatrust-artifacts<br/>incl. immutable lake/ NDJSON")]
     SUM["Summarizer"]
-    SINK["EventSink"]
+    SINK["QueueSink"]
   end
 
   AIG["AI Gateway 'datatrust'<br/>to Workers AI (prod)"]
   LLM["llama-server :8160 Qwen3-1.7B<br/>or template stub (local)"]
-  PIPE["Basin Pipelines stream (prod)"]
   CAT[("Basin Catalog Iceberg<br/>on R2 datatrust-lake (prod)")]
   ICE[("pyiceberg SQL catalog<br/>local Iceberg stand-in")]
 
@@ -150,10 +151,13 @@ flowchart LR
   SUM -- local --> LLM
   WFI --> R2
   QCR --> SINK
+  WFV --> SINK
   WFI --> SINK
-  SINK -- prod --> PIPE --> CAT
-  SINK -- local --> R2
-  R2 -. "datatrust lake sync (local only)" .-> ICE
+  SINK --> QAU
+  QAU -- "one object per batch" --> R2
+  COMMIT -- "GET /api/lake/export" --> API
+  COMMIT -. "prod (F2, in progress)" .-> CAT
+  COMMIT -- local --> ICE
 ```
 
 The Worker never holds warehouse credentials and never sends free-form SQL. A Python runner (on a laptop or in CI) leases jobs from the Worker over HTTPS, runs dbt and the diagnostic probes against the warehouse, sanitizes the probe output, and posts results back. The root-cause logic is one TypeScript package used by both the Worker and the offline benchmark.
@@ -164,7 +168,7 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 
 | Concern | Local and CI (offline) | Production |
 |---|---|---|
-| HTTP API, queue consumers, workflows | `wrangler dev --local` (Miniflare, workerd) on 127.0.0.1:8792 | Cloudflare Workers, Queues, Workflows |
+| HTTP API, queue consumers, workflows | `wrangler dev --local` (Miniflare, workerd) on 127.0.0.1:8792 | Cloudflare Workers, Queues (five `datatrust-*` queues), Workflows, on the Workers Free plan |
 | Metadata store | D1 (Miniflare) | D1 `datatrust` |
 | Artifacts | R2 (Miniflare) bucket `datatrust-artifacts` | R2 `datatrust-artifacts` |
 | Warehouse | **DuckDB 1.5.6 via dbt-duckdb 1.11.0 (stand-in for BigQuery)**, session pinned to UTC | BigQuery via dbt-bigquery 1.12.1 |
@@ -172,7 +176,7 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 | Restricted / authorized views | plain DuckDB views (stand-in) | BigQuery authorized view over an untagged aggregate table |
 | Column masking | none (stand-in: sanitizer and tests) | BigQuery policy tags and data masking policies |
 | Time travel / recovery | per-run Parquet snapshots of marts (stand-in) | `FOR SYSTEM_TIME AS OF`, 7-day window, `bq cp table@<ms>` restore |
-| Iceberg lake | **pyiceberg SqlCatalog on SQLite (stand-in for Basin Catalog)** | Basin Pipelines stream to a Basin Catalog Iceberg table |
+| Iceberg lake | the same Queue, consumer and R2 `lake/` objects as production, then **pyiceberg SqlCatalog on SQLite (stand-in for Basin Catalog)** | Queue `datatrust-audit-events` to immutable NDJSON objects in R2, to be added to the Basin Catalog Iceberg table `datatrust.audit_events` on R2 `datatrust-lake` by a pyiceberg committer (in progress, SPEC 23.1 F2; Basin Pipelines is Workers Paid only and is not used) |
 | LLM summaries | **llama-server (Qwen3-1.7B Q4_0) on 127.0.0.1:8160 (stand-in)** or a deterministic template (CI) | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust` |
 | Auth | locally generated RS256 keypair and JWKS | Cloudflare Access (team JWKS) |
 | Runner identity | local dev JWT (role `runner`) | Access service token `datatrust-runner` (role `runner` only) |
@@ -226,13 +230,15 @@ The same in two commands: `uv run datatrust runner --watch --idle-exit 60` in on
 
 The Worker also serves a read-only incident dashboard (`apps/web`, React 19 and Vite 8, built with `npm run build`) at http://127.0.0.1:8792/: the incident list, then per incident the summary, failing checks, ranked candidates with their features, the column-level lineage path, the supporting diagnostic SQL, recovery commands and the provenance with every local stand-in labelled. Locally, paste a token from `npm run -s dev:token -- --role viewer` into the "Local dev token" box; in production Cloudflare Access signs the browser in.
 
-Audit events (check results, completed runs, incidents) go to the lake. Locally the Worker writes NDJSON to its R2 bucket and `npm run lake:sync` (`uv run datatrust lake sync`) appends them to a pyiceberg SQL catalog under `.data/lake/` (stand-in for Basin Catalog); `uv run datatrust lake query` reads the Iceberg table through DuckDB.
+Audit events (check results, completed runs, incidents) go to the lake the same way locally and in production: the Worker sends them to queue `datatrust-audit-events`, whose consumer writes each batch as one immutable NDJSON object under `lake/` in R2, and `GET /api/lake/export` serves objects once they have settled (5 s locally, 120 s in production). Locally `npm run lake:sync` (`uv run datatrust lake sync`) appends them to a pyiceberg SQL catalog under `.data/lake/` (stand-in for Basin Catalog); `uv run datatrust lake query` reads the Iceberg table through DuckDB.
 
 `npm run dev:up -- --llm` also starts llama-server (Qwen3-1.7B) on 127.0.0.1:8160; set `DATATRUST_LLM_MODEL_PATH` if the GGUF lives elsewhere.
 
 `npm run doctor` and `npm run doctor -- --prod` print one line per prerequisite and the exact fix; `make` offers the same entry points (`make setup|test|bench|bench-e2e|doctor|bootstrap|dev-up|dev-down`).
 
 ## Production setup
+
+> **Being moved to the Workers Free plan.** Production no longer uses Workers Paid or Basin Pipelines (SPEC 28, ADR-0008). Cloudflare steps 2 and 10 below still describe the old design and will be replaced in the next commits; do not run `setup:prod` until this note is gone.
 
 Everything below is implemented and tested locally against stand-ins, and has **not yet run on Cloudflare or Google Cloud**. These are the steps only the account owner can do; the scripts do the rest. `npm run doctor -- --prod` prints one line per prerequisite with the exact fix, so run it whenever you are unsure what is left.
 

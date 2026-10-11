@@ -1,5 +1,6 @@
-// Local configuration (committed). No AI, no Pipelines binding and no account ids: those are production
-// only (wrangler.prod.template.jsonc). Runs under `wrangler dev --local` (Miniflare, workerd).
+// Local configuration (committed). No AI binding and no account ids: those are production only
+// (wrangler.prod.template.jsonc). Runs under `wrangler dev --local` (Miniflare, workerd). Lake objects settle
+// after 5 s locally instead of production's 120 s, so a local `datatrust lake commit` sees them sooner.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "datatrust",
@@ -29,15 +30,17 @@
   "secrets": { "required": ["ACCESS_AUD", "ROLE_MAP_JSON", "EVIDENCE_HMAC_KEY", "ACCESS_JWKS_JSON"] },
   "queues": {
     "producers": [
-      { "binding": "CHECK_RESULTS_Q", "queue": "dt-check-results" },
-      { "binding": "LINEAGE_Q", "queue": "dt-lineage-events" },
-      { "binding": "INVESTIGATE_Q", "queue": "dt-investigate" }
+      { "binding": "CHECK_RESULTS_Q", "queue": "datatrust-check-results" },
+      { "binding": "LINEAGE_Q", "queue": "datatrust-lineage-events" },
+      { "binding": "INVESTIGATE_Q", "queue": "datatrust-investigate" },
+      { "binding": "AUDIT_Q", "queue": "datatrust-audit-events" }
     ],
     "consumers": [
-      { "queue": "dt-check-results", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "dt-dlq" },
-      { "queue": "dt-lineage-events", "max_batch_size": 25, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "dt-dlq" },
-      { "queue": "dt-investigate", "max_batch_size": 5, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "dt-dlq" },
-      { "queue": "dt-dlq", "max_batch_size": 10, "max_batch_timeout": 1 }
+      { "queue": "datatrust-check-results", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
+      { "queue": "datatrust-lineage-events", "max_batch_size": 25, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
+      { "queue": "datatrust-investigate", "max_batch_size": 5, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
+      { "queue": "datatrust-audit-events", "max_batch_size": 10, "max_batch_timeout": 30, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
+      { "queue": "datatrust-dlq", "max_batch_size": 10, "max_batch_timeout": 1 }
     ]
   },
   "workflows": [
@@ -53,6 +56,7 @@
     "AI_GATEWAY_ID": "datatrust",
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_ISSUER": "http://127.0.0.1:8792/dev-access",
+    "LAKE_SETTLE_SECONDS": "5",
     "VERSION": "0.1.0"
   }
 }

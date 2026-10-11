@@ -1,11 +1,12 @@
-"""`datatrust lake sync`: pull NDJSON audit events from the local Worker (/api/dev/lake-export) and append
-them to the local Iceberg table (SPEC 13.9). The cursor lives next to the catalog."""
+"""`datatrust lake sync`: pull settled NDJSON audit-event objects from the Worker (/api/lake/export) and
+append them to the local Iceberg table (SPEC 13.9). The cursor lives next to the catalog."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from datatrust.lake.iceberg_local import append, lake_dir
 from datatrust.lake.schema import to_arrow
@@ -21,7 +22,7 @@ def sync(client: WorkerClient, root: Path | None = None) -> dict[str, Any]:
     after = json.loads(cursor_file.read_text())["after"] if cursor_file.exists() else ""
     appended = 0
     while True:
-        res = client.request("GET", f"/api/dev/lake-export?after={after}")
+        res = client.request("GET", f"/api/lake/export?after={quote(after, safe='')}")
         events = [json.loads(line) for line in res.text.splitlines() if line.strip()]
         nxt = res.headers.get("x-next-after", after)
         if events:

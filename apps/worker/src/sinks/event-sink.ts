@@ -1,14 +1,13 @@
 /**
- * Audit events to the lake (SPEC 13.9).
- * Production: PipelinesSink sends to the Basin Pipelines stream `datatrust_events` (binding EVENTS), whose
- * pipeline writes the Basin Catalog Iceberg table datatrust.audit_events on R2 bucket datatrust-lake.
- * Local stand-in: R2NdjsonSink writes NDJSON objects under lake/ in the local R2 bucket; `datatrust lake sync`
- * appends them to a pyiceberg SQL catalog. Pipelines silently drops schema-invalid records after accepting
- * them, so every event is checked against schemas/lake/audit_event.stream.json before it is sent.
+ * Audit events to the lake (SPEC 13.9, 28.5.1, ADR-0008). Same path locally and in production:
+ * QueueSink validates each event against schemas/lake/audit_event.stream.json and sends messages of at most
+ * 50 events (and under 64 KB, so one message is one queue operation) to `datatrust-audit-events`. The consumer
+ * (queues/audit-events.ts) writes each batch as one immutable `lake/<date>/<ulid>.ndjson` object in R2, and
+ * `datatrust lake commit` adds the settled objects to the Iceberg table once per event_id (Basin Catalog in
+ * production, a pyiceberg SQL catalog locally). Basin Pipelines is Workers Paid only and is not used.
  */
 import streamSchema from '../../../../schemas/lake/audit_event.stream.json';
-import type { AppEnv, PipelineStream } from '../env';
-import { ulid } from '../ids';
+import type { AppEnv } from '../env';
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
@@ -25,10 +24,29 @@ export interface AuditEvent {
   payload: { [k: string]: JsonValue };
 }
 
+export interface AuditMessage {
+  events: AuditEvent[];
+}
+
 export interface EventSink {
-  readonly kind: 'basin-pipelines' | 'r2-ndjson';
+  readonly kind: 'queue';
   send(events: AuditEvent[]): Promise<void>;
 }
+
+/** At most this many events per queue message (SPEC 13.3). */
+export const AUDIT_MESSAGE_MAX_EVENTS = 50;
+/** Queues bill one operation per 64 KB of a message; staying below keeps each message at one operation. */
+export const AUDIT_MESSAGE_MAX_BYTES = 60_000;
+
+/**
+ * Deterministic event ids: a redelivered queue message or a retried workflow step repeats the same id, and
+ * the committer keeps the first row per id (SPEC 28.5.1).
+ */
+export const auditEventId = {
+  checkResult: (runId: string, checkId: string) => `evt_${runId}_check_${checkId}`,
+  runCompleted: (runId: string) => `evt_${runId}_run_completed`,
+  incidentCreated: (incidentId: string) => `evt_${incidentId}_created`,
+};
 
 interface StreamField {
   name: string;
@@ -39,7 +57,7 @@ interface StreamField {
 export const STREAM_FIELDS = (streamSchema as { fields: StreamField[] }).fields;
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
-/** Problems that would make Pipelines drop the record; empty when the event matches the stream schema. */
+/** Problems that would make the event unusable in the lake; empty when it matches the lake schema. */
 export function schemaProblems(event: Record<string, unknown>): string[] {
   const problems: string[] = [];
   const names = new Set(STREAM_FIELDS.map((f) => f.name));
@@ -59,52 +77,67 @@ export function schemaProblems(event: Record<string, unknown>): string[] {
   return problems;
 }
 
-function assertValid(events: AuditEvent[]): void {
+export function assertValid(events: AuditEvent[]): void {
   for (const e of events) {
     const p = schemaProblems(e as unknown as Record<string, unknown>);
-    if (p.length) throw new Error(`audit event ${e.event_id} does not match the stream schema: ${p.join('; ')}`);
+    if (p.length) throw new Error(`audit event ${e.event_id} does not match the lake schema: ${p.join('; ')}`);
   }
 }
 
-export class PipelinesSink implements EventSink {
-  readonly kind = 'basin-pipelines' as const;
-  constructor(private readonly stream: PipelineStream) {}
+/** Split events into messages of at most 50 events and AUDIT_MESSAGE_MAX_BYTES of JSON. */
+export function auditMessages(events: AuditEvent[]): AuditMessage[] {
+  const out: AuditMessage[] = [];
+  let current: AuditEvent[] = [];
+  let bytes = 0;
+  for (const e of events) {
+    const size = JSON.stringify(e).length + 1;
+    if (current.length && (current.length >= AUDIT_MESSAGE_MAX_EVENTS || bytes + size > AUDIT_MESSAGE_MAX_BYTES)) {
+      out.push({ events: current });
+      current = [];
+      bytes = 0;
+    }
+    current.push(e);
+    bytes += size;
+  }
+  if (current.length) out.push({ events: current });
+  return out;
+}
+
+export class QueueSink implements EventSink {
+  readonly kind = 'queue' as const;
+  constructor(private readonly queue: Queue<AuditMessage>) {}
 
   async send(events: AuditEvent[]): Promise<void> {
     if (!events.length) return;
     assertValid(events);
-    await this.stream.send(events);
-  }
-}
-
-export class R2NdjsonSink implements EventSink {
-  readonly kind = 'r2-ndjson' as const;
-  constructor(private readonly bucket: R2Bucket) {}
-
-  async send(events: AuditEvent[]): Promise<void> {
-    if (!events.length) return;
-    assertValid(events);
-    const now = new Date();
-    // Keys sort by time: lake/<date>/<ulid>.ndjson
-    const key = `lake/${now.toISOString().slice(0, 10)}/${ulid(now.getTime())}.ndjson`;
-    await this.bucket.put(key, events.map((e) => JSON.stringify(e)).join('\n') + '\n', {
-      httpMetadata: { contentType: 'application/x-ndjson' },
-    });
+    const messages = auditMessages(events);
+    if (messages.length === 1) await this.queue.send(messages[0]!);
+    else await this.queue.sendBatch(messages.map((body) => ({ body })));
   }
 }
 
 export function createSink(env: AppEnv): EventSink {
-  return env.EVENTS ? new PipelinesSink(env.EVENTS) : new R2NdjsonSink(env.ARTIFACTS);
+  return new QueueSink(env.AUDIT_Q as Queue<AuditMessage>);
+}
+
+/** Human-readable description of the lake path, recorded in incident provenance. */
+export function lakeDescription(env: AppEnv): string {
+  return env.ENVIRONMENT === 'production'
+    ? 'queue datatrust-audit-events, R2 lake/ objects, Basin Catalog via datatrust lake commit'
+    : 'queue datatrust-audit-events, R2 lake/ objects, pyiceberg SQL catalog (local stand-in for Basin Catalog)';
 }
 
 export function auditEvent(
   env: AppEnv,
   type: AuditEvent['event_type'],
   runId: string,
-  fields: Partial<Pick<AuditEvent, 'check_id' | 'status' | 'node'>> & { payload?: AuditEvent['payload'] } = {},
+  fields: Partial<Pick<AuditEvent, 'check_id' | 'status' | 'node'>> & {
+    event_id: string;
+    payload?: AuditEvent['payload'];
+  },
 ): AuditEvent {
   return {
-    event_id: `evt_${ulid()}`,
+    event_id: fields.event_id,
     event_type: type,
     environment: env.ENVIRONMENT,
     run_id: runId,

@@ -22,7 +22,13 @@ from datatrust import config
 ROOT = config.REPO_ROOT
 WORKER = ROOT / "apps" / "worker"
 STATE = ROOT / ".prod" / "state.json"
-QUEUES = ("dt-check-results", "dt-lineage-events", "dt-investigate", "dt-dlq")
+QUEUES = (
+    "datatrust-check-results",
+    "datatrust-lineage-events",
+    "datatrust-investigate",
+    "datatrust-audit-events",
+    "datatrust-dlq",
+)
 BUCKETS = ("datatrust-artifacts", "datatrust-lake")
 GCP_APIS = (
     "bigquery.googleapis.com",

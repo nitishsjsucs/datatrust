@@ -3,7 +3,7 @@ import { investigationIds } from '../investigation-ids';
 import { InvestigateMessage } from '../schemas';
 
 /**
- * dt-investigate: create the InvestigationWorkflow instance inv_<runId>_<trigger>_<hash8> (SPEC 13.3).
+ * datatrust-investigate: create the InvestigationWorkflow instance inv_<runId>_<trigger>_<hash8> (SPEC 13.3).
  * create() throws when the id is already used, so a redelivered message is acknowledged (idempotent).
  */
 export async function handleInvestigate(batch: MessageBatch<unknown>, env: AppEnv): Promise<void> {
@@ -11,7 +11,7 @@ export async function handleInvestigate(batch: MessageBatch<unknown>, env: AppEn
     const parsed = InvestigateMessage.safeParse(msg.body);
     if (!parsed.success) {
       msg.ack();
-      console.error('dt-investigate: malformed message');
+      console.error('datatrust-investigate: malformed message');
       continue;
     }
     const m = parsed.data;
@@ -27,7 +27,7 @@ export async function handleInvestigate(batch: MessageBatch<unknown>, env: AppEn
       if (/already exist|already been used|duplicate|already taken/i.test(text)) {
         msg.ack();
       } else {
-        console.error('dt-investigate', err);
+        console.error('datatrust-investigate', err);
         msg.retry({ delaySeconds: 2 });
       }
     }

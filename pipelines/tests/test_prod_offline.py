@@ -26,21 +26,20 @@ def _jsonc(text: str) -> dict:
     return json.loads("\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//")))
 
 
-def test_prod_template_renders_with_ai_pipelines_and_no_cron(tmp_path):
-    out = config.REPO_ROOT / "apps" / "worker" / "wrangler.prod.jsonc"
-    try:
-        subprocess.run(
-            ["node", "scripts/render-prod-config.mjs", "--placeholders"], cwd=config.REPO_ROOT, check=True
-        )
-        cfg = _jsonc(out.read_text())
-    finally:
-        out.unlink(missing_ok=True)
+def test_prod_template_renders_with_ai_and_no_paid_features(tmp_path):
+    out = tmp_path / "wrangler.prod.jsonc"
+    subprocess.run(
+        ["node", "scripts/render-prod-config.mjs", "--placeholders", "--out", str(out)],
+        cwd=config.REPO_ROOT,
+        check=True,
+    )
+    cfg = _jsonc(out.read_text())
     assert cfg["vars"]["ENVIRONMENT"] == "production"
     assert cfg["vars"]["ACCESS_MODE"] == "cloudflare"
     assert cfg["vars"]["SUMMARIZER"] == "workers-ai"
     assert cfg["vars"]["ACCESS_TEAM_DOMAIN"] == "https://unset.cloudflareaccess.com"
     assert cfg["ai"] == {"binding": "AI"}
-    assert cfg["pipelines"][0]["binding"] == "EVENTS"
+    assert "pipelines" not in cfg  # Basin Pipelines is Workers Paid only (SPEC 28, ADR-0008)
     assert cfg["workers_dev"] is True and cfg["preview_urls"] is False
     assert "triggers" not in cfg
     local = _jsonc((config.REPO_ROOT / "apps" / "worker" / "wrangler.jsonc").read_text())
@@ -49,7 +48,7 @@ def test_prod_template_renders_with_ai_pipelines_and_no_cron(tmp_path):
 
 def test_prod_template_renderer_rejects_bad_values():
     proc = subprocess.run(
-        ["node", "scripts/render-prod-config.mjs", "--d1", "nope", "--stream", "x"],
+        ["node", "scripts/render-prod-config.mjs", "--d1", "nope"],
         cwd=config.REPO_ROOT,
         capture_output=True,
         text=True,
@@ -436,7 +435,7 @@ def test_setup_prod_deploy_url_parser_reads_wrangler_output(tmp_path):
         + json.dumps(
             {
                 "type": "deploy",
-                "targets": ["https://datatrust.nitish.workers.dev", "Consumer for dt-check-results"],
+                "targets": ["https://datatrust.nitish.workers.dev", "Consumer for datatrust-check-results"],
             }
         )
         + "\n"

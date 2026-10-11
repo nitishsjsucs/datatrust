@@ -174,7 +174,7 @@ PYCAT
   fi
 
   say "4. Queues"
-  for q in dt-check-results dt-lineage-events dt-investigate dt-dlq; do
+  for q in datatrust-check-results datatrust-lineage-events datatrust-investigate datatrust-audit-events datatrust-dlq; do
     if wr queues info "$q" >/dev/null 2>&1; then note "$q exists"; else run wr queues create "$q"; fi
   done
 
@@ -223,9 +223,9 @@ PYCAT
   TEAM_ARGS=()
   [[ -n "${ACCESS_TEAM_DOMAIN:-}" ]] && TEAM_ARGS=(--team "$ACCESS_TEAM_DOMAIN")
   if ((DRY)); then
-    note "[dry-run] node scripts/render-prod-config.mjs --d1 <d1 id> --stream <stream id> ${TEAM_ARGS[*]-}"
+    note "[dry-run] node scripts/render-prod-config.mjs --d1 <d1 id> ${TEAM_ARGS[*]-}"
   else
-    node scripts/render-prod-config.mjs --d1 "$(state_get d1_id)" --stream "$(state_get stream_id)" ${TEAM_ARGS[@]+"${TEAM_ARGS[@]}"}
+    node scripts/render-prod-config.mjs --d1 "$(state_get d1_id)" ${TEAM_ARGS[@]+"${TEAM_ARGS[@]}"}
   fi
   run wr d1 migrations apply datatrust --remote -c "$ROOT/apps/worker/wrangler.prod.jsonc"
 

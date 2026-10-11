@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/lineage: one OpenLineage RunEvent or an array (also usable as an OpenLineage HTTP transport
  * target with custom headers). Requires the job id and lease token of a leased dbt_build job; events are
- * filed under that job's run, stored in R2 and announced on dt-lineage-events (SPEC 9, 13.1).
+ * filed under that job's run, stored in R2 and announced on datatrust-lineage-events (SPEC 9, 13.1).
  */
 import { RunEventSchema } from '@datatrust/rca';
 import { Hono } from 'hono';

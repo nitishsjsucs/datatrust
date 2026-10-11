@@ -59,7 +59,9 @@ describe('InvestigationWorkflow', () => {
     expect(incident.diagnosticSql.length).toBeGreaterThan(0);
     expect(incident.diagnosticSql[0]!.sql[0]).toMatch(/^with grouped as/);
     expect(incident.provenance['warehouse']).toBe('duckdb (local stand-in for BigQuery)');
-    expect(incident.provenance['lakeSink']).toBe('r2-ndjson (local stand-in for Basin Pipelines)');
+    expect(incident.provenance['lakeSink']).toBe(
+      'queue datatrust-audit-events, R2 lake/ objects, pyiceberg SQL catalog (local stand-in for Basin Catalog)',
+    );
     expect(JSON.stringify(incident.evidence)).not.toMatch(/@example\.com/);
   });
 

@@ -1,4 +1,5 @@
-"""Arrow schema derived from schemas/lake/audit_event.stream.json (the Basin Pipelines stream)."""
+"""Arrow schema derived from schemas/lake/audit_event.stream.json (the audit-event lake schema; the file name
+is historical, from the Basin Pipelines stream that the Workers Free plan design replaced, SPEC 28.5.1)."""
 
 from __future__ import annotations
 

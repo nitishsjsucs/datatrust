@@ -14,6 +14,14 @@ export function ulid(now = Date.now()): string {
   return time + rand;
 }
 
+/** The millisecond time encoded in a ULID's first 10 characters, or null if it is not a ULID. */
+export function ulidTimeMs(id: string): number | null {
+  if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) return null;
+  let t = 0;
+  for (const ch of id.slice(0, 10)) t = t * 32 + ALPHABET.indexOf(ch);
+  return t;
+}
+
 export function randomToken(bytes = 24): string {
   const b = crypto.getRandomValues(new Uint8Array(bytes));
   return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
