@@ -67,6 +67,12 @@ stored in R2 and announced by one message on `datatrust-lineage-events`; its con
 worst-case neurons there and is refused once the day's reservations would pass `AI_DAILY_NEURON_CAP` (2,000);
 a refused summary falls back to the template with reason `daily_neuron_cap`.
 
+**Prune**: removing the lineage detail of runs older than N days (at least 7) through `POST /api/admin/prune`
+(operator, `datatrust prune`): their D1 lineage edges, events and nodes and their raw OpenLineage events under R2
+`lineage/<runId>/`. Run rows, jobs, check results, incidents and the audit lake stay, and so does the latest
+passed run, whose model checksums are the next investigation's baseline. At most 10 runs per call, because
+deleted rows count as rows written.
+
 **Share**: the 25% of an account-wide Free plan allowance that DataTrust budgets for itself, because four repos
 use the same Cloudflare account and Google Cloud project.
 

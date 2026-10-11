@@ -61,6 +61,17 @@ export const CompleteSchema = z.object({
   error: z.string().max(200).optional(),
 });
 
+/**
+ * POST /api/admin/prune (operator). At most 10 runs per call: each pruned run deletes about 900 D1 rows
+ * (index entries included), and deletes count as rows written against the Free plan's daily allowance.
+ */
+export const PRUNE_MAX_RUNS = 10;
+export const PruneSchema = z.object({
+  olderThanDays: z.number().int().min(7).max(3650).default(30),
+  maxRuns: z.number().int().min(1).max(PRUNE_MAX_RUNS).default(5),
+  dryRun: z.boolean().default(false),
+});
+
 export const AlertSchema = z.object({
   runId: z.string().min(1).max(100),
   metricNode: z.string().regex(/^model\.[a-z_]+\.[a-z0-9_]+$/),

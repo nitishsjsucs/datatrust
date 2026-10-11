@@ -195,3 +195,13 @@ def test_idle_exit_uses_the_backoff_clock(monkeypatch):
         clock=lambda: now[0],
     )
     assert sleeps == [2, 4, 8, 16, 30] and now[0] == 60
+
+
+def test_prune_posts_the_bounded_request_and_returns_the_report():
+    report = {"cutoff": "2026-09-11T00:00:00Z", "dryRun": True, "runs": [{"runId": "run_a"}], "more": False}
+    with FakeWorker([(200, report)]) as w:
+        assert client(w.url).prune(older_than_days=30, max_runs=5, dry_run=True) == report
+    method, path, headers, body = w.seen[0]
+    assert (method, path) == ("POST", "/api/admin/prune")
+    assert body == {"olderThanDays": 30, "maxRuns": 5, "dryRun": True}
+    assert headers["Cf-Access-Jwt-Assertion"] == "t0ken"

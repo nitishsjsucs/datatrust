@@ -210,3 +210,8 @@ class WorkerClient:
     def ai_budget(self) -> dict[str, Any]:
         """Today's (UTC) Workers AI neuron ledger and cap (operator role, SPEC 28.5.5)."""
         return self.request("GET", "/api/ai/budget").json()
+
+    def prune(self, older_than_days: int = 30, max_runs: int = 5, dry_run: bool = False) -> dict[str, Any]:
+        """Remove the lineage detail of old runs (operator role, SPEC risk 25): POST /api/admin/prune."""
+        body = {"olderThanDays": older_than_days, "maxRuns": max_runs, "dryRun": dry_run}
+        return self.request("POST", "/api/admin/prune", json=body).json()

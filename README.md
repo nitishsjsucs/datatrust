@@ -304,6 +304,8 @@ uv run datatrust runner --env prod --target bigquery --watch             # termi
 uv run datatrust run --env prod --seed 101 --scenario S01 --wait         # terminal 2: start a run as operator, wait for the incident
 ```
 
+D1 on the Free plan holds 500 MB, about 3,000 runs at 167 KB each, and the bulk is lineage. `uv run datatrust prune --env prod --older-than-days 30` (operator; `--dry-run` lists first) removes the lineage detail of up to 5 old runs per call (`--max-runs`, at most 10): their D1 lineage edges, events and nodes and their raw OpenLineage events in R2. Runs, check results, incidents and the audit lake stay, and so does the latest passed run, which the next investigation compares checksums against. Each pruned run writes about 900 D1 rows (deletes count as writes), so a call of 5 uses about a fifth of DataTrust's daily D1 write share.
+
 The production runner also commits the audit lake to Basin Catalog every 15 minutes and when it stops (`uv run datatrust lake commit --catalog basin` does the same by hand). The dashboard is the Worker URL in a browser; Access signs you in with your email.
 
 Only `npm run prod:smoke` may move a status label above to "executed in production"; it writes `results/prod-smoke-<date>.*` with the commands, run ids, the Workers AI grounding pass rate and fallback rate, the Iceberg row count and BigQuery bytes billed.

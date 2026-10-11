@@ -321,6 +321,22 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0 if run["status"] in ("passed", "failed") else 1
 
 
+def _cmd_prune(args: argparse.Namespace) -> int:
+    """Remove the lineage detail (D1 edges, events, nodes; R2 lineage/ objects) of runs older than N days,
+    at most --max-runs per call. Runs, check results and incidents stay; so does the latest passed run."""
+    from datatrust.runner.client import WorkerClient
+
+    out = WorkerClient.from_env("operator", args.env).prune(args.older_than_days, args.max_runs, args.dry_run)
+    print(json.dumps(out, indent=2))
+    if out.get("more"):
+        print(
+            "more runs to prune: rerun later (each pruned run writes about 900 D1 rows of the daily "
+            "allowance)",
+            file=sys.stderr,
+        )
+    return 0
+
+
 def _cmd_restore(args: argparse.Namespace) -> int:
     """Local stand-in for BigQuery time travel: copy a mart snapshot into <node>_restored_<ts>."""
     import datetime as dt
@@ -549,6 +565,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--wait", action="store_true", help="poll until the run and its incident are final")
     p.add_argument("--timeout", type=float, default=1800)
     p.set_defaults(func=_cmd_run)
+
+    p = sub.add_parser(
+        "prune", help="remove the lineage detail of old runs so D1 stays under 500 MB (POST /api/admin/prune)"
+    )
+    p.add_argument("--env", choices=["local", "prod"], default="local")
+    p.add_argument("--older-than-days", type=int, default=30, help="at least 7 (default 30)")
+    p.add_argument("--max-runs", type=int, default=5, help="1 to 10 per call (default 5)")
+    p.add_argument("--dry-run", action="store_true", help="list the runs that would be pruned")
+    p.set_defaults(func=_cmd_prune)
 
     p = sub.add_parser("restore", help="restore a mart from a local Parquet snapshot (time-travel stand-in)")
     p.add_argument("--from-snapshot", dest="run", required=True, help="run id of the green run")

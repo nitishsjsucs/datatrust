@@ -1,5 +1,6 @@
 /** Hono app: health, Access-verified API routes and role guards (SPEC 13.1, 15). */
 import { Hono } from 'hono';
+import { admin } from './api/admin';
 import { ai } from './api/ai';
 import { alerts } from './api/alerts';
 import { evalRoutes } from './api/eval';
@@ -46,6 +47,7 @@ export function createApp(): Hono<HonoEnv> {
   app.route('/api/lake', lake);
   app.route('/api/ai', ai);
   app.route('/api/eval', evalRoutes);
+  app.route('/api/admin', admin);
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {

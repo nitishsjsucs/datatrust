@@ -487,3 +487,42 @@ export async function insertDeadLetters(
     .bind(queue, JSON.stringify(letters.map((l) => [JSON.stringify(l.body ?? null), l.error])), nowIso())
     .run();
 }
+
+// ------------------------------------------------------------------------------------------- prune
+
+/**
+ * Runs whose lineage detail may be pruned (SPEC risk 25: about 3,000 runs fill the Free plan's 500 MB
+ * database): finished before `cutoff`, still holding lineage rows, oldest first, and never the latest passed
+ * run, whose model checksums are the baseline of the next investigation (`baselineChecksums`). One statement.
+ */
+export async function prunableRuns(db: D1Database, cutoffIso: string, limit: number): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT r.run_id FROM runs r
+       WHERE r.created_at < ?1 AND r.status IN ('passed', 'failed', 'error', 'stale')
+         AND r.run_id IS NOT (SELECT run_id FROM runs WHERE status = 'passed' ORDER BY created_at DESC LIMIT 1)
+         AND EXISTS (SELECT 1 FROM lineage_nodes WHERE run_id = r.run_id
+                     UNION ALL SELECT 1 FROM lineage_edges WHERE run_id = r.run_id
+                     UNION ALL SELECT 1 FROM lineage_events WHERE run_id = r.run_id)
+       ORDER BY r.created_at, r.run_id LIMIT ?2`,
+    )
+    .bind(cutoffIso, limit)
+    .all<{ run_id: string }>();
+  return results.map((r) => r.run_id);
+}
+
+/**
+ * Deletes the lineage rows (edges, events, nodes) of the given runs: three set-based statements in one batch.
+ * Runs, jobs, check results and incidents (with their ranked candidates, evidence and summary) stay. Each
+ * deleted row and index entry counts as a row written on D1 (about 900 per seed-101 run).
+ */
+export async function pruneLineageRows(
+  db: D1Database,
+  runIds: string[],
+): Promise<{ edges: number; events: number; nodes: number }> {
+  if (!runIds.length) return { edges: 0, events: 0, nodes: 0 };
+  const ids = JSON.stringify(runIds);
+  const del = (table: string) => db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT value FROM json_each(?1))`).bind(ids);
+  const [edges, events, nodes] = await db.batch([del('lineage_edges'), del('lineage_events'), del('lineage_nodes')]);
+  return { edges: edges?.meta.changes ?? 0, events: events?.meta.changes ?? 0, nodes: nodes?.meta.changes ?? 0 };
+}
