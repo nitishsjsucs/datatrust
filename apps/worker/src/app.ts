@@ -14,6 +14,8 @@ import { authenticate } from './auth/access';
 import { misconfiguration } from './env';
 import type { HonoEnv } from './hono';
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 export function createApp(): Hono<HonoEnv> {
   const app = new Hono<HonoEnv>();
 
@@ -34,6 +36,19 @@ export function createApp(): Hono<HonoEnv> {
     const outcome = await authenticate(c.req.raw, c.env);
     if (!outcome.ok) return c.json({ error: outcome.status === 401 ? 'unauthorized' : 'forbidden' }, outcome.status);
     c.set('principal', outcome.principal);
+    await next();
+  });
+
+  // Cross-site request forgery: in production Cloudflare Access turns the browser's CF_Authorization cookie
+  // into the verified JWT header, so a form posted from another site by a logged-in operator would arrive
+  // authenticated. State-changing calls therefore need a JSON body (a cross-site form cannot send
+  // application/json without a CORS preflight, which this Worker never answers) and are refused when the
+  // browser marks them cross-site. The runner, the CLI and the smoke always send application/json.
+  app.use('/api/*', async (c, next) => {
+    if (SAFE_METHODS.has(c.req.method)) return next();
+    if (c.req.header('sec-fetch-site') === 'cross-site') return c.json({ error: 'cross_site' }, 403);
+    const type = (c.req.header('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+    if (type !== 'application/json') return c.json({ error: 'unsupported_media_type' }, 415);
     await next();
   });
 

@@ -309,6 +309,7 @@ open_url "https://dash.cloudflare.com/?to=/:account/workers-and-pages"
 step "Workers & Pages > datatrust > Settings > Domains & Routes."
 step "On the workers.dev entry: Enable Cloudflare Access."
 step "Then Manage Cloudflare Access and allow your email ($DATATRUST_OPERATOR_EMAIL)."
+step "Then in Zero Trust, Access controls, Applications, datatrust, Configure, Advanced settings, Cookie settings: set SameSite to Lax and turn HttpOnly on."
 pause "Press Enter once Access is enabled"
 
 stage "Access application audience (AUD)"

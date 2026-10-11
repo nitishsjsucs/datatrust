@@ -110,3 +110,42 @@ describe('completion request caps (Free plan CPU, SPEC 28.5.3)', () => {
     expect((await request(env, 'POST', path, { token: runner, headers, body: { status: 'completed', probeResults: probes } })).status).toBe(400);
   });
 });
+
+describe('cross-site request forgery guard on state-changing routes', () => {
+  /** A raw POST with the operator's verified token, as a browser form would arrive through Access. */
+  async function post(path: string, body: string, headers: Record<string, string>): Promise<Response> {
+    const ctx = createExecutionContext();
+    const res = await app.fetch(
+      new Request(`http://worker${path}`, { method: 'POST', headers: { 'Cf-Access-Jwt-Assertion': token, ...headers }, body }),
+      env,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    return res;
+  }
+
+  it('answers 415 to a form-encodable body (text/plain, urlencoded, multipart) before any handler runs', async () => {
+    // An HTML form with enctype=text/plain can produce exactly this JSON text; hono's c.req.json() would parse it.
+    const prune = '{"olderThanDays":7,"maxRuns":5,"pad":"="}';
+    const run = '{"target":"bigquery","scenario":"S01","pad":"="}';
+    for (const type of ['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x']) {
+      expect((await post('/api/admin/prune', prune, { 'content-type': type })).status).toBe(415);
+      expect((await post('/api/runs', run, { 'content-type': type })).status).toBe(415);
+    }
+    expect((await post('/api/runs', run, {})).status).toBe(415);
+    const runs = await baseEnv.DB.prepare(`SELECT count(*) AS n FROM runs WHERE target = 'bigquery'`).first<{ n: number }>();
+    expect(runs?.n).toBe(0);
+  });
+
+  it('answers 403 to a request the browser marks cross-site, even with a JSON content type', async () => {
+    const res = await post('/api/admin/prune', '{"dryRun":true}', { 'content-type': 'application/json', 'Sec-Fetch-Site': 'cross-site' });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'cross_site' });
+  });
+
+  it('accepts JSON from the CLI, the runner and same-origin pages, and leaves GET alone', async () => {
+    const ok = await post('/api/admin/prune', '{"dryRun":true}', { 'content-type': 'application/json; charset=utf-8', 'Sec-Fetch-Site': 'same-origin' });
+    expect(ok.status).toBe(200);
+    expect((await get('/api/incidents')).status).toBe(200);
+  });
+});
