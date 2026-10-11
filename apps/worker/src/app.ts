@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import { ai } from './api/ai';
 import { alerts } from './api/alerts';
+import { evalRoutes } from './api/eval';
 import { incidents } from './api/incidents';
 import { lake } from './api/lake';
 import { lineageRead } from './api/lineage';
@@ -44,6 +45,7 @@ export function createApp(): Hono<HonoEnv> {
   app.route('/api/alerts', alerts);
   app.route('/api/lake', lake);
   app.route('/api/ai', ai);
+  app.route('/api/eval', evalRoutes);
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {

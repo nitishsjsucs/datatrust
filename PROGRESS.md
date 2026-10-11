@@ -6,7 +6,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` and 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B` done; 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
-Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F12 (the Free plan migration is complete; F13 is stretch).
+Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F13 (the Free plan migration is complete, including the F13 stretch item, which is implemented and tested offline only).
 
 ## Done
 
@@ -81,9 +81,11 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 3, after F12, `perf(worker): plain-code check of queued check results and a start-up request warm-up`: the `datatrust-check-results` consumer no longer re-runs zod on check results that the completion handler validated before enqueueing them; `checkResultsMessage` checks the fields it uses in plain code (the zod `CheckResultsMessage` is gone). In an interleaved comparison on this machine the 10-message batch went from 11.2 to 5.5 ms under heavy load (load average about 6), roughly half. The warm-up also sends one unauthenticated `/healthz` request through the Hono app at start-up (`warmUp(app.router, app)`), about 1 ms less per cold request in an interleaved comparison of 15 pairs (load average up to 16, so the absolute figures are inflated). `queues.test.ts` covers seven malformed shapes, including 101 results; `free-plan.test.ts` checks the warm-up request. `npm run bench:e2e -- --pytest` 2 passed.
 
+- Builder 3, F13 (stretch) `feat(eval): resumable Workers AI summary eval under the daily neuron cap`: `POST /api/eval/summary` (operator; 404 unless `ENVIRONMENT=production`; envelope-checked evidence up to 256 KB) runs one bundle through the same ledgered draft, repair and finalize code as an incident (`evaluateSummary`) and returns the outcome, the raw drafts (for the PII check), the neurons and `refused` when the cap stopped a call; `datatrust bench summaries --provider workers-ai --checkpoint <file>` rebuilds the 20 seed-101 evidence bundles offline, checks `GET /api/ai/budget` for 388 neurons of headroom before each incident, posts it, appends each finished incident to the checkpoint, stops with "resume after 00:00 UTC" when headroom or the cap runs out, resumes on a rerun, and writes the usual report (plus neurons per UTC day) once all 20 are done; `bench/summaries.py` was split into `detected_trials`, `row_from_outcome` and `summarize_rows` (the template eval rerun to a temporary directory on 2026-10-11 gave the committed figures: 100% JSON, 100% grounded, 0 fallback, 20/20, 0 PII leaks). Tests: `budget.test.ts` (outcome, neurons and refusal through `evaluateSummary`; the route is 404 locally), `test_summary_eval_workers_ai.py` (stops at the daily cap after six incidents, resumes the next day, neurons per day, report line; a refused call is not checkpointed). Not executed against Workers AI.
+
 ## Next
 
-- SPEC 23.1: F1 to F12 done. F13 (stretch): resumable Workers AI summary eval under the daily neuron cap (`POST /api/eval/summary`, `datatrust bench summaries --provider workers-ai --checkpoint ...`), implemented and tested offline only; executed only by Nitish.
+- SPEC 23.1: F1 to F13 done. The Workers AI summary eval (F13) is for Nitish to run after the production smoke.
 - Production execution, by Nitish's operator after the builder gate (a rerun of `setup:prod -- --cloudflare-only` redeploys later Worker changes and applies new migrations): SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux container, not yet observed on ubuntu-latest.
 
@@ -91,10 +93,10 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 55 passed
-- `npm run test:worker`: 89 passed
+- `npm run test:worker`: 91 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 201 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F7)
+- `uv run pytest`: 203 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F7)
 - `npm run budget:cpu -- --gate 8`: pass when this machine is not loaded by other builds (largest median 2.4 to 3.3 ms on Apple M5, Node 25.9; 2.9 to 3.5 ms in a node:24 Linux arm64 container); under a load average of 6 to 16 every figure, the unchanged rank step included, reads 3 to 4 times higher. Not yet observed on the x86 CI runner
 - `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template (no `pipelines` binding)
 

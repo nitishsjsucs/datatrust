@@ -154,7 +154,27 @@ def _bench_summaries(args: argparse.Namespace) -> int:
     from datatrust.bench.summaries import evaluate_summaries, write_summary_report
 
     seeds = _parse_seeds(args.seeds if args.seeds != "101-105" else "101")
-    report = evaluate_summaries(seeds[0], args.provider, llm_url=args.llm_url, workers=args.workers or 4)
+    if args.provider == "workers-ai":
+        from datatrust.bench.summaries import evaluate_workers_ai
+        from datatrust.runner.client import WorkerClient
+
+        if not args.checkpoint:
+            print(
+                "--provider workers-ai needs --checkpoint <file> (the eval resumes from it)", file=sys.stderr
+            )
+            return 2
+        result = evaluate_workers_ai(
+            seeds[0],
+            WorkerClient.from_env("operator", "prod"),
+            Path(args.checkpoint),
+            workers=args.workers or 4,
+        )
+        print(json.dumps({k: result[k] for k in ("done", "total", "stopped")}))
+        if "report" not in result:
+            return 0
+        report = result["report"]
+    else:
+        report = evaluate_summaries(seeds[0], args.provider, llm_url=args.llm_url, workers=args.workers or 4)
     command = args.command_label or "uv run datatrust " + " ".join(sys.argv[1:])
     jpath, mpath = write_summary_report(report, Path(args.out) if args.out else config.RESULTS_DIR, command)
     print(mpath.read_text())
@@ -465,10 +485,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("what", nargs="?", choices=["trials", "summaries"], default="trials")
     p.add_argument("--mode", choices=["offline", "e2e"], default="offline")
     p.add_argument(
-        "--provider", choices=["template", "local-llm"], default="template", help="bench summaries only"
+        "--provider",
+        choices=["template", "local-llm", "workers-ai"],
+        default="template",
+        help="bench summaries only (workers-ai: the deployed Worker, resumable, needs --checkpoint)",
     )
     p.add_argument(
         "--llm-url", default="http://127.0.0.1:8160", help="bench summaries with --provider local-llm"
+    )
+    p.add_argument(
+        "--checkpoint",
+        help="bench summaries --provider workers-ai: JSONL of finished incidents, e.g. "
+        "results/summaries-workers-ai.checkpoint.jsonl",
     )
     p.add_argument("--seeds", default="101-105", help="e.g. 101-105 or 1,2,3")
     p.add_argument("--scenarios", help="comma-separated scenario ids (default: all 20)")

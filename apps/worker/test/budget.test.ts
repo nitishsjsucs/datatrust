@@ -29,6 +29,7 @@ import {
   utcDay,
 } from '../src/llm/budget';
 import { createSummarizer } from '../src/llm/summarizer';
+import { evaluateSummary } from '../src/api/eval';
 import { SUMMARY_SCHEMA_CHARS, WorkersAISummarizer } from '../src/llm/workers-ai';
 import { getIncident, upsertCheckResults, upsertLineageGraph } from '../src/store/repo';
 import { summarizers } from '../src/workflows/investigation';
@@ -268,5 +269,31 @@ describe('GET /api/ai/budget and the production guard', () => {
     expect(misconfiguration({ ...prod, WORKERS_AI_MODEL: '@cf/zai-org/glm-5.3' })).toMatch(/no pinned neuron rate/);
     expect(misconfiguration({ ...prod, AI_DAILY_NEURON_CAP: 'lots' })).toMatch(/AI_DAILY_NEURON_CAP/);
     expect(() => createSummarizer({ ...prod, SUMMARIZER: 'template' })).toThrow(/workers-ai/);
+  });
+});
+
+describe('POST /api/eval/summary (stretch, SPEC 12.4)', () => {
+  it('runs one evidence bundle through the ledgered Workers AI loop and says when the cap refuses', async () => {
+    const ev = evidence();
+    const { ai, calls } = fakeAi([{ response: templateDraft(ev), usage: { prompt_tokens: 1100, completion_tokens: 280 } }]);
+    const s = new WorkersAISummarizer(ai, MODEL, 'datatrust');
+    const now = freshDay();
+    const ok = await evaluateSummary(env(), s, ev, now);
+    expect(ok).toMatchObject({ refused: false, day: utcDay(now), provider: 'workers-ai', fallback: false, firstDraftGrounded: true });
+    expect(ok.rawDrafts).toHaveLength(1);
+    expect(ok.neurons.used).toBe(usageNeurons({ prompt_tokens: 1100, completion_tokens: 280 }, RATE));
+    expect(calls).toHaveLength(1);
+    const capped = await evaluateSummary(env('50'), s, ev, freshDay());
+    expect(capped).toMatchObject({ refused: true, fallback: true, fallbackReason: DAILY_NEURON_CAP_REASON });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('exists only in production', async () => {
+    const keys = await makeKeys();
+    const res = await request(testEnv(keys), 'POST', '/api/eval/summary', {
+      token: await mint(keys, humanClaims(OPERATOR)),
+      body: { evidence: evidence() },
+    });
+    expect(res.status).toBe(404);
   });
 });
