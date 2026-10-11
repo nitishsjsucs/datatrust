@@ -34,15 +34,16 @@ class BuiltWarehouse:
         return connect(self.duckdb_path, read_only=True)
 
 
-def build_warehouse(seed: int, root: Path, dbt_args: list[str] | None = None) -> BuiltWarehouse:
-    from datatrust.dbt.build import run_dbt
+def build_warehouse(seed: int, root: Path) -> BuiltWarehouse:
+    """Generate, load and `dbt-ol build` (the runner's path), with OpenLineage events and relations.json."""
+    from datatrust.dbt.build import build_with_lineage
     from datatrust.load.duckdb_loader import load_raw
 
     raw = root / "raw"
     write_dataset(_cached(seed), raw)
     db = root / "warehouse.duckdb"
     load_raw(raw, db)
-    res = run_dbt(dbt_args or ["build"], target_path=root / "target", duckdb_path=db)
+    res = build_with_lineage(target_path=root / "target", duckdb_path=db)
     return BuiltWarehouse(seed, db, root / "target", res.returncode, res.stdout)
 
 

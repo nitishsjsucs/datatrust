@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 6 of 19 (core) done: `feat(checks): 40 dbt and SQL checks with category registry`.
+Commit 7 of 19 (core) done: `feat(lineage): capture OpenLineage from dbt-ol and build a column-level graph`.
 
 ## Done
 
@@ -14,20 +14,23 @@ Commit 6 of 19 (core) done: `feat(checks): 40 dbt and SQL checks with category r
 - 4. dbt project (`dbt/`), DuckDB profile with `TimeZone: UTC`, 13 sources with model meta, 13 staging views with enforced contracts, `dt_type`/`dt_cast`/`tz_local_date`/`tz_local_hour` dispatch macros, `generate_schema_name`, DuckDB loader, `datatrust load|build` CLI, `test_session_timezone.py`, `test_warehouse_types.py`. Raw `stage_events.stage` now carries ATS labels (for example "Phone Screen") mapped to canonical stages in `stg_stage_events`; seed 101 golden hash for `stage_events` re-recorded.
 - 5. 16 models (6 intermediate tables, 5 marts and 4 metrics with enforced contracts, 1 restricted view over the untagged aggregate), dispatch macros `date_spine`, `safe_divide`, `int_div`, `trailing_median` (+ `trailing_median_finish`), `ordered_path`, `time_travel`, `days_between`, `month_start`, `print_dialect_macros` run-operation, `bigquery` and `bigquery_sa` profiles with defaults, policy-tag vars with placeholders, `test_dialect_macros.py` (banned constructs, sqlglot both dialects, portable model SQL), `test_bigquery_parse.py`. Seed 101 builds all 29 models: 1,980 / 1,200 compensation rows, 0 null USD.
 - 6. 40 checks (18 generic incl. custom `unique_combination` and `expression_is_true`, 22 singular SQL), `checks/registry.yml`, `datatrust.checks.registry` and `datatrust.checks.results` (run_results to CheckResult, contract failures classified as `schema_contract` with columns), `add_days` dialect macro, recorded contract-failure fixture (`pipelines/tests/record_fixtures.py`), `test_check_registry.py`, `test_clean_baseline.py` (CI runs it again under `TZ=America/Los_Angeles`), `test_contract_failure_classified.py`, documented-columns test. Clean build (29 models, 40 checks pass) verified by hand on seeds 1, 2, 3, 7, 42, 101-105.
+- 7. `datatrust.dbt.build.build_with_lineage` (`dbt-ol build`, file transport to `<target>/openlineage.jsonl`, `relations.json` from the manifest), `datatrust build` prints check counts; `packages/rca` types, OpenLineage zod schemas, (schema, table) resolver, `buildLineageGraph`, `upstreamClosure` (column mode with dataset fallback, dataset mode), `columnLineageCoverage`; recorded seed-101 fixtures with namespaces scrubbed; `lineage.test.ts` (incl. `/home/runner` path rewrite), `test_lineage_capture.py`. `stg_stage_events` CTE now lists columns explicitly (the OpenLineage SQL parser cannot see through `select *` in a CTE).
 
 ## Next
 
-- 7. `feat(lineage): capture OpenLineage from dbt-ol and build a column-level graph`.
+- 8. `feat(rca): diagnostic probes, planner and ranker`.
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
 - `npm run typecheck`: pass
-- `npm run test:rca`: 1 passed
+- `npm run test:rca`: 11 passed
 - `npm run test:worker`: no tests yet (`--passWithNoTests`, removed when the Worker lands in commit 11)
 - `uv run ruff check`: pass
-- `uv run pytest`: 45 passed
+- `uv run pytest`: 47 passed
 
 ## Deviations from SPEC.md
+
+- Commit 6 (`feat(checks)`) left two lines over ruff's 110-character limit in `test_warehouse_types.py`, so `uv run ruff check` fails at that commit; fixed in commit 7.
 
 - `apps/web` (stretch) is not in the npm workspaces list until it exists.
 - Contract `data_type` cannot call project macros: dbt 1.12.5 renders schema YAML without them ("'dt_type' is undefined", observed 2026-10-10). Contracts use inline `{{ 'int64' if target.type == 'bigquery' else 'bigint' }}` expressions instead; `test_warehouse_types.py::test_contract_types_mirror_dt_type` asserts every such expression equals the `dt_type` mapping, so `macros/dialect/types.sql` stays the single source of truth.

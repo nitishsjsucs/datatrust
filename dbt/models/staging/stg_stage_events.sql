@@ -3,7 +3,8 @@
   derived in the requisition location's time zone through the dialect macros (SPEC 6.4, 7.3).
 -#}
 with events as (
-    select * from {{ source('raw', 'stage_events') }}
+    select event_id, application_id, stage, entered_at, source_system
+    from {{ source('raw', 'stage_events') }}
 ),
 
 applications as (

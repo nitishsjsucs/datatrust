@@ -16,7 +16,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 |---|---|
 | Synthetic data generator (exact, seeded counts) | implemented; tests pass locally (`uv run pytest`), CI configured |
 | dbt models, 22 enforced contracts, 40 checks | implemented: 29 models, 22 enforced contracts and 40 checks build and pass on clean seeds on DuckDB (stand-in), tested locally; CI configured to run them under `TZ=UTC` and `TZ=America/Los_Angeles` |
-| OpenLineage capture and column-level lineage graph | planned |
+| OpenLineage capture and column-level lineage graph | implemented: `dbt-ol build` (openlineage-dbt 1.53.0, file transport) on DuckDB (stand-in), TypeScript graph and upstream closure; tested locally |
 | Diagnostic probes, root-cause ranker, baselines | planned |
 | Fault-injection benchmark (20 scenarios) | planned |
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | planned |
@@ -157,7 +157,7 @@ Generate, load and build one seed locally (DuckDB is the local stand-in for BigQ
 ```sh
 uv run datatrust synth --seed 101   # .data/raw/101/*.parquet + manifest.json
 uv run datatrust load --seed 101    # raw.* tables in .data/warehouse.duckdb (session pinned to UTC)
-uv run datatrust build              # dbt build (profile in dbt/profiles.yml, target duckdb)
+uv run datatrust build              # dbt-ol build: 29 models, 22 contracts, 40 checks, OpenLineage events in dbt/target/
 ```
 
 More commands are added here as the components land.

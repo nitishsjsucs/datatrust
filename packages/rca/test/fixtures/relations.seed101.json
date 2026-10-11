@@ -1,0 +1,2130 @@
+{
+ "dialect": "duckdb",
+ "nodes": {
+  "model.datatrust.dim_employee": {
+   "checksum": "725acfc053f27ae129b3917a21bce4ee5109caaf056e092c6fc97614433b7007",
+   "columns": {
+    "as_of_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "birth_date": {
+     "classification": "pii",
+     "dataType": "date",
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "department_name": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "first_name": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "hire_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "is_active": {
+     "classification": "internal",
+     "dataType": "boolean",
+     "entity": null
+    },
+    "job_level": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "job_title": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "last_name": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "location_currency": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "location_name": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "location_tz": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "termination_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "work_email": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "dim_employee",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "department_id",
+      "parent": "stg_departments",
+      "parent_column": "department_id"
+     },
+     {
+      "column": "location_id",
+      "parent": "stg_locations",
+      "parent_column": "location_id"
+     }
+    ],
+    "grain": [
+     "employee_id"
+    ],
+    "rowcount": {
+     "parent": "stg_employees",
+     "ratio": 1.0
+    }
+   },
+   "name": "dim_employee",
+   "relation": "\"warehouse\".\"marts\".\"dim_employee\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.dim_employee"
+  },
+  "model.datatrust.fct_compensation_usd": {
+   "checksum": "50afb15934cfe16f690de73af98276335196a1209965565f0f401282e91fc81c",
+   "columns": {
+    "as_of_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "base_salary_local": {
+     "classification": "compensation",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "base_salary_usd": {
+     "classification": "compensation",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "compensation_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "currency": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "fx_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "rate_to_usd": {
+     "classification": "public",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "fct_compensation_usd",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "employee_id"
+    ],
+    "recompute": [
+     {
+      "column": "base_salary_usd",
+      "expr": "base_salary_local * rate_to_usd"
+     }
+    ],
+    "rowcount": {
+     "parent": "stg_employees",
+     "ratio": 1.0
+    }
+   },
+   "name": "fct_compensation_usd",
+   "relation": "\"warehouse\".\"marts\".\"fct_compensation_usd\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.fct_compensation_usd"
+  },
+  "model.datatrust.fct_hires": {
+   "checksum": "d065e47162750085dfce9e3263d80c95b5e2233cdf0e3dd019fe3f549826f8f9",
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "app"
+    },
+    "applied_local_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "candidate_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "cand"
+    },
+    "days_to_hire": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "hire_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "hire_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "hire"
+    },
+    "hire_month": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "offer_accepted_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "offer_local_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "offered_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "requisition_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "fct_hires",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "application_id",
+      "parent": "stg_applications",
+      "parent_column": "application_id"
+     },
+     {
+      "column": "employee_id",
+      "parent": "stg_employees",
+      "parent_column": "employee_id"
+     }
+    ],
+    "grain": [
+     "hire_id"
+    ],
+    "rowcount": {
+     "parent": "stg_hires",
+     "ratio": 1.0
+    },
+    "unique_keys": [
+     [
+      "application_id"
+     ]
+    ]
+   },
+   "name": "fct_hires",
+   "relation": "\"warehouse\".\"marts\".\"fct_hires\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.fct_hires"
+  },
+  "model.datatrust.fct_payroll_reconciliation": {
+   "checksum": "71a92322bc4299bafba0891a64f3c317a2e877dc2376a281ad28ca650a4f040d",
+   "columns": {
+    "actual_gross_local": {
+     "classification": "compensation",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "actual_gross_local_minor": {
+     "classification": "compensation",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "actual_gross_usd": {
+     "classification": "compensation",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "base_salary_local_minor": {
+     "classification": "compensation",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "currency": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "delta_pct": {
+     "classification": "internal",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "expected_gross_local": {
+     "classification": "compensation",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "expected_gross_local_minor": {
+     "classification": "compensation",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "n_lines": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "pay_month": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "rate_to_usd": {
+     "classification": "public",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "fct_payroll_reconciliation",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "employee_id",
+     "pay_month"
+    ],
+    "recompute": [
+     {
+      "column": "expected_gross_local_minor",
+      "expr": "base_salary_local_minor / 12.0"
+     },
+     {
+      "column": "actual_gross_local_minor",
+      "expr": "expected_gross_local_minor"
+     }
+    ],
+    "rowcount": {
+     "parent": "stg_payroll_lines",
+     "ratio": 1.0
+    }
+   },
+   "name": "fct_payroll_reconciliation",
+   "relation": "\"warehouse\".\"marts\".\"fct_payroll_reconciliation\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.fct_payroll_reconciliation"
+  },
+  "model.datatrust.fct_recruiting_funnel": {
+   "checksum": "0f3acd843f985665959e4025e967e9a23ad30bfc2a2264857f0f2717052d6926",
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "app"
+    },
+    "applied_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "candidate_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "cand"
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "outcome": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "reached_offer": {
+     "classification": "internal",
+     "dataType": "boolean",
+     "entity": null
+    },
+    "reached_onsite": {
+     "classification": "internal",
+     "dataType": "boolean",
+     "entity": null
+    },
+    "reached_screen": {
+     "classification": "internal",
+     "dataType": "boolean",
+     "entity": null
+    },
+    "requisition_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "source_channel": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "stage_path": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "was_hired": {
+     "classification": "internal",
+     "dataType": "boolean",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "fct_recruiting_funnel",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "application_id"
+    ],
+    "rowcount": {
+     "parent": "stg_applications",
+     "ratio": 1.0
+    }
+   },
+   "name": "fct_recruiting_funnel",
+   "relation": "\"warehouse\".\"marts\".\"fct_recruiting_funnel\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.fct_recruiting_funnel"
+  },
+  "model.datatrust.int_application_stage_path": {
+   "checksum": "b33784f51a32602773b904c278bf0d99e168195fa189721b2b6c78a8a4e44b55",
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "app"
+    },
+    "applied_at": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "applied_local_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "hired_at": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "hired_local_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "n_events": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "offer_at": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "offer_local_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "onsite_at": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "screen_at": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "stage_path": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "terminal_stage": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "int_application_stage_path",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "application_id"
+    ],
+    "rowcount": {
+     "parent": "stg_applications",
+     "ratio": 1.0
+    }
+   },
+   "name": "int_application_stage_path",
+   "relation": "\"warehouse\".\"staging\".\"int_application_stage_path\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.int_application_stage_path"
+  },
+  "model.datatrust.int_assignment_current": {
+   "checksum": "320dacb57a91dd31122f8719da4c4f6448effb15da8dd44d2a1d1ca114787c58",
+   "columns": {
+    "as_of_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "assignment_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
+    },
+    "job_level": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "job_title": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "location_currency": {
+     "classification": "public",
+     "dataType": null,
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "location_tz": {
+     "classification": "public",
+     "dataType": null,
+     "entity": null
+    },
+    "valid_from": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "valid_to": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "int_assignment_current",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "employee_id"
+    ],
+    "rowcount": {
+     "parent": "stg_employees",
+     "ratio": 1.0
+    }
+   },
+   "name": "int_assignment_current",
+   "relation": "\"warehouse\".\"staging\".\"int_assignment_current\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.int_assignment_current"
+  },
+  "model.datatrust.int_comp_by_dept_month": {
+   "checksum": "861e46aa3beba0c46bfa5958803d0041769470c5f5da54ef33a46b34b58794a2",
+   "columns": {
+    "avg_base_salary_usd": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "headcount": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "month_start": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "total_base_salary_usd": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "int_comp_by_dept_month",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "department_id",
+     "month_start"
+    ]
+   },
+   "name": "int_comp_by_dept_month",
+   "relation": "\"warehouse\".\"staging\".\"int_comp_by_dept_month\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.int_comp_by_dept_month"
+  },
+  "model.datatrust.int_compensation_usd": {
+   "checksum": "54b8f5cb851951690f78f335ef9b9408a69bb645b094c4a12968427cd5ee64c1",
+   "columns": {
+    "base_salary_local": {
+     "classification": "compensation",
+     "dataType": null,
+     "entity": null
+    },
+    "base_salary_local_minor": {
+     "classification": "compensation",
+     "dataType": null,
+     "entity": null
+    },
+    "base_salary_usd": {
+     "classification": "compensation",
+     "dataType": null,
+     "entity": null
+    },
+    "compensation_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "currency": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
+    },
+    "fx_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "rate_to_usd": {
+     "classification": "public",
+     "dataType": null,
+     "entity": null
+    },
+    "valid_from": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "valid_to": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "int_compensation_usd",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "compensation_id"
+    ],
+    "interval": {
+     "from": "valid_from",
+     "key": [
+      "employee_id"
+     ],
+     "to": "valid_to"
+    },
+    "recompute": [
+     {
+      "column": "base_salary_usd",
+      "expr": "base_salary_local * rate_to_usd"
+     }
+    ],
+    "rowcount": {
+     "parent": "stg_compensation",
+     "ratio": 1.0
+    }
+   },
+   "name": "int_compensation_usd",
+   "relation": "\"warehouse\".\"staging\".\"int_compensation_usd\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.int_compensation_usd"
+  },
+  "model.datatrust.int_employee_month": {
+   "checksum": "f4cea99fe645b992070bcfa19627314dea55071cb68a31833a7af29fb36e721c",
+   "columns": {
+    "base_salary_local": {
+     "classification": "compensation",
+     "dataType": null,
+     "entity": null
+    },
+    "base_salary_local_minor": {
+     "classification": "compensation",
+     "dataType": null,
+     "entity": null
+    },
+    "compensation_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "currency": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
+    },
+    "hire_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "is_active": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "month_start": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "termination_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "int_employee_month",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "employee_id",
+     "month_start"
+    ],
+    "rowcount": {
+     "parent": "stg_employees",
+     "ratio": 12.0
+    }
+   },
+   "name": "int_employee_month",
+   "relation": "\"warehouse\".\"staging\".\"int_employee_month\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.int_employee_month"
+  },
+  "model.datatrust.int_fx_daily": {
+   "checksum": "cf190b9cf5ac641571d823b842923b9a3cf6d7503bf190f9a69714cdcc8cf28d",
+   "columns": {
+    "currency": {
+     "classification": "public",
+     "dataType": null,
+     "entity": null
+    },
+    "rate_date": {
+     "classification": "public",
+     "dataType": null,
+     "entity": null
+    },
+    "rate_to_usd": {
+     "classification": "public",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "int_fx_daily",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "fx": {
+     "currency": "currency",
+     "date": "rate_date",
+     "rate": "rate_to_usd"
+    },
+    "grain": [
+     "currency",
+     "rate_date"
+    ],
+    "rowcount": {
+     "parent": "stg_fx_rates",
+     "ratio": 1.0
+    }
+   },
+   "name": "int_fx_daily",
+   "relation": "\"warehouse\".\"staging\".\"int_fx_daily\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.int_fx_daily"
+  },
+  "model.datatrust.metric_headcount_monthly": {
+   "checksum": "11260fabf88b8244ede63572c8429f81451096191a114d8389c9ba5737a133a5",
+   "columns": {
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "headcount": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "month_start": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "metric_headcount_monthly",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "department_id",
+     "month_start"
+    ],
+    "metric": "headcount"
+   },
+   "name": "metric_headcount_monthly",
+   "relation": "\"warehouse\".\"marts\".\"metric_headcount_monthly\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.metric_headcount_monthly"
+  },
+  "model.datatrust.metric_hires_monthly": {
+   "checksum": "ce3d99191cdc97c854f7377ed9994dd1aad1b7af3cfd0c577fb023a15f3a9bb2",
+   "columns": {
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "hire_month": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "hires": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "metric_hires_monthly",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "department_id",
+     "hire_month"
+    ],
+    "metric": "hires"
+   },
+   "name": "metric_hires_monthly",
+   "relation": "\"warehouse\".\"marts\".\"metric_hires_monthly\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.metric_hires_monthly"
+  },
+  "model.datatrust.metric_payroll_cost_usd_monthly": {
+   "checksum": "149218f248e4920a051f05726a8d8eff1fecd8e8c16e265f74a43680488577d4",
+   "columns": {
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "employees_paid": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "pay_month": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "payroll_cost_usd": {
+     "classification": "internal",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "metric_payroll_cost_usd_monthly",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "department_id",
+     "pay_month"
+    ],
+    "metric": "payroll_cost_usd"
+   },
+   "name": "metric_payroll_cost_usd_monthly",
+   "relation": "\"warehouse\".\"marts\".\"metric_payroll_cost_usd_monthly\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.metric_payroll_cost_usd_monthly"
+  },
+  "model.datatrust.metric_time_to_hire": {
+   "checksum": "81165274e9e8c9f56ab455edd6af31651c98e680d962ae53bc9eb7bc9b12793e",
+   "columns": {
+    "avg_days_to_hire": {
+     "classification": "internal",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "hire_month": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "hires": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "metric_time_to_hire",
+   "kind": "model",
+   "materialization": "table",
+   "meta": {
+    "grain": [
+     "department_id",
+     "hire_month"
+    ],
+    "metric": "avg_days_to_hire"
+   },
+   "name": "metric_time_to_hire",
+   "relation": "\"warehouse\".\"marts\".\"metric_time_to_hire\"",
+   "schema": "marts",
+   "uniqueId": "model.datatrust.metric_time_to_hire"
+  },
+  "model.datatrust.rpt_compensation_by_dept": {
+   "checksum": "f5000398505f68231bc9563240945780e90a7331d2b0116f85c9c202e6a7d359",
+   "columns": {
+    "avg_base_salary_usd": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "headcount": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "month_start": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
+    "total_base_salary_usd": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "rpt_compensation_by_dept",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "grain": [
+     "department_id",
+     "month_start"
+    ]
+   },
+   "name": "rpt_compensation_by_dept",
+   "relation": "\"warehouse\".\"restricted\".\"rpt_compensation_by_dept\"",
+   "schema": "restricted",
+   "uniqueId": "model.datatrust.rpt_compensation_by_dept"
+  },
+  "model.datatrust.stg_applications": {
+   "checksum": "f97d28d681aca0f9d647d150510c8835a758a6838d67780ad6e4b59966d9e7b5",
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "app"
+    },
+    "applied_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "candidate_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "cand"
+    },
+    "requisition_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "source_channel": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_applications",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "candidate_id",
+      "parent": "stg_candidates",
+      "parent_column": "candidate_id"
+     },
+     {
+      "column": "requisition_id",
+      "parent": "stg_requisitions",
+      "parent_column": "requisition_id"
+     }
+    ],
+    "grain": [
+     "application_id"
+    ]
+   },
+   "name": "stg_applications",
+   "relation": "\"warehouse\".\"staging\".\"stg_applications\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_applications"
+  },
+  "model.datatrust.stg_candidates": {
+   "checksum": "f8c55bc4d3553fc008892583e4938cbd097e1790349c8277c67c252325648a22",
+   "columns": {
+    "candidate_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "cand"
+    },
+    "created_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "email": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "first_name": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "last_name": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "phone": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_candidates",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "grain": [
+     "candidate_id"
+    ]
+   },
+   "name": "stg_candidates",
+   "relation": "\"warehouse\".\"staging\".\"stg_candidates\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_candidates"
+  },
+  "model.datatrust.stg_compensation": {
+   "checksum": "135cc869e907ba8073bb4a43cd9fa2cffa1c1ecd9b1877c12e727038a52c8ab1",
+   "columns": {
+    "base_salary_local": {
+     "classification": "compensation",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "base_salary_local_minor": {
+     "classification": "compensation",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "compensation_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "currency": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "valid_from": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "valid_to": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_compensation",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "casts": [
+     {
+      "column": "base_salary_local_minor",
+      "type": "int"
+     }
+    ],
+    "foreign_keys": [
+     {
+      "column": "employee_id",
+      "parent": "stg_employees",
+      "parent_column": "employee_id"
+     }
+    ],
+    "grain": [
+     "compensation_id"
+    ],
+    "interval": {
+     "from": "valid_from",
+     "key": [
+      "employee_id"
+     ],
+     "to": "valid_to"
+    }
+   },
+   "name": "stg_compensation",
+   "relation": "\"warehouse\".\"staging\".\"stg_compensation\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_compensation"
+  },
+  "model.datatrust.stg_departments": {
+   "checksum": "16ed59d346218941562520d35ac68e54abbc9be24240bdc35b63f5978db1803d",
+   "columns": {
+    "cost_center": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "department_name": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_departments",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "grain": [
+     "department_id"
+    ]
+   },
+   "name": "stg_departments",
+   "relation": "\"warehouse\".\"staging\".\"stg_departments\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_departments"
+  },
+  "model.datatrust.stg_employees": {
+   "checksum": "f317f67aa17844c5e4f7864023ffe274fe237dc6418f62de3ca394a27fdd6ae4",
+   "columns": {
+    "birth_date": {
+     "classification": "pii",
+     "dataType": "date",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "first_name": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "hire_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "last_name": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "termination_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "work_email": {
+     "classification": "pii",
+     "dataType": "varchar",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_employees",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "grain": [
+     "employee_id"
+    ]
+   },
+   "name": "stg_employees",
+   "relation": "\"warehouse\".\"staging\".\"stg_employees\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_employees"
+  },
+  "model.datatrust.stg_fx_rates": {
+   "checksum": "1a309eb3dc631d38b40b63ad140882f1c0c846273015acea6139b3d149004843",
+   "columns": {
+    "currency": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "rate_date": {
+     "classification": "public",
+     "dataType": "date",
+     "entity": null
+    },
+    "rate_to_usd": {
+     "classification": "public",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_fx_rates",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "fx": {
+     "currency": "currency",
+     "date": "rate_date",
+     "rate": "rate_to_usd"
+    },
+    "grain": [
+     "currency",
+     "rate_date"
+    ]
+   },
+   "name": "stg_fx_rates",
+   "relation": "\"warehouse\".\"staging\".\"stg_fx_rates\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_fx_rates"
+  },
+  "model.datatrust.stg_hires": {
+   "checksum": "27d02f96a91a1557b70c552211fa1bc63507fddebb07ae38eee04b8b9fbd8d58",
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "app"
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "hire_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "hire_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "hire"
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_hires",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "application_id",
+      "parent": "stg_applications",
+      "parent_column": "application_id"
+     },
+     {
+      "column": "employee_id",
+      "parent": "stg_employees",
+      "parent_column": "employee_id"
+     }
+    ],
+    "grain": [
+     "hire_id"
+    ]
+   },
+   "name": "stg_hires",
+   "relation": "\"warehouse\".\"staging\".\"stg_hires\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_hires"
+  },
+  "model.datatrust.stg_job_assignments": {
+   "checksum": "2388a111757f6171e889cf2ebbe11093bb2d3c21b2c955940ed59eeb3fcd34f2",
+   "columns": {
+    "assignment_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "is_current": {
+     "classification": "internal",
+     "dataType": "boolean",
+     "entity": null
+    },
+    "job_level": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "job_title": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "valid_from": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "valid_to": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_job_assignments",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "employee_id",
+      "parent": "stg_employees",
+      "parent_column": "employee_id"
+     },
+     {
+      "column": "department_id",
+      "parent": "stg_departments",
+      "parent_column": "department_id"
+     },
+     {
+      "column": "location_id",
+      "parent": "stg_locations",
+      "parent_column": "location_id"
+     }
+    ],
+    "grain": [
+     "assignment_id"
+    ],
+    "interval": {
+     "from": "valid_from",
+     "key": [
+      "employee_id"
+     ],
+     "to": "valid_to"
+    }
+   },
+   "name": "stg_job_assignments",
+   "relation": "\"warehouse\".\"staging\".\"stg_job_assignments\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_job_assignments"
+  },
+  "model.datatrust.stg_locations": {
+   "checksum": "5aeadb1b6ca7376493793d29ee19546cb73e243d223ed8c8cac7b1074b80664b",
+   "columns": {
+    "country_code": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "currency": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "location_name": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "location_tz": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_locations",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "grain": [
+     "location_id"
+    ]
+   },
+   "name": "stg_locations",
+   "relation": "\"warehouse\".\"staging\".\"stg_locations\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_locations"
+  },
+  "model.datatrust.stg_offers": {
+   "checksum": "4eaeaf3f3c1194979c69e710b6897053e0089f194e977627940e8e685205f75e",
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "app"
+    },
+    "offer_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "offer_status": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "offered_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "responded_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_offers",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "application_id",
+      "parent": "stg_applications",
+      "parent_column": "application_id"
+     }
+    ],
+    "grain": [
+     "offer_id"
+    ]
+   },
+   "name": "stg_offers",
+   "relation": "\"warehouse\".\"staging\".\"stg_offers\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_offers"
+  },
+  "model.datatrust.stg_payroll_lines": {
+   "checksum": "1aacd137f82f42724eb351018f32d55f2f32ce2ea74decb5871fbc2130cd3130",
+   "columns": {
+    "currency": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "emp"
+    },
+    "gross_pay_local": {
+     "classification": "compensation",
+     "dataType": "decimal(38,9)",
+     "entity": null
+    },
+    "gross_pay_local_minor": {
+     "classification": "compensation",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "paid_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "pay_month": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "payroll_line_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_payroll_lines",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "casts": [
+     {
+      "column": "gross_pay_local_minor",
+      "type": "int"
+     }
+    ],
+    "foreign_keys": [
+     {
+      "column": "employee_id",
+      "parent": "stg_employees",
+      "parent_column": "employee_id"
+     }
+    ],
+    "grain": [
+     "payroll_line_id"
+    ]
+   },
+   "name": "stg_payroll_lines",
+   "relation": "\"warehouse\".\"staging\".\"stg_payroll_lines\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_payroll_lines"
+  },
+  "model.datatrust.stg_requisitions": {
+   "checksum": "66fa9e86307479371915dd3dfc597c685d09350ad3c8bcf684f216bb40fdea36",
+   "columns": {
+    "department_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "job_title": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "opened_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "openings": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "requisition_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_requisitions",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "department_id",
+      "parent": "stg_departments",
+      "parent_column": "department_id"
+     },
+     {
+      "column": "location_id",
+      "parent": "stg_locations",
+      "parent_column": "location_id"
+     }
+    ],
+    "grain": [
+     "requisition_id"
+    ]
+   },
+   "name": "stg_requisitions",
+   "relation": "\"warehouse\".\"staging\".\"stg_requisitions\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_requisitions"
+  },
+  "model.datatrust.stg_stage_events": {
+   "checksum": "7ae7460b92360af595768e39cfe015fd03b7cbe16f364d651c340b46288787ab",
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": "bigint",
+     "entity": "app"
+    },
+    "entered_at": {
+     "classification": "internal",
+     "dataType": "timestamptz",
+     "entity": null
+    },
+    "event_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "event_local_date": {
+     "classification": "internal",
+     "dataType": "date",
+     "entity": null
+    },
+    "event_local_hour": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "location_id": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    },
+    "location_tz": {
+     "classification": "public",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "source_system": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "stage": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "stage_label": {
+     "classification": "internal",
+     "dataType": "varchar",
+     "entity": null
+    },
+    "stage_order": {
+     "classification": "internal",
+     "dataType": "bigint",
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "stg_stage_events",
+   "kind": "model",
+   "materialization": "view",
+   "meta": {
+    "foreign_keys": [
+     {
+      "column": "application_id",
+      "parent": "stg_applications",
+      "parent_column": "application_id"
+     }
+    ],
+    "grain": [
+     "event_id"
+    ],
+    "timezone": {
+     "filter_column": "source_system",
+     "filter_value": "recruiter_tool",
+     "hour": "event_local_hour",
+     "ts": "entered_at",
+     "tz": "location_tz"
+    },
+    "transitions": {
+     "key": "application_id",
+     "order": "stage_order",
+     "stage": "stage",
+     "ts": "entered_at"
+    }
+   },
+   "name": "stg_stage_events",
+   "relation": "\"warehouse\".\"staging\".\"stg_stage_events\"",
+   "schema": "staging",
+   "uniqueId": "model.datatrust.stg_stage_events"
+  },
+  "source.datatrust.raw.applications": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "applications",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "application_id"
+    ]
+   },
+   "name": "applications",
+   "relation": "\"warehouse\".\"raw\".\"applications\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.applications"
+  },
+  "source.datatrust.raw.candidates": {
+   "checksum": null,
+   "columns": {
+    "email": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    },
+    "first_name": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    },
+    "last_name": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    },
+    "phone": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "candidates",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "candidate_id"
+    ]
+   },
+   "name": "candidates",
+   "relation": "\"warehouse\".\"raw\".\"candidates\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.candidates"
+  },
+  "source.datatrust.raw.compensation": {
+   "checksum": null,
+   "columns": {
+    "base_salary_local_minor": {
+     "classification": "compensation",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "compensation",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "compensation_id"
+    ],
+    "interval": [
+     "valid_from",
+     "valid_to"
+    ],
+    "interval_key": [
+     "employee_id"
+    ]
+   },
+   "name": "compensation",
+   "relation": "\"warehouse\".\"raw\".\"compensation\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.compensation"
+  },
+  "source.datatrust.raw.departments": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "departments",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "department_id"
+    ]
+   },
+   "name": "departments",
+   "relation": "\"warehouse\".\"raw\".\"departments\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.departments"
+  },
+  "source.datatrust.raw.employees": {
+   "checksum": null,
+   "columns": {
+    "birth_date": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    },
+    "first_name": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    },
+    "last_name": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    },
+    "work_email": {
+     "classification": "pii",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "employees",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "employee_id"
+    ]
+   },
+   "name": "employees",
+   "relation": "\"warehouse\".\"raw\".\"employees\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.employees"
+  },
+  "source.datatrust.raw.fx_rates": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "fx_rates",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "currency",
+     "rate_date"
+    ]
+   },
+   "name": "fx_rates",
+   "relation": "\"warehouse\".\"raw\".\"fx_rates\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.fx_rates"
+  },
+  "source.datatrust.raw.hires": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "hires",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "hire_id"
+    ]
+   },
+   "name": "hires",
+   "relation": "\"warehouse\".\"raw\".\"hires\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.hires"
+  },
+  "source.datatrust.raw.job_assignments": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "job_assignments",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "assignment_id"
+    ],
+    "interval": [
+     "valid_from",
+     "valid_to"
+    ],
+    "interval_key": [
+     "employee_id"
+    ]
+   },
+   "name": "job_assignments",
+   "relation": "\"warehouse\".\"raw\".\"job_assignments\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.job_assignments"
+  },
+  "source.datatrust.raw.locations": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "locations",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "location_id"
+    ]
+   },
+   "name": "locations",
+   "relation": "\"warehouse\".\"raw\".\"locations\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.locations"
+  },
+  "source.datatrust.raw.offers": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "offers",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "offer_id"
+    ]
+   },
+   "name": "offers",
+   "relation": "\"warehouse\".\"raw\".\"offers\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.offers"
+  },
+  "source.datatrust.raw.payroll_lines": {
+   "checksum": null,
+   "columns": {
+    "gross_pay_local_minor": {
+     "classification": "compensation",
+     "dataType": null,
+     "entity": null
+    }
+   },
+   "database": "warehouse",
+   "identifier": "payroll_lines",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "payroll_line_id"
+    ]
+   },
+   "name": "payroll_lines",
+   "relation": "\"warehouse\".\"raw\".\"payroll_lines\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.payroll_lines"
+  },
+  "source.datatrust.raw.requisitions": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "requisitions",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "requisition_id"
+    ]
+   },
+   "name": "requisitions",
+   "relation": "\"warehouse\".\"raw\".\"requisitions\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.requisitions"
+  },
+  "source.datatrust.raw.stage_events": {
+   "checksum": null,
+   "columns": {},
+   "database": "warehouse",
+   "identifier": "stage_events",
+   "kind": "source",
+   "materialization": null,
+   "meta": {
+    "grain": [
+     "event_id"
+    ]
+   },
+   "name": "stage_events",
+   "relation": "\"warehouse\".\"raw\".\"stage_events\"",
+   "schema": "raw",
+   "uniqueId": "source.datatrust.raw.stage_events"
+  }
+ },
+ "project": "datatrust"
+}

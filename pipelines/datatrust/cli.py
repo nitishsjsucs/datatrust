@@ -43,11 +43,28 @@ def _cmd_load(args: argparse.Namespace) -> int:
 
 def _cmd_build(args: argparse.Namespace) -> int:
     from datatrust import config
-    from datatrust.dbt.build import run_dbt
+    from datatrust.checks.results import classify, summarize
+    from datatrust.dbt.build import build_with_lineage
 
     db = Path(args.duckdb_path).resolve() if args.duckdb_path else config.duckdb_path()
-    res = run_dbt(["build"], target_path=config.DBT_DIR / "target", duckdb_path=db)
-    print(res.stdout)
+    target = Path(args.target_path).resolve() if args.target_path else config.DBT_DIR / "target"
+    res = build_with_lineage(target_path=target, duckdb_path=db)
+    if args.verbose:
+        print(res.stdout)
+    if not (target / "run_results.json").exists():
+        print(res.stdout, file=sys.stderr)
+        return res.returncode or 1
+    results = classify(res.run_results(), res.manifest())
+    print(
+        json.dumps(
+            {
+                "target_path": str(target),
+                "checks": summarize(results),
+                "failing": [r.checkId for r in results if r.status in ("fail", "error")],
+                "openlineage_events": len(res.openlineage_events()),
+            }
+        )
+    )
     return res.returncode
 
 
@@ -68,8 +85,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--duckdb-path", help=DUCKDB_HELP)
     p.set_defaults(func=_cmd_load)
 
-    p = sub.add_parser("build", help="dbt build against the loaded warehouse")
+    p = sub.add_parser("build", help="dbt-ol build: models, contracts, 40 checks, OpenLineage events")
     p.add_argument("--duckdb-path", help=DUCKDB_HELP)
+    p.add_argument("--target-path", help="dbt target directory (default dbt/target)")
+    p.add_argument("--verbose", action="store_true", help="print dbt output")
     p.set_defaults(func=_cmd_build)
 
     return parser

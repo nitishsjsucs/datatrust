@@ -1,12 +1,12 @@
 {
- "elapsed_time": 0.4737262725830078,
+ "elapsed_time": 0.470200777053833,
  "metadata": {
   "dbt_schema_version": "https://schemas.getdbt.com/dbt/run-results/v6.json",
   "dbt_version": "1.12.5",
   "env": {},
-  "generated_at": "2026-10-11T00:54:15.813921Z",
-  "invocation_id": "0db6803a-c350-4e0e-82f0-e8134d1d38cb",
-  "invocation_started_at": "2026-10-11T00:54:14.265849Z"
+  "generated_at": "2026-10-11T01:00:07.735396Z",
+  "invocation_id": "9a3dcc44-86c6-40e3-a785-696a2cff4040",
+  "invocation_started_at": "2026-10-11T01:00:06.200590Z"
  },
  "results": [
   {
@@ -14,7 +14,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    cast(compensation_id as bigint) as compensation_id,\n    cast(employee_id as bigint) as employee_id,\n    cast(currency as varchar) as currency,\n    base_salary_local_minor,\n    cast(cast(base_salary_local_minor as decimal(38,9)) * 0.01 as decimal(38,9)) as base_salary_local,\n    valid_from,\n    valid_to\nfrom \"warehouse\".\"raw\".\"compensation\"",
-   "execution_time": 0.042978763580322266,
+   "execution_time": 0.048570871353149414,
    "failures": null,
    "message": "Compilation Error in model stg_compensation (models/staging/stg_compensation.sql)\n  This model has an enforced contract that failed.\n  Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n  \n  | column_name             | definition_type | contract_type | mismatch_reason    |\n  | ----------------------- | --------------- | ------------- | ------------------ |\n  | base_salary_local_minor | VARCHAR         | BIGINT        | data type mismatch |\n  \n  \n  > in macro assert_columns_equivalent (macros/relations/column/columns_spec_ddl.sql)\n  > called by macro default__get_assert_columns_equivalent (macros/relations/column/columns_spec_ddl.sql)\n  > called by macro get_assert_columns_equivalent (macros/relations/column/columns_spec_ddl.sql)\n  > called by macro duckdb__create_view_as (macros/adapters.sql)\n  > called by macro create_view_as (macros/relations/view/create.sql)\n  > called by macro default__get_create_view_as_sql (macros/relations/view/create.sql)\n  > called by macro get_create_view_as_sql (macros/relations/view/create.sql)\n  > called by macro statement (macros/etc/statement.sql)\n  > called by macro materialization_view_default (macros/materializations/models/view.sql)\n  > called by model stg_compensation (models/staging/stg_compensation.sql)",
    "overload_results": null,
@@ -23,14 +23,14 @@
    "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.405772Z",
+     "completed_at": "2026-10-11T01:00:07.345647Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.403533Z"
+     "started_at": "2026-10-11T01:00:07.328738Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.434152Z",
+     "completed_at": "2026-10-11T01:00:07.359835Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.406148Z"
+     "started_at": "2026-10-11T01:00:07.346859Z"
     }
    ],
    "unique_id": "model.datatrust.stg_compensation"
@@ -42,7 +42,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    cast(department_id as bigint) as department_id,\n    cast(department_name as varchar) as department_name,\n    cast(cost_center as varchar) as cost_center\nfrom \"warehouse\".\"raw\".\"departments\"",
-   "execution_time": 0.05767107009887695,
+   "execution_time": 0.05366396903991699,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -51,14 +51,14 @@
    "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.406037Z",
+     "completed_at": "2026-10-11T01:00:07.330771Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.404703Z"
+     "started_at": "2026-10-11T01:00:07.329854Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.456545Z",
+     "completed_at": "2026-10-11T01:00:07.378018Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.420644Z"
+     "started_at": "2026-10-11T01:00:07.330928Z"
     }
    ],
    "unique_id": "model.datatrust.stg_departments"
@@ -69,36 +69,8 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "select\n    cast(candidate_id as bigint) as candidate_id,\n    cast(first_name as varchar) as first_name,\n    cast(last_name as varchar) as last_name,\n    cast(email as varchar) as email,\n    cast(phone as varchar) as phone,\n    created_at\nfrom \"warehouse\".\"raw\".\"candidates\"",
-   "execution_time": 0.06017184257507324,
-   "failures": null,
-   "message": "OK",
-   "overload_results": null,
-   "relation_name": "\"warehouse\".\"staging\".\"stg_candidates\"",
-   "status": "success",
-   "thread_id": "Thread-2 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.405912Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.402362Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.457876Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.419797Z"
-    }
-   ],
-   "unique_id": "model.datatrust.stg_candidates"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
    "compiled_code": "select\n    cast(application_id as bigint) as application_id,\n    cast(candidate_id as bigint) as candidate_id,\n    cast(requisition_id as bigint) as requisition_id,\n    cast(source_channel as varchar) as source_channel,\n    applied_at\nfrom \"warehouse\".\"raw\".\"applications\"",
-   "execution_time": 0.0626680850982666,
+   "execution_time": 0.05985689163208008,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -107,14 +79,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.418132Z",
+     "completed_at": "2026-10-11T01:00:07.344630Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.399885Z"
+     "started_at": "2026-10-11T01:00:07.325208Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.460759Z",
+     "completed_at": "2026-10-11T01:00:07.383030Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.421409Z"
+     "started_at": "2026-10-11T01:00:07.345921Z"
     }
    ],
    "unique_id": "model.datatrust.stg_applications"
@@ -125,8 +97,36 @@
    },
    "batch_results": null,
    "compiled": true,
+   "compiled_code": "select\n    cast(candidate_id as bigint) as candidate_id,\n    cast(first_name as varchar) as first_name,\n    cast(last_name as varchar) as last_name,\n    cast(email as varchar) as email,\n    cast(phone as varchar) as phone,\n    created_at\nfrom \"warehouse\".\"raw\".\"candidates\"",
+   "execution_time": 0.061396121978759766,
+   "failures": null,
+   "message": "OK",
+   "overload_results": null,
+   "relation_name": "\"warehouse\".\"staging\".\"stg_candidates\"",
+   "status": "success",
+   "thread_id": "Thread-2 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.337181Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.327614Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.383832Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.344787Z"
+    }
+   ],
+   "unique_id": "model.datatrust.stg_candidates"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
    "compiled_code": "select\n    cast(employee_id as bigint) as employee_id,\n    cast(first_name as varchar) as first_name,\n    cast(last_name as varchar) as last_name,\n    cast(work_email as varchar) as work_email,\n    birth_date,\n    hire_date,\n    termination_date\nfrom \"warehouse\".\"raw\".\"employees\"",
-   "execution_time": 0.03631019592285156,
+   "execution_time": 0.030315876007080078,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -135,14 +135,14 @@
    "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.456790Z",
+     "completed_at": "2026-10-11T01:00:07.383448Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.453789Z"
+     "started_at": "2026-10-11T01:00:07.381485Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.486353Z",
+     "completed_at": "2026-10-11T01:00:07.410042Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.457998Z"
+     "started_at": "2026-10-11T01:00:07.384844Z"
     }
    ],
    "unique_id": "model.datatrust.stg_employees"
@@ -154,7 +154,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    cast(currency as varchar) as currency,\n    rate_date,\n    cast(rate_to_usd as decimal(38,9)) as rate_to_usd\nfrom \"warehouse\".\"raw\".\"fx_rates\"",
-   "execution_time": 0.0317080020904541,
+   "execution_time": 0.03341317176818848,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -163,14 +163,14 @@
    "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.464916Z",
+     "completed_at": "2026-10-11T01:00:07.386813Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.462107Z"
+     "started_at": "2026-10-11T01:00:07.384174Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.491218Z",
+     "completed_at": "2026-10-11T01:00:07.415243Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.465397Z"
+     "started_at": "2026-10-11T01:00:07.387366Z"
     }
    ],
    "unique_id": "model.datatrust.stg_fx_rates"
@@ -182,23 +182,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    cast(hire_id as bigint) as hire_id,\n    cast(application_id as bigint) as application_id,\n    cast(employee_id as bigint) as employee_id,\n    hire_date\nfrom \"warehouse\".\"raw\".\"hires\"",
-   "execution_time": 0.03265690803527832,
+   "execution_time": 0.030970096588134766,
    "failures": null,
    "message": "OK",
    "overload_results": null,
    "relation_name": "\"warehouse\".\"staging\".\"stg_hires\"",
    "status": "success",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.466284Z",
+     "completed_at": "2026-10-11T01:00:07.392528Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.463945Z"
+     "started_at": "2026-10-11T01:00:07.390277Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.493580Z",
+     "completed_at": "2026-10-11T01:00:07.419058Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.467595Z"
+     "started_at": "2026-10-11T01:00:07.394206Z"
     }
    ],
    "unique_id": "model.datatrust.stg_hires"
@@ -210,23 +210,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    cast(assignment_id as bigint) as assignment_id,\n    cast(employee_id as bigint) as employee_id,\n    cast(department_id as bigint) as department_id,\n    cast(location_id as bigint) as location_id,\n    cast(job_title as varchar) as job_title,\n    cast(job_level as bigint) as job_level,\n    valid_from,\n    valid_to,\n    valid_to is null as is_current\nfrom \"warehouse\".\"raw\".\"job_assignments\"",
-   "execution_time": 0.029800891876220703,
+   "execution_time": 0.03127598762512207,
    "failures": null,
    "message": "OK",
    "overload_results": null,
    "relation_name": "\"warehouse\".\"staging\".\"stg_job_assignments\"",
    "status": "success",
-   "thread_id": "Thread-1 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.470360Z",
+     "completed_at": "2026-10-11T01:00:07.394080Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.468426Z"
+     "started_at": "2026-10-11T01:00:07.391073Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.493976Z",
+     "completed_at": "2026-10-11T01:00:07.419551Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.470538Z"
+     "started_at": "2026-10-11T01:00:07.395213Z"
     }
    ],
    "unique_id": "model.datatrust.stg_job_assignments"
@@ -238,7 +238,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    cast(location_id as bigint) as location_id,\n    cast(location_name as varchar) as location_name,\n    cast(country_code as varchar) as country_code,\n    cast(timezone as varchar) as location_tz,\n    cast(currency as varchar) as currency\nfrom \"warehouse\".\"raw\".\"locations\"",
-   "execution_time": 0.03360605239868164,
+   "execution_time": 0.030346155166625977,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -247,14 +247,14 @@
    "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.494253Z",
+     "completed_at": "2026-10-11T01:00:07.416949Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.491588Z"
+     "started_at": "2026-10-11T01:00:07.413989Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.522538Z",
+     "completed_at": "2026-10-11T01:00:07.443098Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.495102Z"
+     "started_at": "2026-10-11T01:00:07.417379Z"
     }
    ],
    "unique_id": "model.datatrust.stg_locations"
@@ -266,7 +266,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    cast(offer_id as bigint) as offer_id,\n    cast(application_id as bigint) as application_id,\n    cast(offer_status as varchar) as offer_status,\n    offered_at,\n    responded_at\nfrom \"warehouse\".\"raw\".\"offers\"",
-   "execution_time": 0.030333995819091797,
+   "execution_time": 0.03168892860412598,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -275,45 +275,17 @@
    "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.499047Z",
+     "completed_at": "2026-10-11T01:00:07.422301Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.497368Z"
+     "started_at": "2026-10-11T01:00:07.420604Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.525898Z",
+     "completed_at": "2026-10-11T01:00:07.448388Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.501136Z"
+     "started_at": "2026-10-11T01:00:07.423684Z"
     }
    ],
    "unique_id": "model.datatrust.stg_offers"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
-   "compiled_code": "select\n    cast(payroll_line_id as bigint) as payroll_line_id,\n    cast(employee_id as bigint) as employee_id,\n    pay_month,\n    cast(currency as varchar) as currency,\n    gross_pay_local_minor,\n    cast(cast(gross_pay_local_minor as decimal(38,9)) * 0.01 as decimal(38,9)) as gross_pay_local,\n    paid_at\nfrom \"warehouse\".\"raw\".\"payroll_lines\"",
-   "execution_time": 0.029350996017456055,
-   "failures": null,
-   "message": "OK",
-   "overload_results": null,
-   "relation_name": "\"warehouse\".\"staging\".\"stg_payroll_lines\"",
-   "status": "success",
-   "thread_id": "Thread-2 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.502662Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.499166Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.526912Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.503075Z"
-    }
-   ],
-   "unique_id": "model.datatrust.stg_payroll_lines"
   },
   {
    "adapter_response": {},
@@ -336,24 +308,52 @@
    },
    "batch_results": null,
    "compiled": true,
+   "compiled_code": "select\n    cast(payroll_line_id as bigint) as payroll_line_id,\n    cast(employee_id as bigint) as employee_id,\n    pay_month,\n    cast(currency as varchar) as currency,\n    gross_pay_local_minor,\n    cast(cast(gross_pay_local_minor as decimal(38,9)) * 0.01 as decimal(38,9)) as gross_pay_local,\n    paid_at\nfrom \"warehouse\".\"raw\".\"payroll_lines\"",
+   "execution_time": 0.033035993576049805,
+   "failures": null,
+   "message": "OK",
+   "overload_results": null,
+   "relation_name": "\"warehouse\".\"staging\".\"stg_payroll_lines\"",
+   "status": "success",
+   "thread_id": "Thread-1 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.428067Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.424953Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.454813Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.428378Z"
+    }
+   ],
+   "unique_id": "model.datatrust.stg_payroll_lines"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
    "compiled_code": "select\n    cast(requisition_id as bigint) as requisition_id,\n    cast(department_id as bigint) as department_id,\n    cast(location_id as bigint) as location_id,\n    cast(job_title as varchar) as job_title,\n    cast(openings as bigint) as openings,\n    opened_at\nfrom \"warehouse\".\"raw\".\"requisitions\"",
-   "execution_time": 0.03455209732055664,
+   "execution_time": 0.032377004623413086,
    "failures": null,
    "message": "OK",
    "overload_results": null,
    "relation_name": "\"warehouse\".\"staging\".\"stg_requisitions\"",
    "status": "success",
-   "thread_id": "Thread-1 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.503898Z",
+     "completed_at": "2026-10-11T01:00:07.429260Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.500235Z"
+     "started_at": "2026-10-11T01:00:07.426361Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.531600Z",
+     "completed_at": "2026-10-11T01:00:07.456596Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.504262Z"
+     "started_at": "2026-10-11T01:00:07.430201Z"
     }
    ],
    "unique_id": "model.datatrust.stg_requisitions"
@@ -364,36 +364,8 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "\n    \n    \n\nselect\n    application_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"staging\".\"stg_applications\"\nwhere application_id is not null\ngroup by application_id\nhaving count(*) > 1\n\n\n",
-   "execution_time": 0.02728104591369629,
-   "failures": 0,
-   "message": null,
-   "overload_results": null,
-   "relation_name": null,
-   "status": "pass",
-   "thread_id": "Thread-4 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.543898Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.537978Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.558793Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.550125Z"
-    }
-   ],
-   "unique_id": "test.datatrust.dq_u03_unique_stg_applications_application_id.92ffc37530"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
-   "compiled_code": "\n    \n    \n\nwith child as (\n    select candidate_id as from_field\n    from \"warehouse\".\"staging\".\"stg_applications\"\n    where candidate_id is not null\n),\n\nparent as (\n    select candidate_id as to_field\n    from \"warehouse\".\"staging\".\"stg_candidates\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
-   "execution_time": 0.03027629852294922,
+   "compiled_code": "\n    \n    \n\nselect\n    employee_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"staging\".\"stg_employees\"\nwhere employee_id is not null\ngroup by employee_id\nhaving count(*) > 1\n\n\n",
+   "execution_time": 0.021329879760742188,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -402,42 +374,14 @@
    "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.543761Z",
+     "completed_at": "2026-10-11T01:00:07.476807Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.534005Z"
+     "started_at": "2026-10-11T01:00:07.467799Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.559548Z",
+     "completed_at": "2026-10-11T01:00:07.485700Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.544155Z"
-    }
-   ],
-   "unique_id": "test.datatrust.dq_r03_applications_candidate_exists.ab759f0286"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
-   "compiled_code": "\n    \n    \n\nselect\n    employee_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"staging\".\"stg_employees\"\nwhere employee_id is not null\ngroup by employee_id\nhaving count(*) > 1\n\n\n",
-   "execution_time": 0.022282838821411133,
-   "failures": 0,
-   "message": null,
-   "overload_results": null,
-   "relation_name": null,
-   "status": "pass",
-   "thread_id": "Thread-1 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.551423Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.541358Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.561605Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.551782Z"
+     "started_at": "2026-10-11T01:00:07.476926Z"
     }
    ],
    "unique_id": "test.datatrust.dq_u01_unique_stg_employees_employee_id.2f68be0907"
@@ -448,8 +392,36 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "with events as (\n    select * from \"warehouse\".\"raw\".\"stage_events\"\n),\n\napplications as (\n    select application_id, requisition_id from \"warehouse\".\"raw\".\"applications\"\n),\n\nrequisitions as (\n    select requisition_id, location_id from \"warehouse\".\"raw\".\"requisitions\"\n),\n\nlocations as (\n    select location_id, timezone from \"warehouse\".\"raw\".\"locations\"\n),\n\nmapped as (\n    select\n        e.event_id,\n        e.application_id,\n        e.stage as stage_label,\n        case e.stage\n            when 'Applied' then 'applied'\n            when 'Phone Screen' then 'screen'\n            when 'Onsite Interview' then 'onsite'\n            when 'Offer Extended' then 'offer'\n            when 'Hired' then 'hired'\n            when 'Rejected' then 'rejected'\n            when 'Withdrawn' then 'withdrawn'\n            when 'Offer Declined' then 'declined'\n            else e.stage\n        end as stage,\n        e.entered_at,\n        e.source_system,\n        r.location_id,\n        l.timezone as location_tz\n    from events as e\n    left join applications as a on e.application_id = a.application_id\n    left join requisitions as r on a.requisition_id = r.requisition_id\n    left join locations as l on r.location_id = l.location_id\n)\n\nselect\n    cast(event_id as bigint) as event_id,\n    cast(application_id as bigint) as application_id,\n    cast(stage_label as varchar) as stage_label,\n    cast(stage as varchar) as stage,\n    cast(\n        case stage\n            when 'applied' then 1\n            when 'screen' then 2\n            when 'onsite' then 3\n            when 'offer' then 4\n            when 'hired' then 5\n            when 'rejected' then 5\n            when 'withdrawn' then 5\n            when 'declined' then 5\n        end as bigint\n    ) as stage_order,\n    entered_at,\n    cast(source_system as varchar) as source_system,\n    cast(location_id as bigint) as location_id,\n    cast(location_tz as varchar) as location_tz,\n    cast(timezone(location_tz, entered_at) as date) as event_local_date,\n    cast(extract(hour from timezone(location_tz, entered_at)) as bigint) as event_local_hour\nfrom mapped",
-   "execution_time": 0.04478311538696289,
+   "compiled_code": "\n    \n    \n\nselect\n    application_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"staging\".\"stg_applications\"\nwhere application_id is not null\ngroup by application_id\nhaving count(*) > 1\n\n\n",
+   "execution_time": 0.03088521957397461,
+   "failures": 0,
+   "message": null,
+   "overload_results": null,
+   "relation_name": null,
+   "status": "pass",
+   "thread_id": "Thread-4 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.467644Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.458800Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.485299Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.469878Z"
+    }
+   ],
+   "unique_id": "test.datatrust.dq_u03_unique_stg_applications_application_id.92ffc37530"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
+   "compiled_code": "with events as (\n    select event_id, application_id, stage, entered_at, source_system\n    from \"warehouse\".\"raw\".\"stage_events\"\n),\n\napplications as (\n    select application_id, requisition_id from \"warehouse\".\"raw\".\"applications\"\n),\n\nrequisitions as (\n    select requisition_id, location_id from \"warehouse\".\"raw\".\"requisitions\"\n),\n\nlocations as (\n    select location_id, timezone from \"warehouse\".\"raw\".\"locations\"\n),\n\nmapped as (\n    select\n        e.event_id,\n        e.application_id,\n        e.stage as stage_label,\n        case e.stage\n            when 'Applied' then 'applied'\n            when 'Phone Screen' then 'screen'\n            when 'Onsite Interview' then 'onsite'\n            when 'Offer Extended' then 'offer'\n            when 'Hired' then 'hired'\n            when 'Rejected' then 'rejected'\n            when 'Withdrawn' then 'withdrawn'\n            when 'Offer Declined' then 'declined'\n            else e.stage\n        end as stage,\n        e.entered_at,\n        e.source_system,\n        r.location_id,\n        l.timezone as location_tz\n    from events as e\n    left join applications as a on e.application_id = a.application_id\n    left join requisitions as r on a.requisition_id = r.requisition_id\n    left join locations as l on r.location_id = l.location_id\n)\n\nselect\n    cast(event_id as bigint) as event_id,\n    cast(application_id as bigint) as application_id,\n    cast(stage_label as varchar) as stage_label,\n    cast(stage as varchar) as stage,\n    cast(\n        case stage\n            when 'applied' then 1\n            when 'screen' then 2\n            when 'onsite' then 3\n            when 'offer' then 4\n            when 'hired' then 5\n            when 'rejected' then 5\n            when 'withdrawn' then 5\n            when 'declined' then 5\n        end as bigint\n    ) as stage_order,\n    entered_at,\n    cast(source_system as varchar) as source_system,\n    cast(location_id as bigint) as location_id,\n    cast(location_tz as varchar) as location_tz,\n    cast(timezone(location_tz, entered_at) as date) as event_local_date,\n    cast(extract(hour from timezone(location_tz, entered_at)) as bigint) as event_local_hour\nfrom mapped",
+   "execution_time": 0.04016685485839844,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -458,14 +430,14 @@
    "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.531086Z",
+     "completed_at": "2026-10-11T01:00:07.451970Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.527942Z"
+     "started_at": "2026-10-11T01:00:07.448504Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.570602Z",
+     "completed_at": "2026-10-11T01:00:07.486897Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.531977Z"
+     "started_at": "2026-10-11T01:00:07.452439Z"
     }
    ],
    "unique_id": "model.datatrust.stg_stage_events"
@@ -476,36 +448,8 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "-- C05: every rate is within 15% of its trailing 30-day median (current row and 29 preceding days).\nwith windowed as (\n    select\n        currency,\n        rate_date,\n        rate_to_usd,\n        median(rate_to_usd) over (partition by currency order by rate_date rows between 29 preceding and current row) as trailing_window\n    from \"warehouse\".\"staging\".\"stg_fx_rates\"\n),\n\nmedians as (\n    select\n        currency,\n        rate_date,\n        rate_to_usd,\n        trailing_window as trailing_median\n    from windowed\n)\n\nselect\n    currency,\n    rate_date,\n    rate_to_usd,\n    trailing_median\nfrom medians\nwhere abs(rate_to_usd - trailing_median) > 0.15 * trailing_median",
-   "execution_time": 0.0169370174407959,
-   "failures": 0,
-   "message": null,
-   "overload_results": null,
-   "relation_name": null,
-   "status": "pass",
-   "thread_id": "Thread-2 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.570728Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.566365Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.580241Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.571185Z"
-    }
-   ],
-   "unique_id": "test.datatrust.dq_c05_fx_within_band"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
-   "compiled_code": "\nselect\n    currency, rate_date,\n    count(*) as n_rows\nfrom \"warehouse\".\"staging\".\"stg_fx_rates\"\ngroup by currency, rate_date\nhaving count(*) > 1\n",
-   "execution_time": 0.020596027374267578,
+   "compiled_code": "\n    \n    \n\nwith child as (\n    select candidate_id as from_field\n    from \"warehouse\".\"staging\".\"stg_applications\"\n    where candidate_id is not null\n),\n\nparent as (\n    select candidate_id as to_field\n    from \"warehouse\".\"staging\".\"stg_candidates\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
+   "execution_time": 0.026385068893432617,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -514,14 +458,42 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.571816Z",
+     "completed_at": "2026-10-11T01:00:07.475798Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.567552Z"
+     "started_at": "2026-10-11T01:00:07.462564Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.583276Z",
+     "completed_at": "2026-10-11T01:00:07.486107Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.572142Z"
+     "started_at": "2026-10-11T01:00:07.476135Z"
+    }
+   ],
+   "unique_id": "test.datatrust.dq_r03_applications_candidate_exists.ab759f0286"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
+   "compiled_code": "\nselect\n    currency, rate_date,\n    count(*) as n_rows\nfrom \"warehouse\".\"staging\".\"stg_fx_rates\"\ngroup by currency, rate_date\nhaving count(*) > 1\n",
+   "execution_time": 0.016097068786621094,
+   "failures": 0,
+   "message": null,
+   "overload_results": null,
+   "relation_name": null,
+   "status": "pass",
+   "thread_id": "Thread-3 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.497958Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.492114Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.504734Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.498090Z"
     }
    ],
    "unique_id": "test.datatrust.dq_u07_unique_stg_fx_rates_currency_rate_date.c4c842db72"
@@ -532,52 +504,24 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "-- C03: no non-USD currency repeats the same rate on more than 3 consecutive days (a stale feed).\nwith flagged as (\n    select\n        currency,\n        rate_date,\n        rate_to_usd,\n        case\n            when rate_to_usd = lag(rate_to_usd) over (partition by currency order by rate_date) then 0\n            else 1\n        end as starts_run\n    from \"warehouse\".\"staging\".\"stg_fx_rates\"\n    where currency <> 'USD'\n),\n\nruns as (\n    select\n        currency,\n        rate_date,\n        sum(starts_run) over (\n            partition by currency order by rate_date rows between unbounded preceding and current row\n        ) as run_id\n    from flagged\n)\n\nselect\n    currency,\n    run_id,\n    min(rate_date) as run_start,\n    count(*) as run_days\nfrom runs\ngroup by currency, run_id\nhaving count(*) > 3",
-   "execution_time": 0.02432990074157715,
-   "failures": 0,
-   "message": null,
-   "overload_results": null,
-   "relation_name": null,
-   "status": "pass",
-   "thread_id": "Thread-4 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.569565Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.564785Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.586368Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.569884Z"
-    }
-   ],
-   "unique_id": "test.datatrust.dq_c03_fx_not_stale"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
    "compiled_code": "\n    \n    \n\nwith child as (\n    select employee_id as from_field\n    from \"warehouse\".\"staging\".\"stg_hires\"\n    where employee_id is not null\n),\n\nparent as (\n    select employee_id as to_field\n    from \"warehouse\".\"staging\".\"stg_employees\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
-   "execution_time": 0.017477989196777344,
+   "execution_time": 0.01613593101501465,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-3 (worker)",
+   "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.578386Z",
+     "completed_at": "2026-10-11T01:00:07.498625Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.574108Z"
+     "started_at": "2026-10-11T01:00:07.494133Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.589219Z",
+     "completed_at": "2026-10-11T01:00:07.505383Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.578517Z"
+     "started_at": "2026-10-11T01:00:07.498751Z"
     }
    ],
    "unique_id": "test.datatrust.dq_r05_hires_employee_exists.872341b330"
@@ -588,8 +532,36 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "\n    \n    \n\nselect\n    hire_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"staging\".\"stg_hires\"\nwhere hire_id is not null\ngroup by hire_id\nhaving count(*) > 1\n\n\n",
-   "execution_time": 0.018286705017089844,
+   "compiled_code": "-- C05: every rate is within 15% of its trailing 30-day median (current row and 29 preceding days).\nwith windowed as (\n    select\n        currency,\n        rate_date,\n        rate_to_usd,\n        median(rate_to_usd) over (partition by currency order by rate_date rows between 29 preceding and current row) as trailing_window\n    from \"warehouse\".\"staging\".\"stg_fx_rates\"\n),\n\nmedians as (\n    select\n        currency,\n        rate_date,\n        rate_to_usd,\n        trailing_window as trailing_median\n    from windowed\n)\n\nselect\n    currency,\n    rate_date,\n    rate_to_usd,\n    trailing_median\nfrom medians\nwhere abs(rate_to_usd - trailing_median) > 0.15 * trailing_median",
+   "execution_time": 0.022132158279418945,
+   "failures": 0,
+   "message": null,
+   "overload_results": null,
+   "relation_name": null,
+   "status": "pass",
+   "thread_id": "Thread-4 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.500176Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.491428Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.508607Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.500304Z"
+    }
+   ],
+   "unique_id": "test.datatrust.dq_c05_fx_within_band"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
+   "compiled_code": "-- C03: no non-USD currency repeats the same rate on more than 3 consecutive days (a stale feed).\nwith flagged as (\n    select\n        currency,\n        rate_date,\n        rate_to_usd,\n        case\n            when rate_to_usd = lag(rate_to_usd) over (partition by currency order by rate_date) then 0\n            else 1\n        end as starts_run\n    from \"warehouse\".\"staging\".\"stg_fx_rates\"\n    where currency <> 'USD'\n),\n\nruns as (\n    select\n        currency,\n        rate_date,\n        sum(starts_run) over (\n            partition by currency order by rate_date rows between unbounded preceding and current row\n        ) as run_id\n    from flagged\n)\n\nselect\n    currency,\n    run_id,\n    min(rate_date) as run_start,\n    count(*) as run_days\nfrom runs\ngroup by currency, run_id\nhaving count(*) > 3",
+   "execution_time": 0.023857831954956055,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -598,14 +570,42 @@
    "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.587983Z",
+     "completed_at": "2026-10-11T01:00:07.499229Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.583398Z"
+     "started_at": "2026-10-11T01:00:07.490778Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.599355Z",
+     "completed_at": "2026-10-11T01:00:07.509888Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.589351Z"
+     "started_at": "2026-10-11T01:00:07.499536Z"
+    }
+   ],
+   "unique_id": "test.datatrust.dq_c03_fx_not_stale"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
+   "compiled_code": "\n    \n    \n\nselect\n    hire_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"staging\".\"stg_hires\"\nwhere hire_id is not null\ngroup by hire_id\nhaving count(*) > 1\n\n\n",
+   "execution_time": 0.01577305793762207,
+   "failures": 0,
+   "message": null,
+   "overload_results": null,
+   "relation_name": null,
+   "status": "pass",
+   "thread_id": "Thread-3 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.513564Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.510010Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.523308Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.514132Z"
     }
    ],
    "unique_id": "test.datatrust.dq_u04_unique_stg_hires_hire_id.e21d88ec4d"
@@ -617,7 +617,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- H01: no two job assignment intervals of one employee overlap (half-open [valid_from, valid_to)).\nselect\n    a.employee_id,\n    a.assignment_id,\n    b.assignment_id as other_assignment_id\nfrom \"warehouse\".\"staging\".\"stg_job_assignments\" as a\ninner join \"warehouse\".\"staging\".\"stg_job_assignments\" as b\n    on a.employee_id = b.employee_id\n    and a.assignment_id < b.assignment_id\n    and a.valid_from < coalesce(b.valid_to, date '9999-12-31')\n    and b.valid_from < coalesce(a.valid_to, date '9999-12-31')",
-   "execution_time": 0.015357017517089844,
+   "execution_time": 0.017657756805419922,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -626,14 +626,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.591339Z",
+     "completed_at": "2026-10-11T01:00:07.514024Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.588303Z"
+     "started_at": "2026-10-11T01:00:07.512401Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.601510Z",
+     "completed_at": "2026-10-11T01:00:07.525157Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.592558Z"
+     "started_at": "2026-10-11T01:00:07.514904Z"
     }
    ],
    "unique_id": "test.datatrust.dq_h01_no_overlapping_assignments"
@@ -644,36 +644,8 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "\nselect *\nfrom \"warehouse\".\"staging\".\"stg_job_assignments\"\nwhere not coalesce((valid_to is null or valid_to > valid_from), false)\n",
-   "execution_time": 0.012093305587768555,
-   "failures": 0,
-   "message": null,
-   "overload_results": null,
-   "relation_name": null,
-   "status": "pass",
-   "thread_id": "Thread-3 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.596555Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.593607Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.604032Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.596933Z"
-    }
-   ],
-   "unique_id": "test.datatrust.dq_h03_assignment_valid_to_after_valid_from.bf8cc3aac5"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
    "compiled_code": "-- H02: assignment history is contiguous from hire to termination: each interval ends where the next one\n-- starts, the last one is open for active employees and ends the day after termination for leavers.\nwith ordered as (\n    select\n        employee_id,\n        assignment_id,\n        valid_from,\n        valid_to,\n        lead(valid_from) over (partition by employee_id order by valid_from, assignment_id) as next_valid_from\n    from \"warehouse\".\"staging\".\"stg_job_assignments\"\n)\n\nselect\n    o.employee_id,\n    o.assignment_id,\n    o.valid_from,\n    o.valid_to,\n    o.next_valid_from\nfrom ordered as o\ninner join \"warehouse\".\"staging\".\"stg_employees\" as e\n    on e.employee_id = o.employee_id\nwhere (o.next_valid_from is not null and (o.valid_to is null or o.valid_to <> o.next_valid_from))\n    or (o.next_valid_from is null and e.termination_date is null and o.valid_to is not null)\n    or (\n        o.next_valid_from is null\n        and e.termination_date is not null\n        and (o.valid_to is null or o.valid_to <> (e.termination_date + 1))\n    )",
-   "execution_time": 0.015795230865478516,
+   "execution_time": 0.014456033706665039,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -682,14 +654,14 @@
    "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.595739Z",
+     "completed_at": "2026-10-11T01:00:07.517548Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.591724Z"
+     "started_at": "2026-10-11T01:00:07.515967Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.604629Z",
+     "completed_at": "2026-10-11T01:00:07.527217Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.596112Z"
+     "started_at": "2026-10-11T01:00:07.519816Z"
     }
    ],
    "unique_id": "test.datatrust.dq_h02_assignment_history_contiguous"
@@ -700,8 +672,8 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "-- H04: every active employee has exactly one open (current) assignment.\nselect\n    e.employee_id,\n    count(a.assignment_id) as n_current\nfrom \"warehouse\".\"staging\".\"stg_employees\" as e\nleft join \"warehouse\".\"staging\".\"stg_job_assignments\" as a\n    on a.employee_id = e.employee_id\n    and a.valid_to is null\nwhere e.termination_date is null\ngroup by e.employee_id\nhaving count(a.assignment_id) <> 1",
-   "execution_time": 0.017973899841308594,
+   "compiled_code": "\nselect *\nfrom \"warehouse\".\"staging\".\"stg_job_assignments\"\nwhere not coalesce((valid_to is null or valid_to > valid_from), false)\n",
+   "execution_time": 0.014030694961547852,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -710,14 +682,42 @@
    "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.605096Z",
+     "completed_at": "2026-10-11T01:00:07.520648Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.603159Z"
+     "started_at": "2026-10-11T01:00:07.517665Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.618956Z",
+     "completed_at": "2026-10-11T01:00:07.528848Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.605601Z"
+     "started_at": "2026-10-11T01:00:07.521035Z"
+    }
+   ],
+   "unique_id": "test.datatrust.dq_h03_assignment_valid_to_after_valid_from.bf8cc3aac5"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
+   "compiled_code": "-- H04: every active employee has exactly one open (current) assignment.\nselect\n    e.employee_id,\n    count(a.assignment_id) as n_current\nfrom \"warehouse\".\"staging\".\"stg_employees\" as e\nleft join \"warehouse\".\"staging\".\"stg_job_assignments\" as a\n    on a.employee_id = e.employee_id\n    and a.valid_to is null\nwhere e.termination_date is null\ngroup by e.employee_id\nhaving count(a.assignment_id) <> 1",
+   "execution_time": 0.0188448429107666,
+   "failures": 0,
+   "message": null,
+   "overload_results": null,
+   "relation_name": null,
+   "status": "pass",
+   "thread_id": "Thread-3 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.529951Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.527629Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.544105Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.531021Z"
     }
    ],
    "unique_id": "test.datatrust.dq_h04_one_current_assignment_per_active_employee"
@@ -729,7 +729,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- H06: the first assignment of every employee starts on the hire date.\nwith first_assignment as (\n    select\n        employee_id,\n        min(valid_from) as first_valid_from\n    from \"warehouse\".\"staging\".\"stg_job_assignments\"\n    group by employee_id\n)\n\nselect\n    e.employee_id,\n    e.hire_date,\n    f.first_valid_from\nfrom \"warehouse\".\"staging\".\"stg_employees\" as e\nleft join first_assignment as f\n    on f.employee_id = e.employee_id\nwhere f.first_valid_from is null\n    or f.first_valid_from <> e.hire_date",
-   "execution_time": 0.017294883728027344,
+   "execution_time": 0.01782393455505371,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -738,14 +738,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.608781Z",
+     "completed_at": "2026-10-11T01:00:07.532101Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.607344Z"
+     "started_at": "2026-10-11T01:00:07.530244Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.622420Z",
+     "completed_at": "2026-10-11T01:00:07.546131Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.609202Z"
+     "started_at": "2026-10-11T01:00:07.532635Z"
     }
    ],
    "unique_id": "test.datatrust.dq_h06_first_assignment_starts_at_hire"
@@ -757,23 +757,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "\n    \n    \n\nwith child as (\n    select employee_id as from_field\n    from \"warehouse\".\"staging\".\"stg_job_assignments\"\n    where employee_id is not null\n),\n\nparent as (\n    select employee_id as to_field\n    from \"warehouse\".\"staging\".\"stg_employees\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
-   "execution_time": 0.018734216690063477,
+   "execution_time": 0.01872730255126953,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-3 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.617372Z",
+     "completed_at": "2026-10-11T01:00:07.537701Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.609831Z"
+     "started_at": "2026-10-11T01:00:07.533302Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.625226Z",
+     "completed_at": "2026-10-11T01:00:07.549624Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.617711Z"
+     "started_at": "2026-10-11T01:00:07.541402Z"
     }
    ],
    "unique_id": "test.datatrust.dq_r01_job_assignments_employee_exists.67b3bf2a92"
@@ -785,23 +785,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "\n    \n    \n\nwith child as (\n    select department_id as from_field\n    from \"warehouse\".\"staging\".\"stg_job_assignments\"\n    where department_id is not null\n),\n\nparent as (\n    select department_id as to_field\n    from \"warehouse\".\"staging\".\"stg_departments\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
-   "execution_time": 0.022099018096923828,
+   "execution_time": 0.01820087432861328,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-4 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.618444Z",
+     "completed_at": "2026-10-11T01:00:07.542438Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.613759Z"
+     "started_at": "2026-10-11T01:00:07.537966Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.626906Z",
+     "completed_at": "2026-10-11T01:00:07.550202Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.619107Z"
+     "started_at": "2026-10-11T01:00:07.542698Z"
     }
    ],
    "unique_id": "test.datatrust.dq_r02_job_assignments_department_exists.8e8f712f7b"
@@ -813,23 +813,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- C04: every currency in use has a rate for every day of the 2025 calendar.\nwith currencies as (\n    select distinct currency from \"warehouse\".\"staging\".\"stg_locations\"\n),\n\ncalendar as (\n    select d as rate_date\n    from (select cast(unnest(range(date '2025-01-01', date '2025-12-31' + 1, interval 1 day)) as date) as d) as spine\n)\n\nselect\n    c.currency,\n    k.rate_date\nfrom currencies as c\ncross join calendar as k\nleft join \"warehouse\".\"staging\".\"stg_fx_rates\" as f\n    on f.currency = c.currency\n    and f.rate_date = k.rate_date\nwhere f.rate_date is null",
-   "execution_time": 0.016839981079101562,
+   "execution_time": 0.016821861267089844,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.625628Z",
+     "completed_at": "2026-10-11T01:00:07.550853Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.623631Z"
+     "started_at": "2026-10-11T01:00:07.548337Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.638363Z",
+     "completed_at": "2026-10-11T01:00:07.562617Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.626169Z"
+     "started_at": "2026-10-11T01:00:07.551343Z"
     }
    ],
    "unique_id": "test.datatrust.dq_c04_fx_complete_calendar"
@@ -841,7 +841,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "\n    \n    \n\nwith child as (\n    select application_id as from_field\n    from \"warehouse\".\"staging\".\"stg_offers\"\n    where application_id is not null\n),\n\nparent as (\n    select application_id as to_field\n    from \"warehouse\".\"staging\".\"stg_applications\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
-   "execution_time": 0.014887809753417969,
+   "execution_time": 0.01424407958984375,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -850,14 +850,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.632986Z",
+     "completed_at": "2026-10-11T01:00:07.556271Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.627983Z"
+     "started_at": "2026-10-11T01:00:07.551803Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.640575Z",
+     "completed_at": "2026-10-11T01:00:07.563631Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.633423Z"
+     "started_at": "2026-10-11T01:00:07.556795Z"
     }
    ],
    "unique_id": "test.datatrust.dq_r06_offers_application_exists.c70599e8e2"
@@ -869,23 +869,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- H07: no payroll line is posted for a month after the employee's termination month.\nselect\n    p.payroll_line_id,\n    p.employee_id,\n    p.pay_month\nfrom \"warehouse\".\"staging\".\"stg_payroll_lines\" as p\ninner join \"warehouse\".\"staging\".\"stg_employees\" as e\n    on e.employee_id = p.employee_id\nwhere e.termination_date is not null\n    and p.pay_month > cast(date_trunc('month', e.termination_date) as date)",
-   "execution_time": 0.01818704605102539,
+   "execution_time": 0.017985820770263672,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-4 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.637019Z",
+     "completed_at": "2026-10-11T01:00:07.560851Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.635152Z"
+     "started_at": "2026-10-11T01:00:07.558466Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.647139Z",
+     "completed_at": "2026-10-11T01:00:07.567342Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.637147Z"
+     "started_at": "2026-10-11T01:00:07.561124Z"
     }
    ],
    "unique_id": "test.datatrust.dq_h07_no_payroll_after_termination"
@@ -897,23 +897,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- R08: every hire has an accepted offer on the same application.\nselect\n    h.hire_id,\n    h.application_id\nfrom \"warehouse\".\"staging\".\"stg_hires\" as h\nleft join \"warehouse\".\"staging\".\"stg_offers\" as o\n    on o.application_id = h.application_id\n    and o.offer_status = 'accepted'\nwhere o.offer_id is null",
-   "execution_time": 0.019452333450317383,
+   "execution_time": 0.020554780960083008,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-3 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.636367Z",
+     "completed_at": "2026-10-11T01:00:07.560118Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.634153Z"
+     "started_at": "2026-10-11T01:00:07.557629Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.647522Z",
+     "completed_at": "2026-10-11T01:00:07.575232Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.636532Z"
+     "started_at": "2026-10-11T01:00:07.560248Z"
     }
    ],
    "unique_id": "test.datatrust.dq_r08_hire_has_accepted_offer"
@@ -925,23 +925,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "\n    \n    \n\nwith child as (\n    select employee_id as from_field\n    from \"warehouse\".\"staging\".\"stg_payroll_lines\"\n    where employee_id is not null\n),\n\nparent as (\n    select employee_id as to_field\n    from \"warehouse\".\"staging\".\"stg_employees\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
-   "execution_time": 0.01969003677368164,
+   "execution_time": 0.019922971725463867,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.647773Z",
+     "completed_at": "2026-10-11T01:00:07.575844Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.642585Z"
+     "started_at": "2026-10-11T01:00:07.567700Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.660716Z",
+     "completed_at": "2026-10-11T01:00:07.585051Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.651581Z"
+     "started_at": "2026-10-11T01:00:07.576236Z"
     }
    ],
    "unique_id": "test.datatrust.dq_r07_payroll_lines_employee_exists.c11b28335f"
@@ -953,7 +953,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "\n    \n    \n\nwith child as (\n    select requisition_id as from_field\n    from \"warehouse\".\"staging\".\"stg_applications\"\n    where requisition_id is not null\n),\n\nparent as (\n    select requisition_id as to_field\n    from \"warehouse\".\"staging\".\"stg_requisitions\"\n)\n\nselect\n    from_field\n\nfrom child\nleft join parent\n    on child.from_field = parent.to_field\n\nwhere parent.to_field is null\n\n\n",
-   "execution_time": 0.016456127166748047,
+   "execution_time": 0.020831823348999023,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -962,14 +962,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.652508Z",
+     "completed_at": "2026-10-11T01:00:07.576673Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.648085Z"
+     "started_at": "2026-10-11T01:00:07.571200Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.661751Z",
+     "completed_at": "2026-10-11T01:00:07.586196Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.653116Z"
+     "started_at": "2026-10-11T01:00:07.577117Z"
     }
    ],
    "unique_id": "test.datatrust.dq_r04_applications_requisition_exists.913b6f6a00"
@@ -981,23 +981,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "\n    \n    \n\nwith all_values as (\n\n    select\n        stage as value_field,\n        count(*) as n_records\n\n    from \"warehouse\".\"staging\".\"stg_stage_events\"\n    group by stage\n\n)\n\nselect *\nfrom all_values\nwhere value_field not in (\n    'applied','screen','onsite','offer','hired','rejected','withdrawn','declined'\n)\n\n\n",
-   "execution_time": 0.014841079711914062,
+   "execution_time": 0.012416839599609375,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-4 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.658782Z",
+     "completed_at": "2026-10-11T01:00:07.581268Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.655444Z"
+     "started_at": "2026-10-11T01:00:07.578627Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.667990Z",
+     "completed_at": "2026-10-11T01:00:07.588261Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.659301Z"
+     "started_at": "2026-10-11T01:00:07.581556Z"
     }
    ],
    "unique_id": "test.datatrust.dq_s01_stage_accepted_values.57f354165a"
@@ -1009,23 +1009,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- S02: consecutive stages of an application (in time order) are an allowed transition.\nwith ordered as (\n    select\n        application_id,\n        stage,\n        lead(stage) over (partition by application_id order by entered_at, event_id) as next_stage\n    from \"warehouse\".\"staging\".\"stg_stage_events\"\n)\n\nselect\n    application_id,\n    stage,\n    next_stage\nfrom ordered\nwhere next_stage is not null\n    and concat(stage, '>', next_stage) not in (\n        'applied>screen', 'applied>rejected', 'applied>withdrawn',\n        'screen>onsite', 'screen>rejected', 'screen>withdrawn',\n        'onsite>offer', 'onsite>rejected', 'onsite>withdrawn',\n        'offer>hired', 'offer>declined', 'offer>withdrawn'\n    )",
-   "execution_time": 0.018374919891357422,
+   "execution_time": 0.01592087745666504,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-3 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.658919Z",
+     "completed_at": "2026-10-11T01:00:07.583514Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.657590Z"
+     "started_at": "2026-10-11T01:00:07.582086Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.671357Z",
+     "completed_at": "2026-10-11T01:00:07.595158Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.659789Z"
+     "started_at": "2026-10-11T01:00:07.583942Z"
     }
    ],
    "unique_id": "test.datatrust.dq_s02_allowed_stage_transitions"
@@ -1037,23 +1037,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- S03: in canonical stage order, stage timestamps never go backwards within an application.\nwith ordered as (\n    select\n        application_id,\n        stage,\n        stage_order,\n        entered_at,\n        lag(entered_at) over (partition by application_id order by stage_order, event_id) as prev_entered_at\n    from \"warehouse\".\"staging\".\"stg_stage_events\"\n)\n\nselect\n    application_id,\n    stage,\n    entered_at,\n    prev_entered_at\nfrom ordered\nwhere prev_entered_at is not null\n    and entered_at < prev_entered_at",
-   "execution_time": 0.015198945999145508,
+   "execution_time": 0.015161275863647461,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.665589Z",
+     "completed_at": "2026-10-11T01:00:07.590601Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.664202Z"
+     "started_at": "2026-10-11T01:00:07.588872Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.676607Z",
+     "completed_at": "2026-10-11T01:00:07.602158Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.666028Z"
+     "started_at": "2026-10-11T01:00:07.591019Z"
     }
    ],
    "unique_id": "test.datatrust.dq_s03_stage_timestamps_monotonic"
@@ -1065,7 +1065,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- S04: a terminal stage (hired, rejected, withdrawn, declined) is the last event of its application.\nwith ordered as (\n    select\n        application_id,\n        stage,\n        row_number() over (partition by application_id order by entered_at desc, event_id desc) as rn_desc\n    from \"warehouse\".\"staging\".\"stg_stage_events\"\n)\n\nselect\n    application_id,\n    stage\nfrom ordered\nwhere stage in ('hired', 'rejected', 'withdrawn', 'declined')\n    and rn_desc <> 1",
-   "execution_time": 0.015304803848266602,
+   "execution_time": 0.014662742614746094,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -1074,14 +1074,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.668453Z",
+     "completed_at": "2026-10-11T01:00:07.593881Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.666501Z"
+     "started_at": "2026-10-11T01:00:07.591551Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.678312Z",
+     "completed_at": "2026-10-11T01:00:07.603361Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.668824Z"
+     "started_at": "2026-10-11T01:00:07.594177Z"
     }
    ],
    "unique_id": "test.datatrust.dq_s04_terminal_stage_is_last"
@@ -1093,23 +1093,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- S06: the offer stage's local date is on or before the hire date.\nselect\n    h.hire_id,\n    h.application_id,\n    h.hire_date,\n    e.event_local_date as offer_local_date\nfrom \"warehouse\".\"staging\".\"stg_hires\" as h\ninner join \"warehouse\".\"staging\".\"stg_stage_events\" as e\n    on e.application_id = h.application_id\n    and e.stage = 'offer'\nwhere e.event_local_date > h.hire_date",
-   "execution_time": 0.02454686164855957,
+   "execution_time": 0.010624170303344727,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-3 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.679046Z",
+     "completed_at": "2026-10-11T01:00:07.600283Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.676876Z"
+     "started_at": "2026-10-11T01:00:07.599348Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.698396Z",
+     "completed_at": "2026-10-11T01:00:07.608915Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.679548Z"
+     "started_at": "2026-10-11T01:00:07.600437Z"
     }
    ],
    "unique_id": "test.datatrust.dq_s06_offer_precedes_hire"
@@ -1121,23 +1121,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- S05: per location, at least 98% of recruiter_tool events fall between 07:00 and 21:00 local time.\n-- The local hour is recomputed here from the instant and the zone (tz_local_hour), not read from staging.\nwith events as (\n    select\n        location_id,\n        extract(hour from timezone(location_tz, entered_at)) as local_hour\n    from \"warehouse\".\"staging\".\"stg_stage_events\"\n    where source_system = 'recruiter_tool'\n)\n\nselect\n    location_id,\n    count(*) as n_events,\n    sum(case when local_hour >= 7 and local_hour < 21 then 1 else 0 end) as n_in_hours\nfrom events\ngroup by location_id\nhaving sum(case when local_hour >= 7 and local_hour < 21 then 1 else 0 end) < 0.98 * count(*)",
-   "execution_time": 0.029057741165161133,
+   "execution_time": 0.034982919692993164,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-4 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.673689Z",
+     "completed_at": "2026-10-11T01:00:07.594069Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.672173Z"
+     "started_at": "2026-10-11T01:00:07.593099Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.699047Z",
+     "completed_at": "2026-10-11T01:00:07.624229Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.674520Z"
+     "started_at": "2026-10-11T01:00:07.595292Z"
     }
    ],
    "unique_id": "test.datatrust.dq_s05_recruiter_events_in_local_business_hours"
@@ -1153,7 +1153,7 @@
    "overload_results": null,
    "relation_name": "\"warehouse\".\"staging\".\"int_employee_month\"",
    "status": "skipped",
-   "thread_id": "Thread-4 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [],
    "unique_id": "model.datatrust.int_employee_month"
   },
@@ -1164,23 +1164,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- S07: the hired event's local date (requisition location zone) equals the HRIS hire date.\nselect\n    h.hire_id,\n    h.application_id,\n    h.hire_date,\n    e.event_local_date\nfrom \"warehouse\".\"staging\".\"stg_hires\" as h\nleft join \"warehouse\".\"staging\".\"stg_stage_events\" as e\n    on e.application_id = h.application_id\n    and e.stage = 'hired'\nwhere e.event_id is null\n    or e.event_local_date <> h.hire_date",
-   "execution_time": 0.026304006576538086,
+   "execution_time": 0.024983882904052734,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.682758Z",
+     "completed_at": "2026-10-11T01:00:07.606831Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.681454Z"
+     "started_at": "2026-10-11T01:00:07.605292Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.704147Z",
+     "completed_at": "2026-10-11T01:00:07.628264Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.683047Z"
+     "started_at": "2026-10-11T01:00:07.607762Z"
     }
    ],
    "unique_id": "test.datatrust.dq_s07_hired_event_matches_hire_date"
@@ -1196,7 +1196,7 @@
    "overload_results": null,
    "relation_name": "\"warehouse\".\"marts\".\"metric_headcount_monthly\"",
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [],
    "unique_id": "model.datatrust.metric_headcount_monthly"
   },
@@ -1211,7 +1211,7 @@
    "overload_results": null,
    "relation_name": null,
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [],
    "unique_id": "test.datatrust.dq_x02_headcount_metric_reconciles"
   },
@@ -1222,7 +1222,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    currency,\n    rate_date,\n    cast(rate_to_usd as decimal(38,9)) as rate_to_usd\nfrom \"warehouse\".\"staging\".\"stg_fx_rates\"\nwhere rate_date between date '2025-01-01' and date '2025-12-31'",
-   "execution_time": 0.03438425064086914,
+   "execution_time": 0.03454995155334473,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -1231,14 +1231,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.685168Z",
+     "completed_at": "2026-10-11T01:00:07.609834Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.683506Z"
+     "started_at": "2026-10-11T01:00:07.606954Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.716419Z",
+     "completed_at": "2026-10-11T01:00:07.640854Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.685420Z"
+     "started_at": "2026-10-11T01:00:07.610267Z"
     }
    ],
    "unique_id": "model.datatrust.int_fx_daily"
@@ -1254,7 +1254,7 @@
    "overload_results": null,
    "relation_name": "\"warehouse\".\"marts\".\"fct_payroll_reconciliation\"",
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [],
    "unique_id": "model.datatrust.fct_payroll_reconciliation"
   },
@@ -1274,6 +1274,34 @@
    "unique_id": "model.datatrust.int_comp_by_dept_month"
   },
   {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
+   "compiled_code": "with employees as (\n    select\n        employee_id,\n        least(date '2025-12-31', coalesce(termination_date, date '2025-12-31')) as as_of_date\n    from \"warehouse\".\"staging\".\"stg_employees\"\n)\n\nselect\n    e.employee_id,\n    e.as_of_date,\n    a.assignment_id,\n    a.department_id,\n    a.location_id,\n    a.job_title,\n    a.job_level,\n    a.valid_from,\n    a.valid_to,\n    l.location_tz,\n    l.currency as location_currency\nfrom employees as e\ninner join \"warehouse\".\"staging\".\"stg_job_assignments\" as a\n    on a.employee_id = e.employee_id\n    and a.valid_from <= e.as_of_date\n    and (a.valid_to is null or e.as_of_date < a.valid_to)\nleft join \"warehouse\".\"staging\".\"stg_locations\" as l\n    on a.location_id = l.location_id",
+   "execution_time": 0.020431995391845703,
+   "failures": null,
+   "message": "OK",
+   "overload_results": null,
+   "relation_name": "\"warehouse\".\"staging\".\"int_assignment_current\"",
+   "status": "success",
+   "thread_id": "Thread-4 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.626210Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.624503Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.643406Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.626344Z"
+    }
+   ],
+   "unique_id": "model.datatrust.int_assignment_current"
+  },
+  {
    "adapter_response": {},
    "batch_results": null,
    "compiled": false,
@@ -1284,7 +1312,7 @@
    "overload_results": null,
    "relation_name": "\"warehouse\".\"staging\".\"int_compensation_usd\"",
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-3 (worker)",
    "timing": [],
    "unique_id": "model.datatrust.int_compensation_usd"
   },
@@ -1314,37 +1342,9 @@
    "overload_results": null,
    "relation_name": null,
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [],
    "unique_id": "test.datatrust.dq_x01_payroll_matches_expected"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
-   "compiled_code": "with employees as (\n    select\n        employee_id,\n        least(date '2025-12-31', coalesce(termination_date, date '2025-12-31')) as as_of_date\n    from \"warehouse\".\"staging\".\"stg_employees\"\n)\n\nselect\n    e.employee_id,\n    e.as_of_date,\n    a.assignment_id,\n    a.department_id,\n    a.location_id,\n    a.job_title,\n    a.job_level,\n    a.valid_from,\n    a.valid_to,\n    l.location_tz,\n    l.currency as location_currency\nfrom employees as e\ninner join \"warehouse\".\"staging\".\"stg_job_assignments\" as a\n    on a.employee_id = e.employee_id\n    and a.valid_from <= e.as_of_date\n    and (a.valid_to is null or e.as_of_date < a.valid_to)\nleft join \"warehouse\".\"staging\".\"stg_locations\" as l\n    on a.location_id = l.location_id",
-   "execution_time": 0.020801067352294922,
-   "failures": null,
-   "message": "OK",
-   "overload_results": null,
-   "relation_name": "\"warehouse\".\"staging\".\"int_assignment_current\"",
-   "status": "success",
-   "thread_id": "Thread-3 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.704579Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.702599Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.721803Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.704941Z"
-    }
-   ],
-   "unique_id": "model.datatrust.int_assignment_current"
   },
   {
    "adapter_response": {},
@@ -1372,7 +1372,7 @@
    "overload_results": null,
    "relation_name": "\"warehouse\".\"marts\".\"fct_compensation_usd\"",
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [],
    "unique_id": "model.datatrust.fct_compensation_usd"
   },
@@ -1402,7 +1402,7 @@
    "overload_results": null,
    "relation_name": null,
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [],
    "unique_id": "test.datatrust.dq_c01_base_salary_usd_positive.653cf69bad"
   },
@@ -1432,7 +1432,7 @@
    "overload_results": null,
    "relation_name": null,
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [],
    "unique_id": "test.datatrust.dq_c06_comp_currency_matches_location"
   },
@@ -1462,7 +1462,7 @@
    "overload_results": null,
    "relation_name": null,
    "status": "skipped",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-4 (worker)",
    "timing": [],
    "unique_id": "test.datatrust.dq_x03_payroll_cost_metric_reconciles"
   },
@@ -1473,23 +1473,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    application_id,\n    string_agg(stage, '>' order by entered_at, stage_order) as stage_path,\n    count(*) as n_events,\n    min(case when stage = 'applied' then entered_at end) as applied_at,\n    min(case when stage = 'screen' then entered_at end) as screen_at,\n    min(case when stage = 'onsite' then entered_at end) as onsite_at,\n    min(case when stage = 'offer' then entered_at end) as offer_at,\n    min(case when stage = 'hired' then entered_at end) as hired_at,\n    min(case when stage = 'applied' then event_local_date end) as applied_local_date,\n    min(case when stage = 'offer' then event_local_date end) as offer_local_date,\n    min(case when stage = 'hired' then event_local_date end) as hired_local_date,\n    max(case when stage in ('hired', 'rejected', 'withdrawn', 'declined') then stage end) as terminal_stage\nfrom \"warehouse\".\"staging\".\"stg_stage_events\"\ngroup by application_id",
-   "execution_time": 0.04519200325012207,
+   "execution_time": 0.038610219955444336,
    "failures": null,
    "message": "OK",
    "overload_results": null,
    "relation_name": "\"warehouse\".\"staging\".\"int_application_stage_path\"",
    "status": "success",
-   "thread_id": "Thread-4 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.709062Z",
+     "completed_at": "2026-10-11T01:00:07.636859Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.707240Z"
+     "started_at": "2026-10-11T01:00:07.632772Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.749790Z",
+     "completed_at": "2026-10-11T01:00:07.670044Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.710953Z"
+     "started_at": "2026-10-11T01:00:07.637348Z"
     }
    ],
    "unique_id": "model.datatrust.int_application_stage_path"
@@ -1501,7 +1501,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    e.employee_id,\n    e.first_name,\n    e.last_name,\n    e.work_email,\n    e.birth_date,\n    e.hire_date,\n    e.termination_date,\n    e.termination_date is null as is_active,\n    ac.as_of_date,\n    ac.department_id,\n    d.department_name,\n    ac.location_id,\n    l.location_name,\n    l.location_tz,\n    l.currency as location_currency,\n    ac.job_title,\n    ac.job_level\nfrom \"warehouse\".\"staging\".\"stg_employees\" as e\nleft join \"warehouse\".\"staging\".\"int_assignment_current\" as ac\n    on ac.employee_id = e.employee_id\nleft join \"warehouse\".\"staging\".\"stg_departments\" as d\n    on d.department_id = ac.department_id\nleft join \"warehouse\".\"staging\".\"stg_locations\" as l\n    on l.location_id = ac.location_id",
-   "execution_time": 0.03526115417480469,
+   "execution_time": 0.03530311584472656,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -1510,14 +1510,14 @@
    "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.728350Z",
+     "completed_at": "2026-10-11T01:00:07.650667Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.725797Z"
+     "started_at": "2026-10-11T01:00:07.648142Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.759959Z",
+     "completed_at": "2026-10-11T01:00:07.681869Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.728844Z"
+     "started_at": "2026-10-11T01:00:07.651130Z"
     }
    ],
    "unique_id": "model.datatrust.dim_employee"
@@ -1529,23 +1529,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "\n    \n    \n\nselect\n    employee_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"marts\".\"dim_employee\"\nwhere employee_id is not null\ngroup by employee_id\nhaving count(*) > 1\n\n\n",
-   "execution_time": 0.011662960052490234,
+   "execution_time": 0.011462926864624023,
    "failures": 0,
    "message": null,
    "overload_results": null,
    "relation_name": null,
    "status": "pass",
-   "thread_id": "Thread-4 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.769550Z",
+     "completed_at": "2026-10-11T01:00:07.691858Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.764178Z"
+     "started_at": "2026-10-11T01:00:07.686738Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.773266Z",
+     "completed_at": "2026-10-11T01:00:07.695608Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.769930Z"
+     "started_at": "2026-10-11T01:00:07.692121Z"
     }
    ],
    "unique_id": "test.datatrust.dq_u06_unique_dim_employee_employee_id.4e904997c8"
@@ -1556,36 +1556,8 @@
    },
    "batch_results": null,
    "compiled": true,
-   "compiled_code": "select\n    a.application_id,\n    a.candidate_id,\n    a.requisition_id,\n    r.department_id,\n    r.location_id,\n    a.source_channel,\n    p.stage_path,\n    p.applied_at,\n    p.screen_at is not null as reached_screen,\n    p.onsite_at is not null as reached_onsite,\n    p.offer_at is not null as reached_offer,\n    p.hired_at is not null as was_hired,\n    coalesce(p.terminal_stage, 'open') as outcome\nfrom \"warehouse\".\"staging\".\"stg_applications\" as a\nleft join \"warehouse\".\"staging\".\"stg_requisitions\" as r\n    on r.requisition_id = a.requisition_id\nleft join \"warehouse\".\"staging\".\"int_application_stage_path\" as p\n    on p.application_id = a.application_id",
-   "execution_time": 0.02811884880065918,
-   "failures": null,
-   "message": "OK",
-   "overload_results": null,
-   "relation_name": "\"warehouse\".\"marts\".\"fct_recruiting_funnel\"",
-   "status": "success",
-   "thread_id": "Thread-2 (worker)",
-   "timing": [
-    {
-     "completed_at": "2026-10-11T00:54:15.755800Z",
-     "name": "compile",
-     "started_at": "2026-10-11T00:54:15.754595Z"
-    },
-    {
-     "completed_at": "2026-10-11T00:54:15.780129Z",
-     "name": "execute",
-     "started_at": "2026-10-11T00:54:15.756068Z"
-    }
-   ],
-   "unique_id": "model.datatrust.fct_recruiting_funnel"
-  },
-  {
-   "adapter_response": {
-    "_message": "OK"
-   },
-   "batch_results": null,
-   "compiled": true,
    "compiled_code": "select\n    h.hire_id,\n    h.application_id,\n    h.employee_id,\n    a.candidate_id,\n    a.requisition_id,\n    r.department_id,\n    r.location_id,\n    h.hire_date,\n    cast(date_trunc('month', h.hire_date) as date) as hire_month,\n    p.applied_local_date,\n    p.offer_local_date,\n    o.offered_at,\n    o.responded_at as offer_accepted_at,\n    date_diff('day', p.applied_local_date, h.hire_date) as days_to_hire\nfrom \"warehouse\".\"staging\".\"stg_hires\" as h\nleft join \"warehouse\".\"staging\".\"stg_applications\" as a\n    on a.application_id = h.application_id\nleft join \"warehouse\".\"staging\".\"stg_requisitions\" as r\n    on r.requisition_id = a.requisition_id\nleft join \"warehouse\".\"staging\".\"int_application_stage_path\" as p\n    on p.application_id = h.application_id\nleft join \"warehouse\".\"staging\".\"stg_offers\" as o\n    on o.application_id = h.application_id\n    and o.offer_status = 'accepted'",
-   "execution_time": 0.029121875762939453,
+   "execution_time": 0.0292360782623291,
    "failures": null,
    "message": "OK",
    "overload_results": null,
@@ -1594,14 +1566,14 @@
    "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.755933Z",
+     "completed_at": "2026-10-11T01:00:07.676241Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.753315Z"
+     "started_at": "2026-10-11T01:00:07.673383Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.780915Z",
+     "completed_at": "2026-10-11T01:00:07.701157Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.757027Z"
+     "started_at": "2026-10-11T01:00:07.676507Z"
     }
    ],
    "unique_id": "model.datatrust.fct_hires"
@@ -1612,8 +1584,36 @@
    },
    "batch_results": null,
    "compiled": true,
+   "compiled_code": "select\n    a.application_id,\n    a.candidate_id,\n    a.requisition_id,\n    r.department_id,\n    r.location_id,\n    a.source_channel,\n    p.stage_path,\n    p.applied_at,\n    p.screen_at is not null as reached_screen,\n    p.onsite_at is not null as reached_onsite,\n    p.offer_at is not null as reached_offer,\n    p.hired_at is not null as was_hired,\n    coalesce(p.terminal_stage, 'open') as outcome\nfrom \"warehouse\".\"staging\".\"stg_applications\" as a\nleft join \"warehouse\".\"staging\".\"stg_requisitions\" as r\n    on r.requisition_id = a.requisition_id\nleft join \"warehouse\".\"staging\".\"int_application_stage_path\" as p\n    on p.application_id = a.application_id",
+   "execution_time": 0.03096795082092285,
+   "failures": null,
+   "message": "OK",
+   "overload_results": null,
+   "relation_name": "\"warehouse\".\"marts\".\"fct_recruiting_funnel\"",
+   "status": "success",
+   "thread_id": "Thread-4 (worker)",
+   "timing": [
+    {
+     "completed_at": "2026-10-11T01:00:07.678493Z",
+     "name": "compile",
+     "started_at": "2026-10-11T01:00:07.675164Z"
+    },
+    {
+     "completed_at": "2026-10-11T01:00:07.703362Z",
+     "name": "execute",
+     "started_at": "2026-10-11T01:00:07.679795Z"
+    }
+   ],
+   "unique_id": "model.datatrust.fct_recruiting_funnel"
+  },
+  {
+   "adapter_response": {
+    "_message": "OK"
+   },
+   "batch_results": null,
+   "compiled": true,
    "compiled_code": "\n    \n    \n\nselect\n    application_id as unique_field,\n    count(*) as n_records\n\nfrom \"warehouse\".\"marts\".\"fct_hires\"\nwhere application_id is not null\ngroup by application_id\nhaving count(*) > 1\n\n\n",
-   "execution_time": 0.0050771236419677734,
+   "execution_time": 0.0060100555419921875,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -1622,14 +1622,14 @@
    "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.784570Z",
+     "completed_at": "2026-10-11T01:00:07.706084Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.782299Z"
+     "started_at": "2026-10-11T01:00:07.703490Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.786833Z",
+     "completed_at": "2026-10-11T01:00:07.708393Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.784692Z"
+     "started_at": "2026-10-11T01:00:07.706202Z"
     }
    ],
    "unique_id": "test.datatrust.dq_u05_unique_fct_hires_application_id.9635258a3f"
@@ -1641,23 +1641,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    department_id,\n    hire_month,\n    count(*) as hires,\n    cast(case when (count(*)) = 0 then null else (cast(sum(days_to_hire) as decimal(38,9))) / (count(*)) end as decimal(38,9)) as avg_days_to_hire\nfrom \"warehouse\".\"marts\".\"fct_hires\"\ngroup by department_id, hire_month",
-   "execution_time": 0.016114234924316406,
+   "execution_time": 0.01630711555480957,
    "failures": null,
    "message": "OK",
    "overload_results": null,
    "relation_name": "\"warehouse\".\"marts\".\"metric_time_to_hire\"",
    "status": "success",
-   "thread_id": "Thread-1 (worker)",
+   "thread_id": "Thread-2 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.790289Z",
+     "completed_at": "2026-10-11T01:00:07.711977Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.789199Z"
+     "started_at": "2026-10-11T01:00:07.710776Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.804129Z",
+     "completed_at": "2026-10-11T01:00:07.725949Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.790544Z"
+     "started_at": "2026-10-11T01:00:07.713047Z"
     }
    ],
    "unique_id": "model.datatrust.metric_time_to_hire"
@@ -1669,23 +1669,23 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "select\n    department_id,\n    hire_month,\n    count(*) as hires\nfrom \"warehouse\".\"marts\".\"fct_hires\"\ngroup by department_id, hire_month",
-   "execution_time": 0.017052173614501953,
+   "execution_time": 0.01723003387451172,
    "failures": null,
    "message": "OK",
    "overload_results": null,
    "relation_name": "\"warehouse\".\"marts\".\"metric_hires_monthly\"",
    "status": "success",
-   "thread_id": "Thread-2 (worker)",
+   "thread_id": "Thread-1 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.790418Z",
+     "completed_at": "2026-10-11T01:00:07.711853Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.788654Z"
+     "started_at": "2026-10-11T01:00:07.710257Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.804894Z",
+     "completed_at": "2026-10-11T01:00:07.726694Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.791541Z"
+     "started_at": "2026-10-11T01:00:07.712095Z"
     }
    ],
    "unique_id": "model.datatrust.metric_hires_monthly"
@@ -1697,7 +1697,7 @@
    "batch_results": null,
    "compiled": true,
    "compiled_code": "-- X04: three-way reconciliation per month: hires metric = fct_hires rows = HRIS hired events.\n-- Every side buckets by the LOCAL hire date; a UTC bucket would move 1st-of-month hires east of UTC\n-- into the previous month (SPEC 6.4).\nwith metric as (\n    select\n        hire_month as month_start,\n        sum(hires) as metric_hires\n    from \"warehouse\".\"marts\".\"metric_hires_monthly\"\n    group by hire_month\n),\n\nfacts as (\n    select\n        hire_month as month_start,\n        count(*) as fact_hires\n    from \"warehouse\".\"marts\".\"fct_hires\"\n    group by hire_month\n),\n\nevents as (\n    select\n        cast(date_trunc('month', event_local_date) as date) as month_start,\n        count(*) as hired_events\n    from \"warehouse\".\"staging\".\"stg_stage_events\"\n    where stage = 'hired'\n    group by cast(date_trunc('month', event_local_date) as date)\n)\n\nselect\n    coalesce(m.month_start, f.month_start, e.month_start) as month_start,\n    m.metric_hires,\n    f.fact_hires,\n    e.hired_events\nfrom metric as m\nfull outer join facts as f\n    on f.month_start = m.month_start\nfull outer join events as e\n    on e.month_start = coalesce(m.month_start, f.month_start)\nwhere coalesce(m.metric_hires, -1) <> coalesce(f.fact_hires, -1)\n    or coalesce(f.fact_hires, -1) <> coalesce(e.hired_events, -1)",
-   "execution_time": 0.005530834197998047,
+   "execution_time": 0.005412101745605469,
    "failures": 0,
    "message": null,
    "overload_results": null,
@@ -1706,14 +1706,14 @@
    "thread_id": "Thread-3 (worker)",
    "timing": [
     {
-     "completed_at": "2026-10-11T00:54:15.807278Z",
+     "completed_at": "2026-10-11T01:00:07.728959Z",
      "name": "compile",
-     "started_at": "2026-10-11T00:54:15.806239Z"
+     "started_at": "2026-10-11T01:00:07.728007Z"
     },
     {
-     "completed_at": "2026-10-11T00:54:15.811199Z",
+     "completed_at": "2026-10-11T01:00:07.732869Z",
      "name": "execute",
-     "started_at": "2026-10-11T00:54:15.807395Z"
+     "started_at": "2026-10-11T01:00:07.729072Z"
     }
    ],
    "unique_id": "test.datatrust.dq_x04_hires_three_way"

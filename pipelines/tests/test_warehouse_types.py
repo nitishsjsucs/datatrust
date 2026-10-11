@@ -99,7 +99,7 @@ def test_contract_types_mirror_dt_type():
 
 
 def test_documented_columns_match_warehouse(built_101):
-    """Every model's YAML documents exactly the columns it builds (classification coverage for the sanitizer)."""
+    """Every model's YAML documents exactly the columns it builds (classification for the sanitizer)."""
     import json
 
     manifest = json.loads((built_101.target_path / "manifest.json").read_text())
@@ -109,7 +109,8 @@ def test_documented_columns_match_warehouse(built_101):
             actual = {
                 r[0]
                 for r in con.execute(
-                    "select column_name from information_schema.columns where table_schema = ? and table_name = ?",
+                    "select column_name from information_schema.columns "
+                    "where table_schema = ? and table_name = ?",
                     [m["schema"], m["alias"]],
                 ).fetchall()
             }
