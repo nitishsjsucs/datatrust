@@ -59,6 +59,17 @@ queue `datatrust-audit-events`; its consumer writes each batch as one immutable 
 (`lake/<date>/<ulid>.ndjson` in R2). An object is **settled** once its ULID time is older than the settle
 window (120 s in production), and only settled objects are exported to the Iceberg table.
 
+**Lineage bundle**: the OpenLineage events of one `POST /api/v1/lineage` (at most 10 events and 256 KB),
+stored in R2 and announced by one message on `datatrust-lineage-events`; its consumer writes their edges and
+`lineage_events` rows with two set-based statements.
+
+**Neuron ledger**: the `ai_budget` table in D1, one row per UTC day. Every Workers AI call first reserves its
+worst-case neurons there and is refused once the day's reservations would pass `AI_DAILY_NEURON_CAP` (2,000);
+a refused summary falls back to the template with reason `daily_neuron_cap`.
+
+**Share**: the 25% of an account-wide Free plan allowance that DataTrust budgets for itself, because four repos
+use the same Cloudflare account and Google Cloud project.
+
 **Scenario**: one of the 20 injected defects of the benchmark (S01-S13 change source data, T14-T20 patch
 the dbt project), each with a **ground truth** node. **Decoy**: a benign refactor patch that changes a
 model's checksum but not its output; 0 to 4 per **trial**. A trial is one (seed, scenario) build; dev seeds
