@@ -262,7 +262,7 @@ def generate(seed: int) -> Dataset:
         for stage in S.PATHS[a["path"]]:
             event_id += 1
             t["stage_events"].rows.append(
-                [event_id, a["id"], stage, a["instants"][stage], S.STAGE_SOURCE_SYSTEM[stage]]
+                [event_id, a["id"], S.STAGE_LABELS[stage], a["instants"][stage], S.STAGE_SOURCE_SYSTEM[stage]]
             )
         if a["path"] in ("P4", "P5"):
             offer_id += 1

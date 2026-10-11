@@ -1,0 +1,360 @@
+version: 2
+
+# 13 enforced contracts (SPEC 7.2). Contract types render through dt_type() so the same YAML works on
+# DuckDB (local stand-in) and BigQuery. Model meta drives probe planning (SPEC 10, 11):
+#   grain: key columns; foreign_keys: column -> parent model column; interval: half-open history;
+#   timezone: instant and zone columns; classification: pii | identifier | compensation | internal | public.
+
+models:
+  - name: stg_departments
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [department_id]
+    columns:
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: department_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: cost_center
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+
+  - name: stg_locations
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [location_id]
+    columns:
+      - name: location_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: location_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: country_code
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: location_tz
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: currency
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+
+  - name: stg_employees
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [employee_id]
+    columns:
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: first_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+      - name: last_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+      - name: work_email
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+      - name: birth_date
+        data_type: "date"
+        config: {meta: {classification: pii}}
+      - name: hire_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: termination_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+
+  - name: stg_job_assignments
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [assignment_id]
+        foreign_keys:
+          - {column: employee_id, parent: stg_employees, parent_column: employee_id}
+          - {column: department_id, parent: stg_departments, parent_column: department_id}
+          - {column: location_id, parent: stg_locations, parent_column: location_id}
+        interval: {key: [employee_id], from: valid_from, to: valid_to}
+    columns:
+      - name: assignment_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: location_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: job_title
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: job_level
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: valid_from
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: valid_to
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: is_current
+        data_type: "{{ 'bool' if target.type == 'bigquery' else 'boolean' }}"
+        config: {meta: {classification: internal}}
+
+  - name: stg_requisitions
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [requisition_id]
+        foreign_keys:
+          - {column: department_id, parent: stg_departments, parent_column: department_id}
+          - {column: location_id, parent: stg_locations, parent_column: location_id}
+    columns:
+      - name: requisition_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: location_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: job_title
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: openings
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: opened_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+
+  - name: stg_candidates
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [candidate_id]
+    columns:
+      - name: candidate_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: cand}}
+      - name: first_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+      - name: last_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+      - name: email
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+      - name: phone
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+      - name: created_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+
+  - name: stg_applications
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [application_id]
+        foreign_keys:
+          - {column: candidate_id, parent: stg_candidates, parent_column: candidate_id}
+          - {column: requisition_id, parent: stg_requisitions, parent_column: requisition_id}
+    columns:
+      - name: application_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: app}}
+      - name: candidate_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: cand}}
+      - name: requisition_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: source_channel
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: applied_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+
+  - name: stg_stage_events
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [event_id]
+        foreign_keys:
+          - {column: application_id, parent: stg_applications, parent_column: application_id}
+        timezone: {ts: entered_at, tz: location_tz, hour: event_local_hour, filter_column: source_system, filter_value: recruiter_tool}
+        transitions: {key: application_id, stage: stage, order: stage_order, ts: entered_at}
+    columns:
+      - name: event_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: application_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: app}}
+      - name: stage_label
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: stage
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: stage_order
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: entered_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+      - name: source_system
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: location_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: location_tz
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: event_local_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: event_local_hour
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+
+  - name: stg_offers
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [offer_id]
+        foreign_keys:
+          - {column: application_id, parent: stg_applications, parent_column: application_id}
+    columns:
+      - name: offer_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: application_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: app}}
+      - name: offer_status
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: offered_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+      - name: responded_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+
+  - name: stg_hires
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [hire_id]
+        foreign_keys:
+          - {column: application_id, parent: stg_applications, parent_column: application_id}
+          - {column: employee_id, parent: stg_employees, parent_column: employee_id}
+    columns:
+      - name: hire_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: hire}}
+      - name: application_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: app}}
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: hire_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+
+  - name: stg_compensation
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [compensation_id]
+        foreign_keys:
+          - {column: employee_id, parent: stg_employees, parent_column: employee_id}
+        interval: {key: [employee_id], from: valid_from, to: valid_to}
+        casts: [{column: base_salary_local_minor, type: int}]
+    columns:
+      - name: compensation_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: currency
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: base_salary_local_minor
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: compensation}}
+      - name: base_salary_local
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: compensation}}
+      - name: valid_from
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: valid_to
+        data_type: "date"
+        config: {meta: {classification: internal}}
+
+  - name: stg_fx_rates
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [currency, rate_date]
+        fx: {currency: currency, date: rate_date, rate: rate_to_usd}
+    columns:
+      - name: currency
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: rate_date
+        data_type: "date"
+        config: {meta: {classification: public}}
+      - name: rate_to_usd
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: public}}
+
+  - name: stg_payroll_lines
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [payroll_line_id]
+        foreign_keys:
+          - {column: employee_id, parent: stg_employees, parent_column: employee_id}
+        casts: [{column: gross_pay_local_minor, type: int}]
+    columns:
+      - name: payroll_line_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: pay_month
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: currency
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: gross_pay_local_minor
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: compensation}}
+      - name: gross_pay_local
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: compensation}}
+      - name: paid_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}

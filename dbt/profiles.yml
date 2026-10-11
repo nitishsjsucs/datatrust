@@ -1,0 +1,12 @@
+# Every env_var has a default, so `dbt parse` works with no credentials and no .prod/ files.
+datatrust:
+  target: "{{ env_var('DATATRUST_DBT_TARGET', 'duckdb') }}"
+  outputs:
+    duckdb:
+      # Local and CI warehouse: DuckDB is the stand-in for BigQuery (SPEC section 4).
+      type: duckdb
+      path: "{{ env_var('DATATRUST_DUCKDB_PATH', '.data/warehouse.duckdb') }}"
+      threads: 4
+      settings:
+        # ADR-0006: without this the session inherits the machine zone and local dates differ by OS.
+        TimeZone: UTC

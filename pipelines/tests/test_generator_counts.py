@@ -37,7 +37,7 @@ def test_cohorts_and_paths(dataset_factory, seed):
 
     paths = defaultdict(list)
     for ev in rows(ds, "stage_events"):
-        paths[ev["application_id"]].append(ev["stage"])
+        paths[ev["application_id"]].append(S.STAGE_FROM_LABEL[ev["stage"]])
     path_counts = Counter(tuple(v) for v in paths.values())
     expected = {
         S.PATHS["P1"]: 2_400,

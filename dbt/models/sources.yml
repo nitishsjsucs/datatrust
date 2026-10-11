@@ -1,0 +1,58 @@
+version: 2
+
+# ADR-0005: raw tables are dbt sources (not seeds), so dbt-ol lists them in dataset inputs.
+sources:
+  - name: raw
+    schema: "{{ 'datatrust_raw' if target.type == 'bigquery' else 'raw' }}"
+    description: Batch-loaded synthetic HR, ATS, compensation, FX and payroll extracts.
+    tables:
+      - name: departments
+        meta: {grain: [department_id]}
+      - name: locations
+        meta: {grain: [location_id]}
+      - name: employees
+        meta: {grain: [employee_id]}
+        columns:
+          - name: first_name
+            meta: {classification: pii}
+          - name: last_name
+            meta: {classification: pii}
+          - name: work_email
+            meta: {classification: pii}
+          - name: birth_date
+            meta: {classification: pii}
+      - name: job_assignments
+        meta: {grain: [assignment_id], interval: [valid_from, valid_to], interval_key: [employee_id]}
+      - name: requisitions
+        meta: {grain: [requisition_id]}
+      - name: candidates
+        meta: {grain: [candidate_id]}
+        columns:
+          - name: first_name
+            meta: {classification: pii}
+          - name: last_name
+            meta: {classification: pii}
+          - name: email
+            meta: {classification: pii}
+          - name: phone
+            meta: {classification: pii}
+      - name: applications
+        meta: {grain: [application_id]}
+      - name: stage_events
+        meta: {grain: [event_id]}
+      - name: offers
+        meta: {grain: [offer_id]}
+      - name: hires
+        meta: {grain: [hire_id]}
+      - name: compensation
+        meta: {grain: [compensation_id], interval: [valid_from, valid_to], interval_key: [employee_id]}
+        columns:
+          - name: base_salary_local_minor
+            meta: {classification: compensation}
+      - name: fx_rates
+        meta: {grain: [currency, rate_date]}
+      - name: payroll_lines
+        meta: {grain: [payroll_line_id]}
+        columns:
+          - name: gross_pay_local_minor
+            meta: {classification: compensation}

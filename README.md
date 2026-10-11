@@ -15,7 +15,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Component | Status |
 |---|---|
 | Synthetic data generator (exact, seeded counts) | implemented; tests pass locally (`uv run pytest`), CI configured |
-| dbt models, 22 enforced contracts, 40 checks | planned |
+| dbt models, 22 enforced contracts, 40 checks | in progress: 13 staging models with enforced contracts build on DuckDB (stand-in); intermediate, marts, metrics and checks planned |
 | OpenLineage capture and column-level lineage graph | planned |
 | Diagnostic probes, root-cause ranker, baselines | planned |
 | Fault-injection benchmark (20 scenarios) | planned |
@@ -135,6 +135,14 @@ Prerequisites: Node 22 or newer (CI uses Node 24 from `.nvmrc`), npm, [uv](https
 npm run setup        # npm ci && uv sync --locked
 npm run typecheck    # TypeScript strict, all workspaces
 npm test             # vitest (packages/rca, apps/worker) and pytest
+```
+
+Generate, load and build one seed locally (DuckDB is the local stand-in for BigQuery):
+
+```sh
+uv run datatrust synth --seed 101   # .data/raw/101/*.parquet + manifest.json
+uv run datatrust load --seed 101    # raw.* tables in .data/warehouse.duckdb (session pinned to UTC)
+uv run datatrust build              # dbt build (profile in dbt/profiles.yml, target duckdb)
 ```
 
 More commands are added here as the components land.

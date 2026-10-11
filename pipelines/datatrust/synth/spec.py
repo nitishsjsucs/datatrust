@@ -121,6 +121,19 @@ PATH_MIX_TWO_HIRES: dict[str, int] = {"P1": 10, "P2": 5, "P3": 2, "P4": 1, "P5":
 PATH_MIX_ONE_HIRE: dict[str, int] = {"P1": 10, "P2": 5, "P3": 3, "P4": 0, "P5": 1, "P6": 1}
 TWO_HIRE_REQUISITIONS = 120
 
+# Raw ATS stage labels; dbt staging maps them to the canonical stage names above.
+STAGE_LABELS: dict[str, str] = {
+    "applied": "Applied",
+    "screen": "Phone Screen",
+    "onsite": "Onsite Interview",
+    "offer": "Offer Extended",
+    "hired": "Hired",
+    "rejected": "Rejected",
+    "withdrawn": "Withdrawn",
+    "declined": "Offer Declined",
+}
+STAGE_FROM_LABEL: dict[str, str] = {v: k for k, v in STAGE_LABELS.items()}
+
 STAGE_SOURCE_SYSTEM: dict[str, str] = {
     "applied": "careers_site",
     "withdrawn": "careers_site",

@@ -1,0 +1,38 @@
+name: datatrust
+version: "1.0.0"
+config-version: 2
+profile: datatrust
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+target-path: target
+clean-targets: ["target", "logs"]
+
+flags:
+  send_anonymous_usage_stats: false
+  partial_parse: false
+
+vars:
+  # Calendar covered by payroll, FX and metrics (SPEC 6.2).
+  calendar_start: "2025-01-01"
+  calendar_end: "2025-12-31"
+
+models:
+  datatrust:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: staging
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
+    metrics:
+      +schema: marts
+      +materialized: table
+    restricted:
+      +schema: restricted
+      +materialized: view
