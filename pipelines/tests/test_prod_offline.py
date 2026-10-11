@@ -394,14 +394,21 @@ def test_doctor_checks_each_service_token_role(monkeypatch):
     monkeypatch.setenv("CF_ACCESS_OPERATOR_CLIENT_SECRET", "o")
     roles = {"runner.access": ["runner"], "operator.access": ["runner"]}
 
+    import base64
+
     def fake_get(url, headers, **_):
         cid = headers["CF-Access-Client-Id"]
+        # Service-token JWT shape from the Access docs: common_name is the Client ID, sub is empty.
+        payload = base64.urlsafe_b64encode(json.dumps({"common_name": cid, "sub": ""}).encode()).decode()
         return SimpleNamespace(
-            status_code=200, json=lambda: {"kind": "service", "id": cid, "roles": roles[cid]}
+            status_code=200,
+            json=lambda: {"kind": "service", "id": cid, "roles": roles[cid]},
+            cookies={"CF_Authorization": f"h.{payload.rstrip('=')}.s"},
         )
 
     checks = doctor.service_token_checks("https://w", get=fake_get)
     assert [c.status for c in checks] == ["ok", "missing"]
+    assert "'common_name': 'runner.access'" in checks[0].detail
     assert "expected ['operator', 'viewer']" in checks[1].detail
     denied = doctor.service_token_checks("https://w", get=lambda *a, **k: SimpleNamespace(status_code=403))
     assert all(c.status == "missing" and "ROLE_MAP_JSON" in c.fix for c in denied)

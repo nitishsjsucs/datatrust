@@ -32,6 +32,7 @@
     "prod:smoke": "uv run datatrust prod smoke",
     "doctor": "bash scripts/doctor.sh",
     "setup:prod": "bash scripts/setup-prod.sh",
+    "setup:wizard": "bash scripts/prod-wizard.sh",
     "deploy:prod": "bash scripts/setup-prod.sh --cloudflare-only",
     "eval:summaries": "bash scripts/eval-summaries.sh"
   },

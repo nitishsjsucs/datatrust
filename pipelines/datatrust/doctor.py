@@ -545,6 +545,17 @@ def cloudflare_checks() -> list[Check]:
     return out
 
 
+def jwt_claims(token: str | None) -> dict[str, Any]:
+    """Decoded (not verified) claims of an Access JWT, for display only."""
+    import base64
+
+    try:
+        part = (token or "").split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+    except (IndexError, ValueError):
+        return {}
+
+
 def service_token_checks(url: str, get: Callable[..., Any] | None = None) -> list[Check]:
     """Each Access service token reaches the Worker and maps to exactly the roles it should have: the runner
     token to `runner` only, the operator token to `operator` and `viewer` (ROLE_MAP_JSON, SPEC 15)."""
@@ -588,8 +599,15 @@ def service_token_checks(url: str, get: Callable[..., Any] | None = None) -> lis
             continue
         principal = res.json()
         roles = set(principal.get("roles") or [])
+        claims = jwt_claims(getattr(res, "cookies", {}).get("CF_Authorization"))
+        seen = {k: claims[k] for k in ("common_name", "sub", "iss", "aud") if k in claims}
         out.append(
-            Check("ok", f"service token {label}", f"principal {principal.get('id')}, roles {sorted(roles)}")
+            Check(
+                "ok",
+                f"service token {label}",
+                f"principal {principal.get('id')}, roles {sorted(roles)}"
+                + (f", JWT claims {seen}" if seen else ""),
+            )
             if roles == want
             else Check(
                 "missing",

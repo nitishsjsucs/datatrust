@@ -236,7 +236,13 @@ Audit events (check results, completed runs, incidents) go to the lake. Locally 
 
 Everything below is implemented and tested locally against stand-ins, and has **not yet run on Cloudflare or Google Cloud**. These are the steps only the account owner can do; the scripts do the rest. `npm run doctor -- --prod` prints one line per prerequisite with the exact fix, so run it whenever you are unsure what is left.
 
-Start with the values file (gitignored; never put `CLOUDFLARE_API_TOKEN` in it, because wrangler would use it instead of your `wrangler login`):
+The quickest path is the guided wizard, which opens each dashboard page, says what to click and copy, writes the values into `.env.prod`, and runs the bootstrap and the doctor between phases (re-run it any time; it keeps values already saved):
+
+```sh
+npm run setup:wizard
+```
+
+The tables below are the same steps by hand. Start with the values file (gitignored; never put `CLOUDFLARE_API_TOKEN` in it, because wrangler would use it instead of your `wrangler login`):
 
 ```sh
 cp .env.example .env.prod && chmod 600 .env.prod

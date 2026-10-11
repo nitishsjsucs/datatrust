@@ -10,7 +10,7 @@ import pytest
 
 from datatrust import config, doctor
 
-SCRIPTS = ["setup-prod.sh", "doctor.sh", "dev-up.sh", "dev-down.sh", "bench-e2e.sh"]
+SCRIPTS = ["setup-prod.sh", "doctor.sh", "dev-up.sh", "dev-down.sh", "bench-e2e.sh", "prod-wizard.sh"]
 
 
 @pytest.mark.parametrize("script", SCRIPTS)
@@ -97,3 +97,16 @@ def test_doctor_local_checks_shape():
     for c in checks:
         assert c.status in {"ok", "missing", "warn"}
         assert c.line().startswith(f"[{c.status}] ")
+
+
+def test_wizard_stage_count_and_values_cover_doctor():
+    """The wizard's progress counter matches its stages, and it captures every .env.prod value doctor
+    requires except DATATRUST_API_URL, which setup:prod writes after the first deploy."""
+    import re
+
+    text = (config.REPO_ROOT / "scripts" / "prod-wizard.sh").read_text()
+    stages = text.split("# STAGES: author this section", 1)[1]
+    declared = int(re.search(r"^TOTAL_STAGES=(\d+)$", stages, re.M).group(1))
+    assert declared == len(re.findall(r"^stage ", stages, re.M))
+    written = set(re.findall(r"write_env (\w+)", stages))
+    assert {k for k, _ in doctor.ENV_KEYS} - written == {"DATATRUST_API_URL"}
