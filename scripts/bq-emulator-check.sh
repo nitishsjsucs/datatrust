@@ -4,8 +4,10 @@
 # that BigQuery's analyzer would reject (types, functions, contract column types) before `prod validate`.
 #   bash scripts/bq-emulator-check.sh        (needs Docker; uses a private Docker network, no host ports)
 # Steps: empty raw tables; each of the 29 models in dependency order (enforced contracts included); each of
-# the 40 tests on its own; every planned probe in batches. The emulator restarts (file-backed) before each step because it needs a lot
-# of memory per query. Writes results/bq-emulator-<date>.md and .json.
+# the 40 tests on its own. The emulator restarts (file-backed) before each step because it needs a lot of
+# memory per query; a step during which it stops is reported as "no result", never as a pass. Probe SQL is not
+# run here (the emulator stops too often on it in a 2 GB VM); `test_probes_render.py` parses it and
+# `prod validate` dry-runs it on BigQuery. Writes results/bq-emulator-<date>.md and .json.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -20,7 +22,6 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 command -v docker >/dev/null && docker info >/dev/null 2>&1 || { echo "Docker is not running" >&2; exit 1; }
-[[ -f packages/rca/dist/cli.mjs ]] || npm run -s build -w @datatrust/rca
 
 emu() {
   docker rm -f "$EMU" >/dev/null 2>&1
@@ -28,19 +29,25 @@ emu() {
     --project=datatrust-emu --dataset=datatrust_raw --database=/data/bq.db --log-level=warn >/dev/null
   sleep 3
 }
-dbtx() {
+dbtx() { # dbt in the runner container; stops early when the emulator container has stopped
   docker exec "$RUN" timeout 180 bash -c \
-    "cd /work && uv run dbt $* --project-dir dbt --profiles-dir /tmp/emu --target-path /tmp/emu/target --log-path /tmp/emu/logs"
+    "cd /work && uv run dbt $* --project-dir dbt --profiles-dir /tmp/emu --target-path /tmp/emu/target --log-path /tmp/emu/logs" &
+  local pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if ! docker ps --format '{{.Names}}' | grep -qx "$EMU"; then
+      docker exec "$RUN" pkill -f "bin/dbt" >/dev/null 2>&1
+      break
+    fi
+    sleep 2
+  done
+  wait "$pid"
 }
 
-echo "== planning probes on DuckDB (seed 101)"
-uv run python scripts/bqemu/plan.py "$WORK/plan.json"
 docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null
 docker volume rm "$VOL" >/dev/null 2>&1; docker volume create "$VOL" >/dev/null
 docker build -q -t "$IMG" scripts/bqemu >/dev/null
 docker rm -f "$RUN" >/dev/null 2>&1
 docker run -d --name "$RUN" --network "$NET" --memory 700m "$IMG" sleep 10800 >/dev/null
-docker cp "$WORK/plan.json" "$RUN:/tmp/plan.json"
 emu
 git archive HEAD | docker exec -i "$RUN" bash /bqemu/setup.sh
 
@@ -83,21 +90,12 @@ for t in $TESTS; do
   echo "$t: $r" | tee -a "$WORK/tests.txt"
 done
 
-N="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$WORK/plan.json")"
-: >"$WORK/probes.jsonl"
-for ((lo = 0; lo < N; lo += 15)); do
-  emu
-  docker exec "$RUN" timeout 300 bash -c "cd /work && uv run python /bqemu/probes.py http://$EMU:9050 $lo:$((lo + 15))" \
-    >>"$WORK/probes.jsonl" 2>/dev/null || true
-done
-
-uv run python - "$WORK" "$MODELS" "$N" "$EMU_IMAGE" <<'PY'
+uv run python - "$WORK" "$MODELS" "$EMU_IMAGE" <<'PY'
 import datetime as dt, json, subprocess, sys
 from pathlib import Path
-work, models, planned, image = Path(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
+work, models, image = Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
 model_rows = [l.split(": ", 1) for l in (work / "models.txt").read_text().splitlines() if ": " in l]
 tests = [l.split(": ", 1) for l in (work / "tests.txt").read_text().splitlines() if ": " in l]
-probes = [json.loads(l) for l in (work / "probes.jsonl").read_text().splitlines() if l.startswith("{")]
 commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
 date = dt.date.today().isoformat()
 out = {
@@ -105,8 +103,6 @@ out = {
     "note": "goccy BigQuery emulator (ZetaSQL analyzer, SQLite execution) on empty raw tables; not BigQuery",
     "models_built": models, "models_total": 29, "models": {m: r for m, r in model_rows},
     "tests": {t: r for t, r in tests},
-    "probes_planned": planned, "probes_ok": sum(p["ok"] for p in probes),
-    "probe_errors": [p for p in probes if not p["ok"]],
 }
 counts = {k: sum(1 for _, r in tests if r.startswith(k)) for k in ("pass", "fail", "error", "no result")}
 out["test_counts"] = counts
@@ -119,12 +115,10 @@ lines = [
     "the BigQuery SQL is accepted and type-checks, on empty raw tables. Real validation is `npm run prod:validate`.", "",
     f"- Models built with enforced contracts: {models}/29",
     f"- Tests: {counts['pass']} pass, {counts['fail']} fail, {counts['error']} error, {counts['no result']} without a result (emulator stopped)",
-    f"- Planned probes whose BigQuery SQL ran: {out['probes_ok']}/{planned}", "",
+    "",
     "| Model | Result |", "|---|---|", *[f"| {m} | {r} |" for m, r in model_rows], "",
     "| Test | Result |", "|---|---|", *[f"| {t} | {r} |" for t, r in tests],
 ]
-if out["probe_errors"]:
-    lines += ["", "Probe errors:", *[f"- {p['probe']}: {p['error']}" for p in out["probe_errors"]]]
 Path(f"results/bq-emulator-{date}.md").write_text("\n".join(lines) + "\n")
-print("\n".join(lines[6:9]))
+print("\n".join(lines[6:8]))
 PY

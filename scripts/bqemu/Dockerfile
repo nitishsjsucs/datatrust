@@ -4,4 +4,4 @@ FROM node:24-bookworm
 COPY --from=ghcr.io/astral-sh/uv:0.12.17 /uv /uvx /bin/
 ENV DBT_SEND_ANONYMOUS_USAGE_STATS=false CI=true
 WORKDIR /work
-COPY setup.sh load.py probes.py emu_patch.py /bqemu/
+COPY setup.sh load.py emu_patch.py /bqemu/
