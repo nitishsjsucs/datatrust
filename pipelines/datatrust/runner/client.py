@@ -8,6 +8,7 @@ Retries with exponential backoff on 5xx and network errors; 4xx responses are fa
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
@@ -21,6 +22,31 @@ from datatrust import config
 
 LEASE_HEADER = "X-DataTrust-Lease-Token"
 JOB_HEADER = "X-DataTrust-Job-Id"
+# The Worker answers 413 above these (SPEC 28.5.2): 10 events and 256 KB per lineage POST keep its CPU near
+# 3 ms on the Free plan's 10 ms, and each POST is announced by one queue message.
+LINEAGE_POST_MAX_EVENTS = 10
+LINEAGE_POST_MAX_BYTES = 262_144
+
+
+def lineage_batches(events: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Greedy batches of at most LINEAGE_POST_MAX_EVENTS events whose JSON body (as `requests` sends it)
+    stays within LINEAGE_POST_MAX_BYTES."""
+    batches: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    size = 2  # "[" and "]"
+    for event in events:
+        n = len(json.dumps(event).encode())
+        if n + 2 > LINEAGE_POST_MAX_BYTES:
+            raise ValueError(f"an OpenLineage event of {n} bytes is larger than one lineage POST allows")
+        extra = n + (2 if current else 0)  # ", " separator
+        if current and (len(current) >= LINEAGE_POST_MAX_EVENTS or size + extra > LINEAGE_POST_MAX_BYTES):
+            batches.append(current)
+            current, size, extra = [], 2, n
+        current.append(event)
+        size += extra
+    if current:
+        batches.append(current)
+    return batches
 
 
 class WorkerHTTPError(RuntimeError):
@@ -148,10 +174,11 @@ class WorkerClient:
             headers=job.headers(),
         )
 
-    def post_lineage(self, job: LeasedJob, events: list[dict[str, Any]], batch: int = 50) -> list[str]:
+    def post_lineage(self, job: LeasedJob, events: list[dict[str, Any]]) -> list[str]:
+        """POST the build's OpenLineage events in batches of at most 10 events and 256 KB (SPEC 28.5.2)."""
         ids: list[str] = []
-        for i in range(0, len(events), batch):
-            res = self.request("POST", "/api/v1/lineage", json=events[i : i + batch], headers=job.headers())
+        for batch in lineage_batches(events):
+            res = self.request("POST", "/api/v1/lineage", json=batch, headers=job.headers())
             ids.extend(res.json()["eventIds"])
         return ids
 

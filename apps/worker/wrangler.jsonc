@@ -37,7 +37,7 @@
     ],
     "consumers": [
       { "queue": "datatrust-check-results", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
-      { "queue": "datatrust-lineage-events", "max_batch_size": 25, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
+      { "queue": "datatrust-lineage-events", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
       { "queue": "datatrust-investigate", "max_batch_size": 5, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
       { "queue": "datatrust-audit-events", "max_batch_size": 10, "max_batch_timeout": 30, "max_retries": 3, "dead_letter_queue": "datatrust-dlq" },
       { "queue": "datatrust-dlq", "max_batch_size": 10, "max_batch_timeout": 1 }

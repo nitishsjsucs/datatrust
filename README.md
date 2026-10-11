@@ -116,7 +116,7 @@ flowchart LR
   subgraph CF["Worker 'datatrust' on Workers Free (local: wrangler dev / Miniflare)"]
     API["Hono API<br/>Access JWT verification"]
     QCR[["Queue datatrust-check-results"]]
-    QLE[["Queue datatrust-lineage-events"]]
+    QLE[["Queue datatrust-lineage-events<br/>one bundle per POST of 10 events"]]
     QIN[["Queue datatrust-investigate"]]
     QAU[["Queue datatrust-audit-events"]]
     WFV{{"ValidationRunWorkflow"}}
@@ -138,7 +138,7 @@ flowchart LR
   DBT --> WH
   PROBE --> WH
   PROBE --> SAN
-  RUNNER -- "lease jobs, post sanitized results,<br/>post OpenLineage events" --> API
+  RUNNER -- "lease jobs, post sanitized results,<br/>post OpenLineage events (10 per POST)" --> API
   API --> QCR --> D1
   API --> QLE --> D1
   API -- "create" --> WFV
@@ -182,7 +182,7 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 | Runner identity | local dev JWT (role `runner`) | Access service token `datatrust-runner` (role `runner` only) |
 | Operator identity (start runs, read incidents) | local dev JWT (role `operator`) | your Access login in the browser, or Access service token `datatrust-operator` for the CLI and the smoke |
 | Probe identity | DuckDB connection opened read-only | impersonated service account `datatrust-prober`, dry run plus byte cap |
-| Lineage | `dbt-ol` file transport, uploaded by the runner | same |
+| Lineage | `dbt-ol` file transport, uploaded by the runner in POSTs of at most 10 events and 256 KB, one queue message per POST | same |
 
 ## Local setup
 

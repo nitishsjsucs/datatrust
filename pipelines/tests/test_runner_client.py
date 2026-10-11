@@ -101,15 +101,40 @@ def test_4xx_is_fatal_without_retry():
 
 
 def test_job_calls_carry_lease_and_job_headers():
+    events = [{"e": i} for i in range(12)]
     with FakeWorker(
-        [(202, {"accepted": 2, "eventIds": ["a", "b"]}), (202, {"accepted": 1, "eventIds": ["c"]})]
+        [
+            (202, {"accepted": 10, "eventIds": [f"id{i}" for i in range(10)]}),
+            (202, {"accepted": 2, "eventIds": ["id10", "id11"]}),
+        ]
     ) as w:
-        ids = client(w.url).post_lineage(_job(), [{"e": 1}, {"e": 2}, {"e": 3}], batch=2)
-    assert ids == ["a", "b", "c"]
+        ids = client(w.url).post_lineage(_job(), events)
+    assert ids == [f"id{i}" for i in range(12)]
+    assert [len(body) for *_, body in w.seen] == [10, 2]
     for _, path, headers, _ in w.seen:
         assert path == "/api/v1/lineage"
         assert headers["X-DataTrust-Lease-Token"] == "abc"
         assert headers["X-DataTrust-Job-Id"] == "job_1"
+
+
+def test_lineage_posts_carry_at_most_10_events_and_256_kb():
+    """SPEC 28.5.2: the Worker answers 413 above either limit."""
+    from datatrust.runner.client import LINEAGE_POST_MAX_BYTES, LINEAGE_POST_MAX_EVENTS, lineage_batches
+
+    assert (LINEAGE_POST_MAX_EVENTS, LINEAGE_POST_MAX_BYTES) == (10, 262_144)
+    assert [len(b) for b in lineage_batches([{"e": i} for i in range(25)])] == [10, 10, 5]
+    big = [{"e": i, "pad": "x" * 100_000} for i in range(5)]
+    batches = lineage_batches(big)
+    assert [len(b) for b in batches] == [2, 2, 1]
+    for b in batches:
+        assert len(json.dumps(b).encode()) <= LINEAGE_POST_MAX_BYTES
+    # Exactly at the limit still fits; one byte more starts a new batch.
+    one = {"pad": ""}
+    one["pad"] = "x" * (LINEAGE_POST_MAX_BYTES - 2 - len(json.dumps(one).encode()))
+    assert len(json.dumps([one]).encode()) == LINEAGE_POST_MAX_BYTES
+    assert lineage_batches([one]) == [[one]]
+    with pytest.raises(ValueError, match="larger than one lineage POST"):
+        lineage_batches([{"pad": "x" * LINEAGE_POST_MAX_BYTES}])
 
 
 def test_network_errors_are_retried_then_raised():

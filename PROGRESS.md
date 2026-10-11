@@ -6,7 +6,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` and 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B` done; 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
-Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1, F2, F3.
+Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F4.
 
 ## Done
 
@@ -61,9 +61,11 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 3, F3 `feat(ops): setup, doctor and wizard for the Workers Free plan`: setup-prod drops the Basin Pipelines stream, sink and pipeline steps (5 to 7) and the stream id, creates the five `datatrust-*` queues, only notes a missing `BASIN_CATALOG_TOKEN` (the first `lake commit` needs it), and points a disabled-billing preflight at the console; doctor drops the Workers Paid warning and the stream, sink and pipeline checks, and adds `[ok] Workers Free plan only` from the production template (`paid_only_keys`: no `pipelines`, `limits`, `triggers`, `tail_consumers`, `logpush` or `durable_objects`); README step numbers in every doctor fix follow the new tables; the wizard (19 stages) has no Workers Paid stage, marks what was done on 2026-10-10, adds the One-time PIN step, pre-fills the account id, team domain, project and location (Enter keeps them, typing overrides), and walks billing on the shared project; `.env.example` notes the Free plan and the known values; README production setup is SPEC 21 (17 Cloudflare and 7 Google Cloud steps with what is done). Tests in `test_ops_scripts.py`: no `basin pipelines` command or `--stream` in setup-prod, its queue list equals doctor's, `paid_only_keys`, no Pipelines checks in doctor, no Workers Paid stage in the wizard and the pre-filled values. Nothing was run against Cloudflare or Google Cloud.
 
+- Builder 3, F4 `fix(worker): lineage ingest in POSTs of ten events with one bundle message`: `POST /api/v1/lineage` answers 413 above 10 events or 256 KB (`content-length` checked before the job lookup, the body length after), validates every event, ids each as the first 32 hex characters of SHA-256 over `JSON.stringify` of the event as received, puts it in R2 and sends ONE `{runId, events: [{eventId, r2Key}]}` message per POST; it no longer writes D1. The `datatrust-lineage-events` consumer (`max_batch_size 1` in all three configs) reads relations and up to 10 events, dedupes the edges and writes them and the `lineage_events` rows (already processed) with two set-based `json_each` statements in one `db.batch` (`lineageBundleStatements`; `json_each` confirmed in the D1 "Query JSON" docs on 2026-10-11 and in Miniflare by the tests). `await-ingested` counts `lineage_events` rows (`countLineageEvents`). The runner's `post_lineage` packs greedy batches of at most `LINEAGE_POST_MAX_EVENTS = 10` and `LINEAGE_POST_MAX_BYTES = 262144` bytes of JSON as `requests` sends it. Tests: 10 events accepted with one message, 11 events and a 270 KB body answer 413 (`api.test.ts`); 140 events posted 10 at a time give exactly 14 messages and all 140 rows and the full graph; redelivered bundles add nothing; malformed and 11-event bundles are acked (`queues.test.ts`); batching limits incl. the exact 256 KB boundary (`test_runner_client.py`). `npm run bench:e2e -- --pytest`: 2 passed (S01, T14, S04 top-3 identical to offline), ports free.
+
 ## Next
 
-- SPEC 23.1, Free plan migration, in order (F1 to F3 done): F4 lineage POSTs of ten events; F5 set-based D1 writes and request caps; F6 module-scope collator; F7 daily Workers AI neuron ledger and split summary steps; F8 runner idle backoff; F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
+- SPEC 23.1, Free plan migration, in order (F1 to F4 done): F5 set-based D1 writes and request caps; F6 module-scope collator; F7 daily Workers AI neuron ledger and split summary steps; F8 runner idle backoff; F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
 - Production execution, by Nitish's operator after the builder gate (a rerun of `setup:prod -- --cloudflare-only` redeploys later Worker changes and applies new migrations): SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux container, not yet observed on ubuntu-latest.
 
@@ -71,10 +73,10 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 53 passed
-- `npm run test:worker`: 66 passed
+- `npm run test:worker`: 68 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 184 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-10, at F1)
+- `uv run pytest`: 185 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F4)
 - `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template (no `pipelines` binding)
 
 ## Deviations from SPEC.md

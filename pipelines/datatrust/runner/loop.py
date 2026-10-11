@@ -2,7 +2,7 @@
 
 dbt_build: synthesize the seed, apply the scenario if one is given (scenario + decoys, exactly as the offline
 benchmark does), load, `dbt-ol build`, snapshot marts on green runs, upload relations and run_results, post
-OpenLineage events in batches of 50 with the job headers, complete with check results.
+OpenLineage events in POSTs of at most 10 events and 256 KB with the job headers, complete with check results.
 diagnostics: render and run the requested probes against this runner's own warehouse and relations (never
 SQL from the request), on a read-only connection; sanitize with `rca sanitize`; complete.
 """

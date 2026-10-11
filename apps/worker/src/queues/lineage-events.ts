@@ -1,11 +1,13 @@
 import { edgesFromEvent, makeResolver, parseRunEvent, type RelationsMap } from '@datatrust/rca';
 import type { AppEnv } from '../env';
-import { LineageMessage } from '../schemas';
-import { markLineageProcessed } from '../store/repo';
+import { LineageBundleSchema } from '../schemas';
+import { type EdgeRow, lineageBundleStatements } from '../store/repo';
 
 /**
- * datatrust-lineage-events: read the OpenLineage event from R2, resolve datasets by (schema, table) against the
- * run's relations.json, and upsert column and dataset edges (SPEC 9, 13.3).
+ * datatrust-lineage-events (max_batch_size 1): one message per lineage POST, up to 10 OpenLineage events in
+ * R2. Resolve datasets by (schema, table) against the run's relations.json, then write the column and
+ * dataset edges and the lineage_events rows with two set-based statements in one batch (SPEC 9, 13.3,
+ * 28.5.2). Redelivery is harmless: both inserts are ON CONFLICT DO NOTHING.
  */
 export async function handleLineageEvents(batch: MessageBatch<unknown>, env: AppEnv): Promise<void> {
   const relationsCache = new Map<string, RelationsMap | null>();
@@ -16,29 +18,33 @@ export async function handleLineageEvents(batch: MessageBatch<unknown>, env: App
     }
     return relationsCache.get(runId) ?? null;
   };
-  const edge = env.DB.prepare(
-    `INSERT INTO lineage_edges (run_id, src_node, src_column, dst_node, dst_column) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
-  );
   for (const msg of batch.messages) {
-    const parsed = LineageMessage.safeParse(msg.body);
+    const parsed = LineageBundleSchema.safeParse(msg.body);
     if (!parsed.success) {
       msg.ack();
       console.error('datatrust-lineage-events: malformed message');
       continue;
     }
-    const { runId, eventId, r2Key } = parsed.data;
+    const { runId, events } = parsed.data;
     try {
       const relations = await relationsFor(runId);
       if (!relations) throw new Error(`relations not uploaded yet for ${runId}`);
-      const obj = await env.ARTIFACTS.get(r2Key);
-      if (!obj) throw new Error(`missing ${r2Key}`);
-      const edges = edgesFromEvent(parseRunEvent(await obj.json()), makeResolver(relations));
-      const stmts = [
-        ...edges.columnEdges.map((e) => edge.bind(runId, e.from.node, e.from.column ?? '*', e.to.node, e.to.column ?? '*')),
-        ...edges.datasetEdges.map((e) => edge.bind(runId, e.from, '*', e.to, '*')),
-      ];
-      for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
-      await markLineageProcessed(env.DB, runId, eventId);
+      const resolver = makeResolver(relations);
+      const rows = new Map<string, EdgeRow>();
+      for (const ev of events) {
+        const obj = await env.ARTIFACTS.get(ev.r2Key);
+        if (!obj) throw new Error(`missing ${ev.r2Key}`);
+        const edges = edgesFromEvent(parseRunEvent(await obj.json()), resolver);
+        for (const e of edges.columnEdges) {
+          const row: EdgeRow = [e.from.node, e.from.column ?? '*', e.to.node, e.to.column ?? '*'];
+          rows.set(row.join('\u0000'), row);
+        }
+        for (const e of edges.datasetEdges) {
+          const row: EdgeRow = [e.from, '*', e.to, '*'];
+          rows.set(row.join('\u0000'), row);
+        }
+      }
+      await env.DB.batch(lineageBundleStatements(env.DB, runId, [...rows.values()], events));
       msg.ack();
     } catch (err) {
       console.error('datatrust-lineage-events', err);

@@ -68,7 +68,12 @@ export const AlertSchema = z.object({
 });
 
 export const CheckResultsMessage = z.object({ runId: z.string(), checkResults: z.array(CheckResultSchema) });
-export const LineageMessage = z.object({ runId: z.string(), eventId: z.string(), r2Key: z.string() });
+/** One message per lineage POST: up to 10 events already stored in R2 (SPEC 28.5.2). */
+export const LineageBundleSchema = z.object({
+  runId: z.string().min(1),
+  events: z.array(z.object({ eventId: z.string().min(1), r2Key: z.string().min(1) })).min(1).max(10),
+});
+export type LineageBundle = z.infer<typeof LineageBundleSchema>;
 export const InvestigateMessage = z.object({
   runId: z.string(),
   incidentId: z.string(),

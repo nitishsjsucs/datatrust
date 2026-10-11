@@ -6,7 +6,9 @@ import { createApp } from '../src/app';
 import type { AppEnv } from '../src/env';
 import { insertRun, upsertLineageGraph } from '../src/store/repo';
 import { seed101Events, seed101Relations } from './helpers/fixtures';
-import { humanClaims, type Keys, makeKeys, mint, OPERATOR, testEnv } from './helpers/keys';
+import { request } from './helpers/app';
+import { leasedBuildJob, manyEvents, recordingQueue } from './helpers/jobs';
+import { humanClaims, type Keys, makeKeys, mint, OPERATOR, serviceClaims, testEnv } from './helpers/keys';
 
 const app = createApp();
 let keys: Keys;
@@ -71,5 +73,28 @@ describe('read API', () => {
     expect(nodes).toContain('source.datatrust.raw.fx_rates');
     expect(nodes).not.toContain('model.datatrust.stg_employees');
     expect((await get('/api/lineage/run_api_1/upstream')).status).toBe(400);
+  });
+});
+
+describe('POST /api/v1/lineage limits (Free plan, SPEC 28.5.2)', () => {
+  it('accepts up to 10 events in one POST with one queue message, and answers 413 above 10 events or 256 KB', async () => {
+    const runner = await mint(keys, serviceClaims());
+    const headers = await leasedBuildJob('run_api_ol');
+    const { queue, bodies } = recordingQueue<{ runId: string; events: unknown[] }>();
+    const e = { ...env, LINEAGE_Q: queue };
+    const ten = manyEvents(seed101Events, 10);
+    const ok = await request(e, 'POST', '/api/v1/lineage', { token: runner, headers, body: ten });
+    expect(ok.status).toBe(202);
+    expect(((await ok.json()) as { accepted: number }).accepted).toBe(10);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]!.events).toHaveLength(10);
+    const eleven = await request(e, 'POST', '/api/v1/lineage', { token: runner, headers, body: manyEvents(seed101Events, 11) });
+    expect(eleven.status).toBe(413);
+    const padded = [{ ...(seed101Events[0] as object), padding: 'x'.repeat(270_000) }];
+    const big = await request(e, 'POST', '/api/v1/lineage', { token: runner, headers, body: padded });
+    expect(big.status).toBe(413);
+    expect(bodies).toHaveLength(1);
+    const operator = await mint(keys, humanClaims(OPERATOR));
+    expect((await request(e, 'POST', '/api/v1/lineage', { token: operator, headers, body: ten })).status).toBe(403);
   });
 });

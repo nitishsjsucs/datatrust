@@ -10,7 +10,7 @@ import { investigationIds } from '../investigation-ids';
 import { auditEvent, auditEventId, createSink } from '../sinks/event-sink';
 import {
   countCheckResults,
-  countProcessedLineageEvents,
+  countLineageEvents,
   finishRun,
   insertJob,
   listCheckResults,
@@ -88,7 +88,7 @@ export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, Validation
       'await-ingested',
       async () => {
         const checks = await countCheckResults(db, runId);
-        const lineage = await countProcessedLineageEvents(db, runId);
+        const lineage = await countLineageEvents(db, runId);
         const wantChecks = build.checkCount ?? 0;
         const wantLineage = build.expectedLineageEvents ?? 0;
         if (checks < wantChecks || lineage < wantLineage) {

@@ -3,7 +3,7 @@ import { env as baseEnv } from 'cloudflare:workers';
 import { buildLineageGraph } from '@datatrust/rca';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { AppEnv } from '../src/env';
-import { getJob, getRun, insertLineageEvent, markLineageProcessed, upsertCheckResults, upsertLineageGraph } from '../src/store/repo';
+import { getJob, getRun, lineageBundleStatements, upsertCheckResults, upsertLineageGraph } from '../src/store/repo';
 import { request } from './helpers/app';
 import { s01 } from './helpers/fixtures';
 import { humanClaims, type Keys, makeKeys, mint, OPERATOR, testEnv } from './helpers/keys';
@@ -28,10 +28,8 @@ async function createRun(): Promise<string> {
 async function ingest(runId: string, checks = s01.checks, lineageEvents = 3) {
   await upsertCheckResults(baseEnv.DB, runId, checks);
   await upsertLineageGraph(baseEnv.DB, runId, buildLineageGraph(s01.events, s01.relations));
-  for (let i = 0; i < lineageEvents; i++) {
-    await insertLineageEvent(baseEnv.DB, runId, `e${i}`, `lineage/${runId}/e${i}.json`);
-    await markLineageProcessed(baseEnv.DB, runId, `e${i}`);
-  }
+  const events = Array.from({ length: lineageEvents }, (_, i) => ({ eventId: `e${i}`, r2Key: `lineage/${runId}/e${i}.json` }));
+  await baseEnv.DB.batch(lineageBundleStatements(baseEnv.DB, runId, [], events));
 }
 
 describe('ValidationRunWorkflow', () => {

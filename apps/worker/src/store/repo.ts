@@ -233,23 +233,41 @@ export async function countCheckResults(db: D1Database, runId: string): Promise<
 
 // ------------------------------------------------------------------------------------------- lineage
 
-export async function insertLineageEvent(db: D1Database, runId: string, eventId: string, r2Key: string): Promise<void> {
-  await db
-    .prepare(`INSERT INTO lineage_events (run_id, event_id, r2_key) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`)
-    .bind(runId, eventId, r2Key)
-    .run();
+export type EdgeRow = [srcNode: string, srcColumn: string, dstNode: string, dstColumn: string];
+
+/**
+ * Set-based writes for one lineage bundle (SPEC 28.5.2, 28.5.3): one statement for all edges and one for the
+ * lineage_events rows (inserted already processed), each over a JSON array parameter through json_each, so
+ * the consumer issues two statements whatever the number of edges. Run them in one db.batch (atomic).
+ */
+export function lineageBundleStatements(
+  db: D1Database,
+  runId: string,
+  edges: EdgeRow[],
+  events: Array<{ eventId: string; r2Key: string }>,
+): D1PreparedStatement[] {
+  return [
+    db
+      .prepare(
+        `INSERT INTO lineage_edges (run_id, src_node, src_column, dst_node, dst_column)
+         SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]')
+         FROM json_each(?2) WHERE true ON CONFLICT DO NOTHING`,
+      )
+      .bind(runId, JSON.stringify(edges)),
+    db
+      .prepare(
+        `INSERT INTO lineage_events (run_id, event_id, r2_key, processed_at)
+         SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), ?3
+         FROM json_each(?2) WHERE true ON CONFLICT DO NOTHING`,
+      )
+      .bind(runId, JSON.stringify(events.map((e) => [e.eventId, e.r2Key])), nowIso()),
+  ];
 }
 
-export async function markLineageProcessed(db: D1Database, runId: string, eventId: string): Promise<void> {
-  await db
-    .prepare(`UPDATE lineage_events SET processed_at = ? WHERE run_id = ? AND event_id = ?`)
-    .bind(nowIso(), runId, eventId)
-    .run();
-}
-
-export async function countProcessedLineageEvents(db: D1Database, runId: string): Promise<number> {
+/** lineage_events rows of a run; every row is written already processed by the bundle consumer. */
+export async function countLineageEvents(db: D1Database, runId: string): Promise<number> {
   const row = await db
-    .prepare(`SELECT count(*) AS n FROM lineage_events WHERE run_id = ? AND processed_at IS NOT NULL`)
+    .prepare(`SELECT count(*) AS n FROM lineage_events WHERE run_id = ?`)
     .bind(runId)
     .first<{ n: number }>();
   return row?.n ?? 0;
