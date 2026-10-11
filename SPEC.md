@@ -2,7 +2,7 @@
 
 Lineage-aware data quality and root-cause analysis for workforce (HR, recruiting, compensation) data.
 
-- Spec version: 1.1, 2026-10-10. Version 1.0 was written by the architect pass; 1.1 resolves the review findings (section 27, Review log). Nothing is implemented yet.
+- Spec version: 1.2, 2026-10-10. Version 1.0 was written by the architect pass; 1.1 resolves the review findings (section 27, Review log); 1.2 moves production onto the Cloudflare Workers Free plan (section 28, ADR-0008), and section 28 wins over any older sentence that still conflicts with it. v1 is implemented locally (see PROGRESS.md); the Free plan changes are the commits of section 23.1.
 - Repository: `~/Developer/projects/datatrust`, published as `github.com/nitishsjsucs/datatrust` (public, empty, default branch `main`, confirmed with `gh api` on 2026-10-10).
 - v1 is built from scratch. No earlier implementation is reused.
 - Every version, command and product fact in this document is either verified (see section 25, Verification log) or explicitly marked **UNVERIFIED**.
@@ -46,6 +46,7 @@ Hard numbers v1 must make exactly true:
 7. A Cloudflare Worker that coordinates validation and investigation with Queues and Workflows, sanitizes evidence, and generates incident summaries with Workers AI (production) through AI Gateway.
 8. Cloudflare Access protection with in-Worker JWT verification (fail closed).
 9. A local path that works fully offline and in CI, and a production path that runs as soon as credentials exist, with an idempotent `setup:prod` and a `doctor` that names every missing prerequisite.
+10. Production on the Cloudflare Workers Free plan only, inside DataTrust's share of the account's daily allowances (section 28).
 
 ### Non-goals (v1)
 
@@ -77,27 +78,28 @@ flowchart LR
     DBT["dbt-ol build<br/>22 contracts + 40 checks"]
     PROBE["Diagnostic probes<br/>read-only identity"]
     SAN["rca sanitize (Node CLI)<br/>HMAC tokens, aggregates only"]
+    COMMIT["datatrust lake commit<br/>pyiceberg, once per event_id"]
   end
 
   WH[("Warehouse<br/>local: DuckDB stand-in<br/>prod: BigQuery")]
 
-  subgraph CF["Worker 'datatrust' (local: wrangler dev / Miniflare, prod: Workers)"]
+  subgraph CF["Worker 'datatrust' on Workers Free (local: wrangler dev / Miniflare)"]
     API["Hono API<br/>Access JWT verification"]
-    QCR[["Queue dt-check-results"]]
-    QLE[["Queue dt-lineage-events"]]
-    QIN[["Queue dt-investigate"]]
+    QCR[["Queue datatrust-check-results"]]
+    QLE[["Queue datatrust-lineage-events<br/>one bundle per POST of 10 events"]]
+    QIN[["Queue datatrust-investigate"]]
+    QAU[["Queue datatrust-audit-events"]]
     WFV{{"ValidationRunWorkflow"}}
     WFI{{"InvestigationWorkflow"}}
     RCA["rca core (TypeScript)<br/>trace, plan, rank, sanitize"]
-    D1[("D1: runs, jobs, checks,<br/>lineage, incidents")]
-    R2[("R2: datatrust-artifacts")]
-    SUM["Summarizer"]
-    SINK["EventSink"]
+    D1[("D1: runs, jobs, checks, lineage,<br/>incidents, ai_budget")]
+    R2[("R2: datatrust-artifacts<br/>incl. immutable lake/ NDJSON")]
+    SUM["Summarizer<br/>daily neuron ledger"]
+    SINK["QueueSink"]
   end
 
   AIG["AI Gateway 'datatrust'<br/>to Workers AI (prod)"]
   LLM["llama-server :8160 Qwen3-1.7B<br/>or template stub (local)"]
-  PIPE["Basin Pipelines stream (prod)"]
   CAT[("Basin Catalog Iceberg<br/>on R2 datatrust-lake (prod)")]
   ICE[("pyiceberg SQL catalog<br/>local Iceberg stand-in")]
 
@@ -106,7 +108,7 @@ flowchart LR
   DBT --> WH
   PROBE --> WH
   PROBE --> SAN
-  RUNNER -- "lease jobs, post sanitized results,<br/>post OpenLineage events" --> API
+  RUNNER -- "lease jobs, post sanitized results,<br/>post OpenLineage events (10 per POST)" --> API
   API --> QCR --> D1
   API --> QLE --> D1
   API -- "create" --> WFV
@@ -119,11 +121,16 @@ flowchart LR
   SUM -- local --> LLM
   WFI --> R2
   QCR --> SINK
+  WFV --> SINK
   WFI --> SINK
-  SINK -- prod --> PIPE --> CAT
-  SINK -- local --> R2
-  R2 -. "datatrust lake sync (local only)" .-> ICE
+  SINK --> QAU
+  QAU -- "one object per batch" --> R2
+  COMMIT -- "GET /api/lake/export" --> API
+  COMMIT -- prod --> CAT
+  COMMIT -- local --> ICE
 ```
+
+Basin Pipelines, the v1.1 production lake sink, is Workers Paid only and is no longer part of the design (section 28.5.1).
 
 ### 3.2 One validation run, end to end
 
@@ -144,13 +151,13 @@ sequenceDiagram
   R->>W: POST /api/runner/lease
   W-->>R: job dbt_build
   R->>WH: generate, inject, load, dbt-ol build
-  R->>W: POST /api/v1/lineage (OpenLineage events, batched)
-  W->>Q: dt-lineage-events
+  R->>W: POST /api/v1/lineage (OpenLineage events, 10 per POST)
+  W->>Q: datatrust-lineage-events (one bundle per POST)
   R->>W: POST /api/runner/jobs/:id/complete {checkResults}
-  W->>Q: dt-check-results (sendBatch)
+  W->>Q: datatrust-check-results (one message per run)
   W->>VW: sendEvent build-complete
   VW->>VW: step await-ingested (retries until counts match)
-  VW->>Q: dt-investigate (if any check failed)
+  VW->>Q: datatrust-investigate (if any check failed)
   Q->>IW: consumer creates instance inv_RUNID_TRIGGER_HASH
   IW->>IW: step trace-lineage, step plan-probes
   IW->>W: step request-diagnostics: insert job diagnostics
@@ -160,8 +167,8 @@ sequenceDiagram
   R->>W: complete {probeResults (sanitized)}
   W->>IW: sendEvent diagnostics-complete
   IW->>IW: step rank, step sanitize
-  IW->>S: step summarize (Workers AI in prod)
-  IW->>W: step persist-incident (D1, R2, EventSink)
+  IW->>S: steps summarize-draft and summarize-repair (Workers AI in prod, neuron ledger)
+  IW->>W: step persist-incident (D1, R2, audit Queue)
 ```
 
 ### 3.3 Key design decisions (each becomes an ADR in `docs/adr/`)
@@ -173,6 +180,7 @@ sequenceDiagram
 5. **ADR-0005 Raw data are dbt sources, not seeds.** Verified: `dbt-ol` omits `ref()`-ed seeds from dataset-level `inputs` (they still appear in `columnLineage`), while sources appear in both. Loading raw tables as sources keeps the lineage graph complete.
 6. **ADR-0006 Deterministic warehouse semantics.** Every DuckDB session runs in UTC (`settings: {TimeZone: UTC}` in the profile), every stored instant is a time-zone-aware UTC timestamp, and every money and rate value is `decimal(38,9)` on DuckDB and `NUMERIC` (38,9) on BigQuery. Plain `numeric` in DuckDB is DECIMAL(18,3) and is banned. Local time is derived only through the `tz_local_*` dialect macros. Reason: without these rules the same seed gives different answers on the Mac, on ubuntu-latest and on BigQuery (review findings B1, B2).
 7. **ADR-0007 Least-privilege probes and runner-side sanitization.** Probes run on a read-only DuckDB connection locally and as the impersonated `datatrust-prober` service account on BigQuery, with a dry run and `maximum_bytes_billed` on every query. The runner sanitizes probe output with the same TypeScript code (`rca sanitize`) before anything is uploaded, so no raw identifier reaches R2 or D1. The Worker re-checks and rejects unsanitized payloads (review finding I9).
+8. **ADR-0008 Production on the Workers Free plan.** No Workers Paid feature anywhere: the audit lake goes through a Queue into immutable R2 objects that a pyiceberg committer adds to Basin Catalog once per event id, lineage arrives in bundles of ten, D1 writes are set-based, Workers AI spend is capped by a daily ledger, and every account-wide allowance is budgeted at a 25% share because four repos share the account (section 28).
 
 ---
 
@@ -180,7 +188,7 @@ sequenceDiagram
 
 | Concern | Local and CI (offline) | Production | Notes |
 |---|---|---|---|
-| HTTP API, queue consumers, workflows | `wrangler dev --local` (Miniflare, workerd) on 127.0.0.1:8792, inspector 9242 | Cloudflare Workers, Queues, Workflows | Verified locally: Workflows incl. `waitForEvent`/`sendEvent`, Queue producer+consumer, D1, R2 all run in local mode |
+| HTTP API, queue consumers, workflows | `wrangler dev --local` (Miniflare, workerd) on 127.0.0.1:8792, inspector 9242 | Cloudflare Workers, Queues, Workflows on the **Workers Free plan** (no Paid feature anywhere, section 28) | Verified locally: Workflows incl. `waitForEvent`/`sendEvent`, Queue producer+consumer, D1, R2 all run in local mode. Miniflare enforces no plan limits, so `npm run budget:cpu` and `test_free_budget.py` check them offline |
 | Metadata store | D1 (Miniflare, `.wrangler/state`) | D1 `datatrust` | Same migrations |
 | Artifacts | R2 (Miniflare) bucket `datatrust-artifacts` | R2 `datatrust-artifacts` | |
 | Warehouse | **DuckDB 1.5.6 via dbt-duckdb 1.11.0 (stand-in for BigQuery)**, session pinned to UTC by the profile | BigQuery via dbt-bigquery 1.12.1 | Dialect macros in `dbt/macros/dialect/` (section 7.3) |
@@ -188,13 +196,15 @@ sequenceDiagram
 | Restricted / authorized views | plain DuckDB views in schema `restricted` (stand-in) | BigQuery authorized view in `datatrust_restricted` over the untagged aggregate table `int_comp_by_dept_month` (`grant_access_to` the staging dataset) | Authorized views do not bypass column-level security (docs), so the view never reads tagged columns |
 | Column masking | none (stand-in: sanitizer + tests) | BigQuery policy tags + data masking policies on per-person mart columns | Billing must be enabled (verified) |
 | Time travel / recovery | per-run Parquet snapshots of marts under `DATATRUST_SNAPSHOT_DIR` (absolute path, stand-in) | `FOR SYSTEM_TIME AS OF` on sources and table materializations only, 7-day window, `bq cp table@<ms>` restore, 7-day fail-safe via Customer Care only | |
-| Iceberg lake | **pyiceberg 0.12.0 SqlCatalog on SQLite (stand-in for Basin Catalog)**, fed from R2 NDJSON by `datatrust lake sync` | Basin Pipelines stream to Basin Catalog Iceberg table (sink roll interval 60 s) | Pipelines binding runs in local mode but no local delivery is relied on |
-| LLM summaries | **llama-server (Qwen3-1.7B Q4_0) on 127.0.0.1:8160, OpenAI-compatible (stand-in)** or deterministic template stub (CI) | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust` | Verified: AI binding is "not supported" in `wrangler dev --local` |
+| Iceberg lake | **pyiceberg 0.12.0 SqlCatalog on SQLite (stand-in for Basin Catalog)**, fed by `datatrust lake commit --catalog local` from the same Queue, consumer and `lake/` R2 objects as production | Queue `datatrust-audit-events` to immutable NDJSON objects in R2 `datatrust-artifacts`, added to the Basin Catalog Iceberg table `datatrust.audit_events` on `datatrust-lake` by `datatrust lake commit --catalog basin` (pyiceberg REST catalog, once per `event_id`) | Basin Pipelines is Workers Paid only (error 1021 on Nitish's account) and is not used (ADR-0008) |
+| LLM summaries | **llama-server (Qwen3-1.7B Q4_0) on 127.0.0.1:8160, OpenAI-compatible (stand-in)** or deterministic template stub (CI) | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust`, at most 2,000 neurons per UTC day by a D1 ledger (template fallback with reason `daily_neuron_cap` beyond it, section 28.5.5) | Verified: AI binding is "not supported" in `wrangler dev --local` |
 | Auth | locally generated RS256 keypair; JWKS injected via `.dev.vars`; tokens minted by `npm run dev:token` | Cloudflare Access, JWKS from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`; `preview_urls: false` so only the Access-protected workers.dev hostname serves | Same verifier code path, different key source |
 | Runner identity | local dev JWT (role `runner`) | Access service token `datatrust-runner` (Service Auth policy) | |
 | Probe identity | DuckDB connection opened with `read_only=True` | impersonated service account `datatrust-prober` (read-only roles), dry run plus `maximum_bytes_billed` per probe | ADR-0007 |
 | Scheduling | none (CLI or `POST /api/runs`) | none in v1 (no cron trigger) | |
 | Lineage | `dbt-ol` file transport, uploaded by runner; dataset identity normalized to `(schema, table)` | same | OpenLineage namespaces embed the absolute DuckDB path (verified), so they are never used as identity |
+| Cloudflare plan and account | none | Workers Free on an account shared by four repos; DataTrust budgets 25% of every daily allowance and names every resource `datatrust*` | section 28.6 |
+| Google Cloud project | none | shared project `master-magnet-444903-u4` (US), billing enabled, only `datatrust_*` datasets and `datatrust-*` identities, dataset- or resource-scoped grants, every query capped with `maximum_bytes_billed` | section 28.5.10 |
 
 ### 4.1 Execution status labels (normative for the README status table)
 
@@ -206,7 +216,7 @@ The README status table gives every component exactly one of these labels, and c
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local`) only | executed in production (date, command) |
 | Access JWT verification | executed against local RS256 keys only | executed against Cloudflare Access (date, command) |
 | Workers AI summaries, AI Gateway | implemented, not executed | executed in production, with the grounding pass rate and fallback rate |
-| Basin Pipelines, Basin Catalog | implemented, not executed (local pyiceberg stand-in executed) | executed in production, Iceberg row read back (date, command) |
+| Audit lake: Queue to R2 objects, Basin Catalog commit | implemented, not executed (local pyiceberg stand-in executed) | executed in production, Iceberg row read back (date, command) |
 | BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed | executed in production (date, command) |
 
 ---
@@ -234,7 +244,7 @@ datatrust/
   checks/
     registry.yml                           # the 40 checks: id, dbt test name, category, node, columns
   schemas/
-    lake/audit_event.stream.json           # Basin Pipelines stream schema (also drives pyiceberg schema)
+    lake/audit_event.stream.json           # audit event schema: QueueSink validation and the Iceberg schema (historical file name)
     api/                                   # JSON Schemas shared by Worker (zod mirrors) and runner tests
       check_result.json
       runner_job.json
@@ -248,12 +258,14 @@ datatrust/
     adr/0005-raw-as-sources.md
     adr/0006-deterministic-warehouse-semantics.md
     adr/0007-least-privilege-probes.md
+    adr/0008-workers-free-plan.md
   packages/rca/
     package.json
     tsconfig.json
     vitest.config.ts                       # node environment
     src/index.ts
     src/types.ts                           # NodeId, ColumnRef, CheckResult, Candidate, ProbeRequest, ProbeResult, ...
+    src/order.ts                           # module-scope Intl.Collator and compareIds (section 28.5.4)
     src/lineage/openlineage.ts             # zod schemas for RunEvent + columnLineage facet; event -> edges
     src/lineage/graph.ts                   # LineageGraph build, upstream closure (column and dataset level)
     src/rca/trace.ts                       # failing checks / failed metrics -> candidates
@@ -285,9 +297,10 @@ datatrust/
     wrangler.test.jsonc                    # local config minus remote-only bindings
     worker-configuration.d.ts              # generated by `wrangler types --strict-vars=false` (includes runtime types)
     migrations/0001_init.sql
+    migrations/0002_ai_budget.sql          # daily Workers AI neuron ledger (section 28.5.5)
     src/index.ts                           # export default { fetch, queue }; export workflow classes (no scheduled handler in v1)
     src/app.ts                             # Hono app and routes
-    src/env.ts                             # AppEnv: generated Env plus union-typed vars and optional AI / EVENTS
+    src/env.ts                             # AppEnv: generated Env plus union-typed vars and optional AI
     src/auth/access.ts                     # JWT verification (remote JWKS or local JWKS)
     src/auth/roles.ts                      # role map, route guards
     src/api/runs.ts
@@ -295,19 +308,22 @@ datatrust/
     src/api/lineage.ts
     src/api/incidents.ts
     src/api/alerts.ts
+    src/api/lake.ts                        # /api/lake/export for the committer (runner, both environments)
     src/api/dev.ts                         # /api/dev/* only when ENVIRONMENT=local
     src/queues/router.ts                   # dispatch by batch.queue
     src/queues/check-results.ts
     src/queues/lineage-events.ts
     src/queues/investigate.ts
     src/queues/dlq.ts
+    src/queues/audit-events.ts             # batches audit events into immutable lake/ objects
     src/workflows/validation-run.ts
     src/workflows/investigation.ts
     src/llm/summarizer.ts                  # interface + factory
     src/llm/workers-ai.ts
     src/llm/openai-compatible.ts
     src/llm/template.ts
-    src/sinks/event-sink.ts                # interface + PipelinesSink + R2NdjsonSink
+    src/llm/budget.ts                      # neuron rates and the D1 ledger
+    src/sinks/event-sink.ts                # interface + QueueSink (datatrust-audit-events)
     src/store/repo.ts                      # D1 repositories
     test/access.test.ts
     test/api.test.ts
@@ -316,6 +332,9 @@ datatrust/
     test/investigation.test.ts
     test/summarizer.test.ts
     test/event-sink.test.ts
+    test/free-plan.test.ts
+    test/d1-statements.test.ts
+    test/budget.test.ts
     test/helpers/keys.ts                   # in-test RS256 keypair via jose.generateKeyPair
   apps/web/                                # (stretch) React 19 + Vite 8 dashboard served as Worker static assets
     package.json
@@ -432,11 +451,13 @@ datatrust/
       bench/metrics.py                     # recall, top-k, MRR, Wilson interval, scenario-clustered bootstrap, LOSO
       bench/report.py                      # results/*.json and results/*.md
       lake/iceberg_local.py                # SqlCatalog (SQLite) writer and reader
-      lake/iceberg_basin.py                # RestCatalog reader for Basin Catalog (prod)
-      lake/sync.py                         # pull /api/dev/lake-export -> local Iceberg
+      lake/iceberg_basin.py                # RestCatalog for Basin Catalog (prod): commit and read-back
+      lake/commit.py                       # /api/lake/export -> Iceberg once per event_id (local SqlCatalog or Basin Catalog)
+      lake/sync.py                         # alias: lake commit --catalog local
       prod/governance.py                   # taxonomy, policy tags, data policies, IAM (idempotent), verify with retry
       prod/validate.py                     # compile, build --empty, dry runs of tests and probes (section 18.1)
       prod/smoke.py
+      prod/free_budget.py                  # Free plan allowances, 25% share, per-run model (section 28.6)
       doctor.py                            # Python-side checks called by scripts/doctor.sh
     tests/
       conftest.py
@@ -459,6 +480,8 @@ datatrust/
       test_no_pii_in_prompts.py
       test_restricted_views.py
       test_lake_local.py
+      test_lake_commit.py
+      test_free_budget.py
       test_bigquery_parse.py               # dbt parse --target bigquery without credentials or .prod files
   scripts/
     dev-keys.mjs                           # RS256 keypair -> .dev/keys/, JWKS -> apps/worker/.dev.vars
@@ -467,6 +490,7 @@ datatrust/
     dev-down.sh                            # kill pids, verify ports free
     setup-prod.sh                          # idempotent Cloudflare + GCP bootstrap (section 18)
     doctor.sh                              # prerequisite checks (section 18)
+    cpu-budget.mjs                         # cold CPU per Worker code path, CI gate (section 28.7)
   results/                                 # committed benchmark outputs produced in-session (json + md)
     baseline-seed101.json                  # CI gate for the seed-101 bench-offline job
     baseline.json                          # five-seed test run, reported in the README
@@ -703,7 +727,7 @@ Totals: 18 generic + 22 singular = 40. On every clean seed the expected result i
 
 - The runner invokes `dbt-ol build` (openlineage-dbt 1.53.0) with `OPENLINEAGE_CONFIG` pointing at a generated file transport (`target/openlineage.jsonl`). Verified on DuckDB: model COMPLETE events carry `columnLineage` output facets, test events carry `dataQualityAssertions` input facets with `success` and `actual`, and sources appear in dataset `inputs`.
 - The runner also writes `relations.json`: dbt `relation_name` to `unique_id`, model `checksum` (sha256, present in the manifest), materialization, columns with `meta.classification`, and registry metadata (grain keys, foreign keys, interval columns, timezone columns from `meta`).
-- Upload: `POST /api/v1/lineage` accepts one OpenLineage RunEvent or an array (so the endpoint also works as an OpenLineage HTTP transport target; openlineage-python 1.53.0 `HttpConfig` supports `custom_headers`, verified, which is how Access service-token headers would be added). The Worker stores each event in R2 (`lineage/<runId>/<eventId>.json`) and enqueues a pointer on `dt-lineage-events`.
+- Upload: `POST /api/v1/lineage` accepts one OpenLineage RunEvent or an array (so the endpoint also works as an OpenLineage HTTP transport target; openlineage-python 1.53.0 `HttpConfig` supports `custom_headers`, verified, which is how Access service-token headers would be added). The Worker stores each event in R2 (`lineage/<runId>/<eventId>.json`) and enqueues one bundle message per POST (at most 10 events) on `datatrust-lineage-events` (section 28.5.2).
 - Graph model (`packages/rca/src/types.ts`):
 
 ```ts
@@ -847,7 +871,7 @@ Named resume scenarios: duplicate hires (S01), join fan-out (T14, T15), stale ex
 
 ### 12.4 Summary faithfulness eval (stretch)
 
-`datatrust bench summaries --provider template|local-llm|workers-ai` runs the 20 seed-101 incidents through a summarizer and reports: JSON validity, grounding pass rate (validator in section 13.7), repair rate, template fallback rate, root cause named within the top 3, and PII leak count (must be 0). Workers AI numbers exist only after Nitish runs it in production. (`prod smoke` collects the core Workers AI figures without this stretch item, section 18.4.)
+`datatrust bench summaries --provider template|local-llm|workers-ai` runs the 20 seed-101 incidents through a summarizer and reports: JSON validity, grounding pass rate (validator in section 13.7), repair rate, template fallback rate, root cause named within the top 3, and PII leak count (must be 0). Workers AI numbers exist only after Nitish runs it in production, resumably under the daily neuron cap (`--checkpoint`, section 28.5.5); every Workers AI number names `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. (`prod smoke` collects the core Workers AI figures without this stretch item, section 18.4.)
 
 ---
 
@@ -865,12 +889,14 @@ All routes except `/healthz` require a verified Access JWT (section 15). Roles: 
 | `POST /api/runner/lease` | runner | `{runnerId, kinds: ('dbt_build'\|'diagnostics')[], target}` returns 200 `{job}` or 204 |
 | `POST /api/runner/jobs/:jobId/artifacts` | runner | `{kind: 'run_results'\|'relations'\|'probe_results', data}` stored in R2 `runs/<runId>/<kind>.json` |
 | `POST /api/runner/jobs/:jobId/complete` | runner | `{status, checkResults?, probeResults?, expectedLineageEvents?, error?}`; enqueues and sends the matching workflow event |
-| `POST /api/v1/lineage` | runner | one OpenLineage RunEvent or an array; headers `X-DataTrust-Job-Id` and `X-DataTrust-Lease-Token` required (openlineage-python `HttpConfig.custom_headers` can send them); 403 unless that job is `dbt_build`, currently `leased` with that token; the event is filed under the job's `run_id`; 202 |
-| `POST /api/alerts` | runner, operator | `{runId, metricNode, column?, observed, expected}`; 404 unless the run exists; enqueues on dt-investigate with `trigger: 'alert'` |
+| `POST /api/v1/lineage` | runner | one OpenLineage RunEvent or an array of at most 10 events and 256 KB (413 otherwise, section 28.5.2); headers `X-DataTrust-Job-Id` and `X-DataTrust-Lease-Token` required (openlineage-python `HttpConfig.custom_headers` can send them); 403 unless that job is `dbt_build`, currently `leased` with that token; the event is filed under the job's `run_id`; 202 |
+| `POST /api/alerts` | runner, operator | `{runId, metricNode, column?, observed, expected}`; 404 unless the run exists; enqueues on datatrust-investigate with `trigger: 'alert'` |
 | `GET /api/incidents` | viewer | list, filter by runId |
 | `GET /api/incidents/:id` | viewer | failing checks, lineage path, ranked candidates, sanitized evidence, diagnostic SQL, summary, provenance |
 | `GET /api/lineage/:runId/upstream?node=&column=` | viewer | upstream subgraph |
-| `GET /api/dev/lake-export?after=` | runner, only when `ENVIRONMENT=local` | NDJSON of events written by R2NdjsonSink |
+| `GET /api/lake/export?after=` | runner (both environments) | settled `lake/` NDJSON objects after a key, at most 100 objects and 1 MB, for `datatrust lake commit` (replaces `/api/dev/lake-export`, section 28.5.1) |
+| `GET /api/ai/budget` | operator | today's (UTC) reserved and used neurons and the cap (section 28.5.5) |
+| `POST /api/eval/summary` | operator, production only (stretch) | one evidence bundle through the grounded Workers AI loop under the ledger (section 28.5.5) |
 
 ### 13.2 D1 schema (`migrations/0001_init.sql`)
 
@@ -882,6 +908,7 @@ All routes except `/healthz` require a verified Access JWT (section 15). Roles: 
 - `lineage_edges(run_id, src_node, src_column, dst_node, dst_column, PK(run_id, src_node, src_column, dst_node, dst_column))` (`'*'` column for dataset edges)
 - `incidents(incident_id PK, run_id, trigger, status, failing_checks_json, ranked_json, evidence_r2_key, summary_draft_json, summary_json, summary_provider, summary_model, summary_attempts, summary_fallback, summary_fallback_reason, provenance_json, created_at)`
 - `dead_letters(id PK, queue, body_json, error, created_at)`
+- `ai_budget(day PK, reserved, used, calls)` (migration `0002_ai_budget.sql`, section 28.5.5). Since spec 1.2 `lineage_events` rows are written by the lineage consumer only, already processed, and every multi-row write is one set-based statement (section 28.5.3).
 
 Lease in one statement: `UPDATE jobs SET status='leased', lease_token=?, lease_owner=?, lease_expires_at=?, attempts=attempts+1 WHERE job_id = (SELECT job_id FROM jobs WHERE kind IN (...) AND attempts < 3 AND (status='queued' OR (status='leased' AND lease_expires_at < ?now)) ORDER BY created_at LIMIT 1) RETURNING *` (verified in local D1: `UPDATE ... RETURNING` with the `attempts < 3` guard leased the eligible row and skipped the exhausted one). Lease TTL 15 minutes. A separate sweep in the lease handler marks `failed` any job with `attempts >= 3` whose lease expired, and sends the workflow its event with `status: 'failed'` so the run ends instead of waiting for its timeout.
 
@@ -889,12 +916,13 @@ Lease in one statement: `UPDATE jobs SET status='leased', lease_token=?, lease_o
 
 | Queue | Producer | Message (zod) | Consumer | Batch / retries |
 |---|---|---|---|---|
-| `dt-check-results` | `/complete` for dbt_build | `{runId, checkResults: CheckResult[]}` (chunks of 20) | upsert check_results, EventSink `check_result` events | max_batch_size 10, timeout 1 s, 3 retries, DLQ `dt-dlq` |
-| `dt-lineage-events` | `/api/v1/lineage` | `{runId, eventId, r2Key}` | parse event from R2, upsert lineage nodes and edges | 25, 1 s, 3 retries, DLQ |
-| `dt-investigate` | ValidationRunWorkflow, `/api/alerts` | `{runId, incidentId, trigger: 'checks'\|'alert', alert?}` | create InvestigationWorkflow with id `inv_<runId>_<trigger>_<hash8>`, where `hash8` is the first 8 hex characters of SHA-256 over the canonical alert JSON (`00000000` for `checks`). That is at most 50 characters and matches the documented `^[a-zA-Z0-9_][a-zA-Z0-9-_]*$`, max 100 (verified in docs). So an alert never collides with the checks-triggered investigation of the same run, while a redelivered message maps to the same id. Docs: `create()` throws if the id is already used by an instance inside its retention, so the consumer catches that error and acks (idempotent redelivery) | 5, 1 s, 3 retries, DLQ |
-| `dt-dlq` | Queues | any | write `dead_letters` | 10 |
+| `datatrust-check-results` | `/complete` for dbt_build | `{runId, checkResults: CheckResult[]}` (one message of at most 50 results per run) | one set-based upsert of check_results, audit `check_result` events through QueueSink | max_batch_size 10, timeout 1 s, 3 retries, DLQ `datatrust-dlq` |
+| `datatrust-lineage-events` | `/api/v1/lineage` (one message per POST) | `{runId, events: [{eventId, r2Key}]}` (1 to 10) | read relations and the events from R2, insert edges and `lineage_events` rows with two set-based statements | 1, 1 s, 3 retries, DLQ |
+| `datatrust-investigate` | ValidationRunWorkflow, `/api/alerts` | `{runId, incidentId, trigger: 'checks'\|'alert', alert?}` | create InvestigationWorkflow with id `inv_<runId>_<trigger>_<hash8>`, where `hash8` is the first 8 hex characters of SHA-256 over the canonical alert JSON (`00000000` for `checks`). That is at most 50 characters and matches the documented `^[a-zA-Z0-9_][a-zA-Z0-9-_]*$`, max 100 (verified in docs). So an alert never collides with the checks-triggered investigation of the same run, while a redelivered message maps to the same id. Docs: `create()` throws if the id is already used by an instance inside its retention, so the consumer catches that error and acks (idempotent redelivery). It also acks without creating when the incident row already exists, which covers an id reused after the 3-day Free retention (section 28.5.7) | 5, 1 s, 3 retries, DLQ |
+| `datatrust-audit-events` | QueueSink (check-results consumer, ValidationRunWorkflow `finalize`, InvestigationWorkflow `persist-incident`) | `{events: AuditEvent[]}` (at most 50, deterministic `event_id`) | write the batch as one immutable `lake/<date>/<ulid>.ndjson` object in R2 | 10, 30 s, 3 retries, DLQ |
+| `datatrust-dlq` | Queues | any | write `dead_letters` (one statement) | 10 |
 
-Messages carry IDs and pointers; payloads live in R2 or D1.
+Messages carry IDs and pointers; payloads live in R2 or D1. Since spec 1.2 a failing run sends 19 messages (57 queue operations) and a clean run 17 (section 28.6); queue names carry the `datatrust-` prefix because four repos share the account.
 
 ### 13.4 ValidationRunWorkflow (`params: {runId, target, seed, scenario}`)
 
@@ -903,7 +931,7 @@ Messages carry IDs and pointers; payloads live in R2 or D1.
 3. `waitForEvent('wait-build', {type: 'build-complete', timeout: '6 hours'})`. Verified: events sent before the wait is reached are buffered; default timeout is 24 hours, range 1 second to 365 days; timeout throws, caught here and the run is marked `stale`.
 4. `await-ingested`: compare D1 counts with `checkResults.length` and `expectedLineageEvents`; throw if short so the step retries (`retries: {limit: 10, delay: '5 seconds', backoff: 'exponential'}`).
 5. `summarize-run`: counts by status and category.
-6. `dispatch-investigation`: if any failure or error, send one `dt-investigate` message (v1: one incident per failing run).
+6. `dispatch-investigation`: if any failure or error, send one `datatrust-investigate` message (v1: one incident per failing run).
 7. `finalize`: status `passed` or `failed`, EventSink `run_completed`.
 
 ### 13.5 InvestigationWorkflow (`params: {runId, incidentId, trigger, alert?}`)
@@ -914,7 +942,7 @@ Messages carry IDs and pointers; payloads live in R2 or D1.
 4. `request-diagnostics`: insert `diagnostics` job; `waitForEvent('wait-diagnostics', {type: 'diagnostics-complete', timeout: '1 hour'})`.
 5. `rank`: `rca.rankCandidates` with `FROZEN_WEIGHTS`.
 6. `sanitize`: `rca.sanitizeEvidence` (section 13.8).
-7. `summarize`: Summarizer returns a placeholder draft; grounding validation (section 13.7), one repair retry that quotes the exact violations, then template fallback (`summary_fallback=true`, reason stored); placeholders rendered server-side (`render.ts`). The incident stores the raw draft, the rendered summary, `summary_attempts` and `summary_fallback`.
+7. `summarize-draft`, `summarize-repair`, `summarize-finalize` (section 28.5.5): the first step reserves neurons and asks the Summarizer for a placeholder draft (one AI call); grounding validation (section 13.7); only if it fails, the second step makes one repair call that quotes the exact violations; the third step validates, falls back to the template (`summary_fallback=true`, reason stored, including `daily_neuron_cap`) and renders placeholders server-side (`render.ts`). AI steps retry at most once, and completed steps replay from storage, so no AI call is repeated. The incident stores the raw draft, the rendered summary, `summary_attempts` and `summary_fallback`.
 8. `persist-incident`: D1 incident row, full incident JSON and prompt to R2 (`incidents/<id>.json`, `prompts/<id>.json`), EventSink `incident_created`.
 
 ### 13.6 Summarizer
@@ -937,7 +965,7 @@ interface IncidentSummary {
 
 - The model never writes numbers. Every number it wants to cite is a placeholder `{ev:<evidenceKey>.<field>}`, for example `{ev:dup_key_rate.int_compensation_usd.value}` or `{ev:check.dq_u02.failures}`. The prompt lists every available key with its field names but **without values**, so the model cannot copy a wrong value. `render.ts` substitutes the formatted evidence value server-side (integers as is, rates as percentages to 1 decimal, ratios to 3 decimals). Grounding of numbers therefore holds by construction.
 
-- **WorkersAISummarizer (production only):** `env.AI.run(env.WORKERS_AI_MODEL, {messages, response_format: {type: 'json_schema', json_schema}, temperature: 0.1, max_tokens: 700}, {gateway: {id: env.AI_GATEWAY_ID, skipCache: false}})`. Default model `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (listed as JSON-mode capable, verified). JSON mode can fail with "JSON Mode couldn't be met" and does not support streaming (verified), so failures go to the repair-then-template path. `cacheTtl` in the gateway options is **UNVERIFIED** and not used.
+- **WorkersAISummarizer (production only):** `env.AI.run(env.WORKERS_AI_MODEL, {messages, response_format: {type: 'json_schema', json_schema}, temperature: 0.1, max_tokens: 700}, {gateway: {id: env.AI_GATEWAY_ID, skipCache: false}})`. Default model `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (listed as JSON-mode capable, verified). JSON mode can fail with "JSON Mode couldn't be met" and does not support streaming (verified), so failures go to the repair-then-template path. `cacheTtl` in the gateway options is **UNVERIFIED** and not used. On the Free plan every call first reserves its worst-case neurons in the D1 ledger (`AI_DAILY_NEURON_CAP`, section 28.5.5).
 - **OpenAICompatSummarizer (local stand-in):** `POST ${LOCAL_LLM_URL}/v1/chat/completions` with `response_format: {type: 'json_object'}`, `chat_template_kwargs: {enable_thinking: false}`, `temperature: 0`, `seed: 7`. Verified against llama-server 0.5.0 with the Qwen3-1.7B GGUF, including a call from a Worker running in `wrangler dev`.
 - **TemplateSummarizer (CI, fallback):** deterministic text from the top-ranked candidate and probe values.
 - Factory chooses by `SUMMARIZER` var; production config refuses any value other than `workers-ai` (test).
@@ -964,18 +992,18 @@ interface AuditEvent { event_id: string; event_type: 'check_result' | 'run_compl
   environment: 'local' | 'production'; run_id: string;
   occurred_at: string;   // RFC 3339 UTC, e.g. 2026-10-10T17:00:00.000Z (new Date().toISOString())
   check_id: string | null; status: string | null; node: string | null;
-  payload: { [k: string]: JsonValue } }  // a JSON object, matching the stream's `json` field type
+  payload: { [k: string]: JsonValue } }  // a JSON object, matching the schema's `json` field type
 ```
 
-- **Production:** `PipelinesSink` calls `env.EVENTS.send(events)` on a Basin Pipelines stream binding (`"pipelines": [{"binding": "EVENTS", "stream": "<STREAM_ID>"}]`, verified format; the old `pipeline` key still works with a deprecation warning). Stream `datatrust_events` is structured with schema `schemas/lake/audit_event.stream.json` (types `string`, `timestamp`, `json`, verified as supported). Timestamp format: the stream docs say a `timestamp` field accepts "RFC 3339 timestamps, or numeric values parsed as Unix seconds, milliseconds, or microseconds (depending on unit)" (fetched 2026-10-10), so `occurred_at` is sent as an RFC 3339 string and no REST-created stream or unit setting is needed; `prod smoke` still confirms by reading the row back. `wrangler basin pipelines streams create` exposes only `--schema-file`, `--http-enabled`, `--http-auth` and `--cors-origin` (verified), which is enough. Invalid records are accepted and then silently dropped (verified), so `event-sink.test.ts` validates every emitted event against the same schema file, including that `payload` is an object and `occurred_at` parses as RFC 3339. Pipeline SQL: `INSERT INTO datatrust_events_iceberg SELECT * FROM datatrust_events`. Sink type `r2-data-catalog`, bucket `datatrust-lake`, namespace `datatrust`, table `audit_events`, created with `--roll-interval 60` (the default is 300 seconds, verified in `sinks create --help`), so a smoke read-back needs about 2 minutes, polled for up to 10.
-- **Local stand-in:** `R2NdjsonSink` writes `lake/<date>/<uuid>.ndjson` to the local R2 bucket. `uv run datatrust lake sync` reads `/api/dev/lake-export` and appends to a pyiceberg `SqlCatalog` (SQLite at `.data/lake/catalog.db`, warehouse given as an absolute `file://` URI of `.data/lake/warehouse`), table `datatrust.audit_events` with the schema derived from the same JSON file (`json` fields stored as serialized strings). Verified: a relative warehouse path also works but records cwd-relative metadata locations, which break when the command runs from another directory. Verified: pyiceberg 0.12.0 SqlCatalog append plus snapshot time travel works locally. `datatrust lake query` reads via pyiceberg into DuckDB (the DuckDB iceberg extension is not bundled, verified, so it is not used).
-- **Production read path:** `lake/iceberg_basin.py` uses `RestCatalog(name=..., warehouse=BASIN_WAREHOUSE, uri=BASIN_CATALOG_URI, token=BASIN_CATALOG_TOKEN)` (verified snippet from Basin Catalog docs).
+- **Both environments (section 28.5.1, ADR-0008):** `QueueSink` validates every event against `schemas/lake/audit_event.stream.json` (types `string`, `timestamp`, `json`; `payload` must be a JSON object and `occurred_at` must parse as RFC 3339; `event-sink.test.ts` covers both) and sends one message of at most 50 events to `datatrust-audit-events`. Event ids are deterministic (`evt_<runId>_check_<checkId>`, `evt_<runId>_run_completed`, `evt_<incidentId>_created`), so a redelivery or a retried step repeats the same id. The consumer (batch 10, wait 30 s) writes each batch as one immutable object `lake/<date>/<ulid>.ndjson` in `datatrust-artifacts`. Basin Pipelines, the v1.1 production sink, is Workers Paid only and is not used.
+- **Committer:** `uv run datatrust lake commit --catalog local|basin` reads settled objects through `GET /api/lake/export`, drops events whose `event_id` is already in the table, and appends the rest together with the cursor (table property `datatrust.lake.after`) in one Iceberg commit, retrying on a commit conflict. `local` is a pyiceberg `SqlCatalog` (SQLite at `.data/lake/catalog.db`, warehouse given as an absolute `file://` URI of `.data/lake/warehouse`; verified: a relative warehouse records cwd-relative metadata locations, which break when the command runs from another directory); `basin` is the Basin Catalog REST catalog. Table `datatrust.audit_events`, schema derived from the same JSON file (`json` fields stored as serialized strings). Verified: pyiceberg 0.12.0 SqlCatalog append plus snapshot time travel works locally. `datatrust lake query` reads via pyiceberg into DuckDB (the DuckDB iceberg extension is not bundled, verified, so it is not used). `datatrust lake sync` stays as an alias for `lake commit --catalog local`.
+- **Production catalog:** `lake/iceberg_basin.py` uses `RestCatalog(name=..., warehouse=BASIN_WAREHOUSE, uri=BASIN_CATALOG_URI, token=BASIN_CATALOG_TOKEN)` (verified snippet from Basin Catalog docs) for the commit and for the smoke's read-back. Compaction stays off (billed beyond the included 10 GB per month); snapshot expiration is free and optional.
 
 ### 13.10 Worker configuration
 
-- `wrangler.jsonc` (local, committed): `name: datatrust`, `main: src/index.ts`, `compatibility_date: 2026-09-30`, `compatibility_flags: ["nodejs_compat"]`, D1 `DB` (placeholder id; local only), R2 `ARTIFACTS`, queues (producers `CHECK_RESULTS_Q`, `LINEAGE_Q`, `INVESTIGATE_Q`; consumers for all four), workflows `VALIDATION_RUN` (class `ValidationRunWorkflow`) and `INVESTIGATION` (class `InvestigationWorkflow`), vars `ENVIRONMENT=local`, `ACCESS_MODE=local-jwks`, `SUMMARIZER=template`, `LOCAL_LLM_URL=http://127.0.0.1:8160`. No `ai` and no `pipelines` binding locally.
-- `wrangler.prod.template.jsonc`: same plus `ai: {binding: "AI"}`, `pipelines: [{binding: "EVENTS", stream: "${STREAM_ID}"}]`, real D1 id, `workers_dev: true`, `preview_urls: false` (both keys exist in the wrangler 4.149 config schema, verified), **no `triggers.crons`** (review finding I6), vars `ENVIRONMENT=production`, `ACCESS_MODE=cloudflare`, `SUMMARIZER=workers-ai`, `WORKERS_AI_MODEL`, `AI_GATEWAY_ID=datatrust`, `ACCESS_TEAM_DOMAIN`. Secrets: `ACCESS_AUD`, `ROLE_MAP_JSON`, `EVIDENCE_HMAC_KEY`.
-- **Types.** Verified with wrangler 4.149.0 and TypeScript 5.9.3: `wrangler types` defaults to `--strict-vars=true`, which types `ENVIRONMENT` as the literal `"local"`, and then `env.ENVIRONMENT === 'production'` fails with TS2367 ("no overlap"); the local config has no `ai` or `pipelines` binding, so the generated `Env` has no `AI` or `EVENTS`. Fix (verified to compile with `tsc --noEmit`): generate with `wrangler types --strict-vars=false`, and type the app against `src/env.ts`:
+- `wrangler.jsonc` (local, committed): `name: datatrust`, `main: src/index.ts`, `compatibility_date: 2026-09-30`, `compatibility_flags: ["nodejs_compat"]`, D1 `DB` (placeholder id; local only), R2 `ARTIFACTS`, queues (producers `CHECK_RESULTS_Q`, `LINEAGE_Q`, `INVESTIGATE_Q`, `AUDIT_Q`; consumers for all five `datatrust-*` queues with the settings of section 28.5), workflows `VALIDATION_RUN` (class `ValidationRunWorkflow`) and `INVESTIGATION` (class `InvestigationWorkflow`), vars `ENVIRONMENT=local`, `ACCESS_MODE=local-jwks`, `SUMMARIZER=template`, `LOCAL_LLM_URL=http://127.0.0.1:8160`. No `ai` binding locally.
+- `wrangler.prod.template.jsonc`: same plus `ai: {binding: "AI"}`, real D1 id, `workers_dev: true`, `preview_urls: false` (both keys exist in the wrangler 4.149 config schema, verified), **no `triggers.crons`** (review finding I6), vars `ENVIRONMENT=production`, `ACCESS_MODE=cloudflare`, `SUMMARIZER=workers-ai`, `WORKERS_AI_MODEL`, `AI_GATEWAY_ID=datatrust`, `AI_DAILY_NEURON_CAP=2000`, `ACCESS_TEAM_DOMAIN`. Secrets: `ACCESS_AUD`, `ROLE_MAP_JSON`, `EVIDENCE_HMAC_KEY`. No `pipelines` binding, no `limits`, no Durable Objects, no cron: the Workers Free plan (section 28, pinned by `free-plan.test.ts`).
+- **Types.** Verified with wrangler 4.149.0 and TypeScript 5.9.3: `wrangler types` defaults to `--strict-vars=true`, which types `ENVIRONMENT` as the literal `"local"`, and then `env.ENVIRONMENT === 'production'` fails with TS2367 ("no overlap"); the local config has no `ai` binding, so the generated `Env` has no `AI`. Fix (verified to compile with `tsc --noEmit`): generate with `wrangler types --strict-vars=false`, and type the app against `src/env.ts`:
 
 ```ts
 export type Environment = 'local' | 'production';
@@ -985,12 +1013,11 @@ export interface AppEnv extends Omit<Env, 'ENVIRONMENT' | 'SUMMARIZER' | 'ACCESS
   SUMMARIZER: SummarizerKind;
   ACCESS_MODE: 'local-jwks' | 'cloudflare';
   AI?: Ai;                                              // present only in production
-  EVENTS?: import('cloudflare:pipelines').Pipeline;     // present only in production
 }
 ```
 
-  The generated file includes runtime types (`--include-runtime` defaults to true, and it declares `Ai` and `cloudflare:pipelines`), so the worker tsconfig does **not** list `@cloudflare/workers-types` (it would duplicate them). CI runs `npx wrangler types --strict-vars=false --check`.
-- Startup guard: if `ENVIRONMENT=production` and (`ACCESS_MODE` is not `cloudflare`, `SUMMARIZER` is not `workers-ai`, `AI` is missing or `EVENTS` is missing), every route returns 500 `misconfigured` (tested).
+  The generated file includes runtime types (`--include-runtime` defaults to true, and it declares `Ai`), so the worker tsconfig does **not** list `@cloudflare/workers-types` (it would duplicate them). CI runs `npx wrangler types --strict-vars=false --check`.
+- Startup guard: if `ENVIRONMENT=production` and (`ACCESS_MODE` is not `cloudflare`, `SUMMARIZER` is not `workers-ai`, `AI` is missing, `AUDIT_Q` is missing, `WORKERS_AI_MODEL` has no pinned neuron rate, or `AI_DAILY_NEURON_CAP` is not a number), every route returns 500 `misconfigured` (tested).
 
 ---
 
@@ -998,13 +1025,14 @@ export interface AppEnv extends Omit<Env, 'ENVIRONMENT' | 'SUMMARIZER' | 'ACCESS
 
 ### 14.1 Commands (`uv run datatrust ...`)
 
-`synth`, `load`, `build`, `runner [--watch|--once] [--env local|prod]`, `bench [--mode offline|e2e] [--seeds 101-105] [--scenarios ...]`, `bench summaries`, `lake sync|query`, `restore --from-snapshot <run> <node>` (local), `prod governance apply|verify`, `prod validate`, `prod smoke`, `prod reset`, `doctor [--local|--prod]`.
+`synth`, `load`, `build`, `runner [--watch|--once] [--env local|prod]`, `bench [--mode offline|e2e] [--seeds 101-105] [--scenarios ...]`, `bench summaries`, `lake commit|sync|query`, `restore --from-snapshot <run> <node>` (local), `prod governance apply|verify`, `prod validate`, `prod smoke`, `prod reset`, `doctor [--local|--prod]`.
 
 ### 14.2 Job handling
 
-- `dbt_build`: synthesize (seed), apply scenario if given (the runner is the only component that knows scenario definitions), overlay project, load, `dbt-ol build`, snapshot marts to `$DATATRUST_SNAPSHOT_DIR/<runId>/` on green runs (local), upload `relations` and `run_results`, post OpenLineage events in batches of 50 with the job id and lease token headers, then `complete` with `checkResults` and `expectedLineageEvents`.
+- `dbt_build`: synthesize (seed), apply scenario if given (the runner is the only component that knows scenario definitions), overlay project, load, `dbt-ol build`, snapshot marts to `$DATATRUST_SNAPSHOT_DIR/<runId>/` on green runs (local), upload `relations` and `run_results`, post OpenLineage events in POSTs of at most 10 events and 256 KB with the job id and lease token headers, then `complete` with `checkResults` and `expectedLineageEvents`.
 - `diagnostics`: render and run probes (read-only identity, section 10), sanitize with `rca sanitize`, upload sanitized `probe_results`, `complete`.
 - Every request carries auth headers (section 15). Retries with exponential backoff on 5xx and network errors; 4xx are fatal and logged.
+- Idle `--watch` polling starts at 2 s and doubles to a 30 s cap until a job arrives (at most 2,880 requests per idle day); with `--env prod` the runner also runs `lake commit --catalog basin` every 15 minutes and before it exits (sections 28.5.1, 28.5.6).
 
 ### 14.3 Where it runs
 
@@ -1040,7 +1068,7 @@ Locally and in CI against `wrangler dev`. In production, on Nitish's machine (AD
 
 ## 17. Production implementations
 
-Covered in sections 7.4 (BigQuery), 13.6 (Workers AI via AI Gateway), 13.9 (Basin Pipelines and Basin Catalog), 13.10 (Worker config) and 15 (Access). BigQuery governance (`prod/governance.py`, idempotent, Python clients `google-cloud-datacatalog 3.32.0` and `google-cloud-bigquery-datapolicies 0.10.1`, both verified to import their `PolicyTagManagerClient` and v2 `DataPolicyServiceClient`):
+Covered in sections 7.4 (BigQuery), 13.6 (Workers AI via AI Gateway), 13.9 and 28.5.1 (audit lake and Basin Catalog), 13.10 (Worker config) and 15 (Access). BigQuery governance (`prod/governance.py`, idempotent, Python clients `google-cloud-datacatalog 3.32.0` and `google-cloud-bigquery-datapolicies 0.10.1`, both verified to import their `PolicyTagManagerClient` and v2 `DataPolicyServiceClient`):
 
 - Taxonomy `datatrust-classification` in the dataset location with policy tags `pii_string`, `pii_date`, `compensation`.
 - Data masking policies (v2 API, `DATA_MASKING_POLICY`, predefined expressions `SHA256`, `DATE_YEAR_MASK`, `ALWAYS_NULL`, enum names verified in `bigquery_datapolicies_v2`): `pii_string` hashes, `pii_date` keeps the year, `compensation` returns NULL. Column-level access control enforced on the taxonomy.
@@ -1058,7 +1086,7 @@ Covered in sections 7.4 (BigQuery), 13.6 (Workers AI via AI Gateway), 13.9 (Basi
 
 ### 18.1 `npm run setup:prod` (`scripts/setup-prod.sh`, also `make bootstrap`)
 
-Idempotent: every step checks existence first and creates only what is missing, recording ids in `.prod/state.json` (gitignored). Existence checks use JSON output wherever wrangler offers it (verified in wrangler 4.149.0 help: `d1 list --json`, `d1 info --json`, `r2 bucket info --json`, `basin pipelines list|get --json`, `basin pipelines streams list|get --json`, `basin pipelines sinks list|get --json`) and are parsed with `python3 -c 'import json,sys; ...'` (no jq dependency). `--dry-run` prints the plan. `--cloudflare-only` and `--gcp-only` split the work. A rerun after a partial failure continues where it stopped.
+Idempotent: every step checks existence first and creates only what is missing, recording ids in `.prod/state.json` (gitignored). Existence checks use JSON output wherever wrangler offers it (verified in wrangler 4.149.0 help: `d1 list --json`, `d1 info --json`, `r2 bucket info --json`) and are parsed with `python3 -c 'import json,sys; ...'` (no jq dependency). `--dry-run` prints the plan. `--cloudflare-only` and `--gcp-only` split the work. A rerun after a partial failure continues where it stopped.
 
 Preflight (both parts):
 - P1. Load `.env.prod`. Refuse to continue if it defines `CLOUDFLARE_API_TOKEN` and print: rename it to `DATATRUST_CF_API_TOKEN` (section 14.4).
@@ -1069,12 +1097,12 @@ Cloudflare (requires `npx wrangler login`):
 1. D1: find `datatrust` in `wr d1 list --json`, else `wr d1 create datatrust`; record the database id from `wr d1 info datatrust --json`.
 2. R2: for `datatrust-artifacts` and `datatrust-lake`, `wr r2 bucket info <b> --json` or `wr r2 bucket create <b>`.
 3. Basin Catalog: `wr basin catalog get datatrust-lake` (this command has no `--json`, verified); if it does not report the catalog as enabled, `wr basin catalog enable datatrust-lake`. Record the Warehouse and Catalog URI it prints into `.env.prod` (`BASIN_WAREHOUSE`, `BASIN_CATALOG_URI`). The text format is the one **UNVERIFIED** parse left; if it fails, the script prints the raw output and asks Nitish to paste the two values.
-4. Queues: for `dt-check-results`, `dt-lineage-events`, `dt-investigate`, `dt-dlq`, `wr queues info <name>` or `wr queues create <name>` (consumers are registered by deploy from the config).
-5. Stop here with a clear message if `BASIN_CATALOG_TOKEN` is missing from `.env.prod` (R2 API token, section 21.1). Stream: find `datatrust_events` in `wr basin pipelines streams list --json`, else `wr basin pipelines streams create datatrust_events --schema-file schemas/lake/audit_event.stream.json --http-enabled=false` (the Worker binding is the only writer); record the stream id from the list output.
-6. Sink: find `datatrust_events_iceberg` in `sinks list --json`, else `wr basin pipelines sinks create datatrust_events_iceberg --type r2-data-catalog --bucket datatrust-lake --namespace datatrust --table audit_events --catalog-token "$BASIN_CATALOG_TOKEN" --roll-interval 60`.
-7. Pipeline: find `datatrust_events_pipeline` in `wr basin pipelines list --json`, else `wr basin pipelines create datatrust_events_pipeline --sql "INSERT INTO datatrust_events_iceberg SELECT * FROM datatrust_events"`.
+4. Queues: for `datatrust-check-results`, `datatrust-lineage-events`, `datatrust-investigate`, `datatrust-audit-events`, `datatrust-dlq`, `wr queues info <name>` or `wr queues create <name>` (consumers are registered by deploy from the config). Queues are available on the Free plan (a queue was created and deleted on Nitish's account on 2026-10-10).
+5. Removed in spec 1.2: the Basin Pipelines stream, sink and pipeline are Workers Paid only (section 28). The audit lake needs nothing in Cloudflare beyond the queue of step 4 and the catalog of step 3; `BASIN_CATALOG_TOKEN` is checked by the first `lake commit`.
+6. Removed (see 5).
+7. Removed (see 5).
 8. AI Gateway `datatrust`, using only `DATATRUST_CF_API_TOKEN` (AI Gateway Read and Edit) in a curl header: `GET https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/ai-gateway/gateways/datatrust`; if 404, `POST .../ai-gateway/gateways` with `{"id":"datatrust","cache_invalidate_on_update":false,"cache_ttl":0,"collect_logs":true,"rate_limiting_interval":60,"rate_limiting_limit":60,"rate_limiting_technique":"fixed"}` (verified endpoint and required fields). Without the token, print the dashboard path (AI, AI Gateway, Create Gateway, name `datatrust`) and continue; doctor reports it as missing.
-9. Render `apps/worker/wrangler.prod.jsonc` from the template (D1 id, stream id, `ACCESS_TEAM_DOMAIN` or the fail-closed placeholder `https://unset.cloudflareaccess.com`), then `wr d1 migrations apply datatrust --remote -c apps/worker/wrangler.prod.jsonc`.
+9. Render `apps/worker/wrangler.prod.jsonc` from the template (D1 id, `ACCESS_TEAM_DOMAIN` or the fail-closed placeholder `https://unset.cloudflareaccess.com`), then `wr d1 migrations apply datatrust --remote -c apps/worker/wrangler.prod.jsonc`.
 10. Write `.prod/secrets.json` (mode 600): `EVIDENCE_HMAC_KEY` (32 random bytes, generated once and reused on reruns, also copied into `.env.prod` for the runner), `ROLE_MAP_JSON` (from `DATATRUST_OPERATOR_EMAIL` and `CF_ACCESS_CLIENT_ID` when present), `ACCESS_AUD` (from `.env.prod`, or the literal `unset`, which makes every authenticated route return 401 until the real value exists).
 11. Build and `wr deploy -c apps/worker/wrangler.prod.jsonc --secrets-file .prod/secrets.json`. The flag exists in wrangler 4.149.0 and applies secrets additively with the version (verified in help), so the first deploy creates the Worker and its secrets together and never runs `secret put` against a Worker that does not exist yet. Reruns use the same command; `wr secret bulk .prod/secrets.json -c ...` is the fallback when only secrets change.
 12. If `ACCESS_AUD` is still `unset`, print the Worker URL and the Access steps from section 21.1, and exit 0 with "rerun after Access is configured". After Nitish fills `ACCESS_AUD`, `ACCESS_TEAM_DOMAIN`, `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`, rerunning `--cloudflare-only` re-renders and redeploys.
@@ -1101,7 +1129,7 @@ Google Cloud (requires `gcloud auth login`, `gcloud auth application-default log
 Prints one line per check as `[ok]`, `[missing]` or `[warn]` with the exact fix command, and exits non-zero if anything required for the chosen mode is missing.
 
 - Local: Node >= 22 (wrangler engines, verified), npm, uv, Python 3.12, `npm ci` done, `uv sync` done, dev keys present, ports 8792/9242/8160 free or owned by our pids, llama-server binary and model file (warn only), DuckDB ICU loaded, dbt session time zone is UTC.
-- Prod Cloudflare: `[warn]` if `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_API_KEY` or `CLOUDFLARE_EMAIL` is exported while OAuth login is intended (wrangler would use it instead of the login; setup-prod strips it, but ad hoc `npx wrangler` commands would not); `npx wrangler whoami` logged in; account id set; D1, both R2 buckets, four queues exist. Doctor runs `wr r2 bucket list` and `wr basin catalog get datatrust-lake` for real. The wrangler 4.149 OAuth scope list (`wrangler login --scopes-list`, verified) has `d1:write`, `queues:write`, `pipelines:write`, `ai:write` and `workers:write` but nothing named for R2 or the catalog, so if either call fails authorization doctor prints the remedy: rerun `npx wrangler login`, and if it still fails, create an account API token with Workers R2 Storage Edit plus the catalog permissions and run setup with `--use-env-token`. Also: stream, sink and pipeline exist (JSON listings); AI Gateway `datatrust` exists (API with `DATATRUST_CF_API_TOKEN`, else `[warn]`); `wrangler.prod.jsonc` rendered with no placeholder left; required secrets listed by `wr secret list`; `ACCESS_AUD` not `unset`; `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` returns keys; Worker URL reachable; unauthenticated request redirected or denied by Access; request with the service token returns 200; decoded service-token JWT claims printed; `.env.prod` has `CF_ACCESS_CLIENT_ID`/`SECRET`, `BASIN_CATALOG_TOKEN` and `EVIDENCE_HMAC_KEY`; a pyiceberg `RestCatalog` `list_namespaces()` succeeds. Workers Paid plan status cannot be read from wrangler, so it is a manual `[warn]` with the dashboard path.
+- Prod Cloudflare: `[warn]` if `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_API_KEY` or `CLOUDFLARE_EMAIL` is exported while OAuth login is intended (wrangler would use it instead of the login; setup-prod strips it, but ad hoc `npx wrangler` commands would not); `npx wrangler whoami` logged in; account id set; D1, both R2 buckets, the five `datatrust-*` queues exist. Doctor runs `wr r2 bucket list` and `wr basin catalog get datatrust-lake` for real. The wrangler 4.149 OAuth scope list (`wrangler login --scopes-list`, verified) has `d1:write`, `queues:write`, `pipelines:write`, `ai:write` and `workers:write` but nothing named for R2 or the catalog, so if either call fails authorization doctor prints the remedy: rerun `npx wrangler login`, and if it still fails, create an account API token with Workers R2 Storage Edit plus the catalog permissions and run setup with `--use-env-token`. Also: AI Gateway `datatrust` exists (API with `DATATRUST_CF_API_TOKEN`, else `[warn]`); `wrangler.prod.jsonc` rendered with no placeholder left; required secrets listed by `wr secret list`; `ACCESS_AUD` not `unset`; `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` returns keys; Worker URL reachable; unauthenticated request redirected or denied by Access; request with the service token returns 200; decoded service-token JWT claims printed; `.env.prod` has `CF_ACCESS_CLIENT_ID`/`SECRET`, `BASIN_CATALOG_TOKEN` and `EVIDENCE_HMAC_KEY`; a pyiceberg `RestCatalog` `list_namespaces()` succeeds; `AI_DAILY_NEURON_CAP` is rendered and `GET /api/ai/budget` answers. There is no Workers Paid check: production must not depend on it (section 28).
 - Prod Google Cloud: `gcloud` and `bq` on PATH; active account; ADC file present and carrying a `quota_project_id`; project set and not the placeholder; billing enabled (`gcloud billing projects describe $P` shows `billingEnabled: true`); five APIs enabled; four datasets; time travel 168 hours; taxonomy, policy tags and data policies; both service accounts; Nitish can mint a token for each (impersonation check); `.prod/dbt_vars.yml` present with no placeholder.
 
 ### 18.3 Root npm scripts
@@ -1114,12 +1142,12 @@ The only command that may flip a README status label from "Miniflare/local only"
 1. `prod validate` (skippable with `--skip-validate` when it passed the same day).
 2. Start the real runner (`datatrust runner --env prod --watch`, BigQuery target, Access service token) in the background with a `trap` that kills it.
 3. One clean run (`POST /api/runs {target: 'bigquery', seed: 101}`): must end `passed` with 40 checks passing and no incident.
-4. Five fault runs, one each for S01, S03, S04, T14 and T20, each through the deployed Queues, ValidationRunWorkflow and InvestigationWorkflow with the real runner on BigQuery. Each must produce an incident with `summary_provider = workers-ai`. The smoke records, per incident, whether the first Workers AI draft passed grounding, whether a repair was needed, and whether the template fallback was used, and reports the pass rate and fallback rate over the five. A fallback does not fail the smoke, but the README reports both rates.
-5. Read the lake back with pyiceberg `RestCatalog` (Basin Catalog): poll for up to 10 minutes until the `run_completed` events of all six run ids are in `datatrust.audit_events`.
+4. `GET /api/ai/budget` must show at least 1,940 neurons of headroom for the UTC day, else the smoke stops with "rerun after 00:00 UTC" (section 28.5.5). Then five fault runs, one each for S01, S03, S04, T14 and T20, each through the deployed Queues, ValidationRunWorkflow and InvestigationWorkflow with the real runner on BigQuery. Each must produce an incident with `summary_provider = workers-ai`. The smoke records, per incident, whether the first Workers AI draft passed grounding, whether a repair was needed, and whether the template fallback was used, and reports the pass rate and fallback rate over the five. A fallback does not fail the smoke, but the README reports both rates.
+5. Run `datatrust lake commit --catalog basin` and read the table back with pyiceberg `RestCatalog` (Basin Catalog) until the `run_completed` events of all six run ids are in `datatrust.audit_events`, for up to 5 minutes (batches close within 30 s and objects settle after 120 s).
 6. Access: an unauthenticated request is redirected or denied, a service-token request returns 200, and the decoded claims are recorded.
-7. Write `results/prod-smoke-<YYYY-MM-DD>.json` and `.md`: commands, timestamps, run ids, check counts, the Workers AI model and gateway id, grounding pass rate, fallback rate, Iceberg row count, BigQuery bytes billed, and wrangler and package versions.
+7. Write `results/prod-smoke-<YYYY-MM-DD>.json` and `.md`: commands, timestamps, run ids, check counts, the Workers AI model and gateway id, reserved and used neurons, grounding pass rate, fallback rate, Iceberg row count, BigQuery bytes billed, and wrangler and package versions.
 
-Expected cost per smoke: BigQuery well under 1 GB billed (inside the free tier), 5 to 10 Workers AI calls (cents at most), Pipelines and catalog usage inside the included amounts.
+Expected cost per smoke: $0. BigQuery under 1 GB billed per run (inside the free tier, every query capped); 5 to 10 Workers AI calls, 432 neurons typical and at most 1,907 (inside the Free allowance and the 2,000 cap); Queues, Workflows, D1, R2 and Basin Catalog usage inside the Free amounts (section 28.6).
 
 ---
 
@@ -1132,7 +1160,7 @@ Expected cost per smoke: BigQuery well under 1 GB billed (inside the free tier),
 | SQL reconciliation | X01-X04 | T18, T20, S09 trials detected | `npm run bench` |
 | column-level lineage | dbt-ol columnLineage into LineageGraph | lineage.test.ts (fixture from a real DuckDB build), ablation `dataset_lineage_only` | `npm run test:rca`, `npm run bench` |
 | record inconsistencies and calculation discrepancies | uniqueness/referential/interval checks; C02, X01, X03 | registry test, benchmark | as above |
-| Queues and Workflows coordinate validation | ValidationRunWorkflow + 3 queues + DLQ | validation-run.test.ts (vitest-plugin `introspectWorkflowInstance`, `mockEvent`), queues.test.ts (`createMessageBatch`, `getQueueResult`), e2e job | `npm run test:worker`, `npm run bench:e2e` |
+| Queues and Workflows coordinate validation | ValidationRunWorkflow + 4 queues + DLQ | validation-run.test.ts (vitest-plugin `introspectWorkflowInstance`, `mockEvent`), queues.test.ts (`createMessageBatch`, `getQueueResult`), e2e job | `npm run test:worker`, `npm run bench:e2e` |
 | Workers AI incident summaries | WorkersAISummarizer through AI Gateway, placeholder drafts rendered server-side | summarizer.test.ts (binding mocked), summary-validate.test.ts, `prod smoke` runs 5 incidents with `summary_provider=workers-ai` and records grounding pass rate and fallback rate | `npm run prod:smoke` (needs Nitish's setup) |
 | sanitized diagnostic evidence | classification-driven sanitizer, run in the runner before upload and re-checked in the Worker | sanitize.test.ts, test_no_pii_in_prompts, api.test.ts (untokenized payload gets 422) | `npm run test:rca`, `uv run pytest -k pii`, `npm run test:worker` |
 | approximately 40 dbt and SQL checks | exactly 40 `dq_` tests | test_check_registry | `uv run pytest -k registry` |
@@ -1142,9 +1170,10 @@ Expected cost per smoke: BigQuery well under 1 GB billed (inside the free tier),
 | 90% top-three root-cause accuracy (target) | benchmark | measured over 100 trials, same intervals, baselines (`change_only`, `nearest_upstream_source`, `random_in_closure`), median candidate-set size, LOSO top-3 | `npm run bench` |
 | tracing failed metrics to upstream transformations | trace + rank on metric_* failures and `/api/alerts` | trace.test.ts, T20 and S09 trials, api.test.ts alert path | `npm run test:rca`, `npm run bench` |
 | supporting diagnostic SQL | probe SQL attached to incidents | test_probes_render (sqlglot parses DuckDB and BigQuery variants), investigation.test.ts asserts SQL present | `uv run pytest -k probes`, `npm run test:worker` |
-| OpenLineage | dbt-ol events ingested via `/api/v1/lineage` and dt-lineage-events | queues.test.ts, e2e | as above |
+| OpenLineage | dbt-ol events ingested via `/api/v1/lineage` (10 per POST) and datatrust-lineage-events | queues.test.ts, e2e | as above |
 | Access protection | JWT verification | access.test.ts (12 cases, including the documented service-token payload shape) | `npm run test:worker` |
-| Iceberg lake path | EventSink + pyiceberg | event-sink.test.ts, test_lake_local | `npm run test:worker`, `uv run pytest -k lake` |
+| Iceberg lake path | QueueSink, batching consumer, exactly-once committer | event-sink.test.ts, queues.test.ts, test_lake_local, test_lake_commit | `npm run test:worker`, `uv run pytest -k lake` |
+| Production fits the Workers Free plan (section 28) | no Paid feature in the production config; bundles of ten; set-based D1 writes; request caps; neuron ledger; module-scope collator; runner backoff | free-plan.test.ts, d1-statements.test.ts, queues.test.ts message counts, api.test.ts caps, budget.test.ts, order.test.ts, test_free_budget, test_runner_client (batching, backoff), `budget:cpu` gate (section 28.7) | `npm run test:worker`, `npm run test:rca`, `uv run pytest -k "free_budget or runner_client or lake_commit"`, `npm run budget:cpu -- --gate 8` |
 | restricted views | rpt_compensation_by_dept over the untagged aggregate `int_comp_by_dept_month` | test_restricted_views (no PII columns, k >= 5 suppression, reads only the aggregate); in production `governance verify` (analyst sees non-null aggregates, masked per-person columns) | `uv run pytest -k restricted`, `uv run datatrust prod governance verify` |
 | deterministic across machines | UTC session, tz-aware timestamps, decimal(38,9), integer generator arithmetic | test_session_timezone, test_warehouse_types, test_generator_golden on ubuntu, clean baseline under two `TZ` values | `uv run pytest` |
 | BigQuery path ready | dispatch macros, profile defaults, `prod validate` | test_dialect_macros, test_bigquery_parse in CI; `prod validate` in production | `uv run pytest -k "dialect or bigquery"`, `npm run prod:validate` |
@@ -1156,8 +1185,8 @@ Expected cost per smoke: BigQuery well under 1 GB billed (inside the free tier),
 - Triggers: push and pull_request. `concurrency` cancels superseded runs. Env: `WRANGLER_SEND_METRICS=false`, `DBT_SEND_ANONYMOUS_USAGE_STATS=false`, `DBT_PROFILES_DIR=dbt`.
 - Actions pinned by major: `actions/checkout@v7`, `actions/setup-node@v7` (node-version-file `.nvmrc`, Node 24 LTS), `astral-sh/setup-uv@v10` (enable-cache), `actions/upload-artifact@v7` (latest majors checked 2026-10-10; setup-node v7.1.0 and setup-uv v10.3.0 were released days earlier, so pin the major and watch for regressions).
 - Jobs:
-  1. `node`: `npm ci` (on ubuntu from commit 2 onward, so a macOS-generated lockfile missing Linux optional binaries such as workerd or esbuild fails on day one), `npx wrangler types --strict-vars=false --check` in `apps/worker`, `npm run typecheck`, `npm run test:rca`, `npm run test:worker` (workerd via @cloudflare/vitest-plugin; D1 migrations loaded with `readD1Migrations` in the config and `applyD1Migrations` in a setup file, both exported by @cloudflare/vitest-plugin 1.4.0, verified), `npx wrangler deploy --dry-run --outdir dist` for `wrangler.jsonc` and for the prod template rendered with placeholder ids.
-  2. `python`: `uv sync --locked`, `uv run ruff check`, `uv run pytest` (includes golden hashes, registry, session time zone, warehouse types, contract-failure classification, dialect macro check, probe rendering, patch combinations, `dbt parse --target bigquery` with no env vars set), then `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py` as a second step, so the clean baseline passes under both zones.
+  1. `node`: `npm ci` (on ubuntu from commit 2 onward, so a macOS-generated lockfile missing Linux optional binaries such as workerd or esbuild fails on day one), `npx wrangler types --strict-vars=false --check` in `apps/worker`, `npm run typecheck`, `npm run test:rca`, `npm run test:worker` (workerd via @cloudflare/vitest-plugin; D1 migrations loaded with `readD1Migrations` in the config and `applyD1Migrations` in a setup file, both exported by @cloudflare/vitest-plugin 1.4.0, verified), `npx wrangler deploy --dry-run --outdir dist` for `wrangler.jsonc` and for the prod template rendered with placeholder ids. From spec 1.2 also `npm run budget:cpu -- --gate 8` (section 28.7).
+  2. `python`: `uv sync --locked`, `uv run ruff check`, `uv run pytest` (includes golden hashes, registry, session time zone, warehouse types, contract-failure classification, dialect macro check, probe rendering, patch combinations, the Free plan budget model and the lake committer, `dbt parse --target bigquery` with no env vars set), then `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py` as a second step, so the clean baseline passes under both zones.
   3. `bench-offline` (needs node and python): seed 101 only, 20 trials + 1 clean, uploads `results/` as an artifact. Gates: clean false positives must be 0; detection and top-3 must not drop more than 0.05 below the committed **`results/baseline-seed101.json`** (a seed-101 baseline, not the five-seed `results/baseline.json`). CI does not gate on 0.95 or 0.90 (those are targets reported by the eval).
   4. `e2e` (added in commit 14 and made a required check only then): start `wrangler dev` on 8792/9242, `npm run dev:token`, runner `--once` over S01, T14, S04 through Queues and Workflows with the template summarizer, assert incidents exist with the expected fields, run the parity test, then kill wrangler (trap).
 - Nothing depends on local commit SHAs, macOS paths, llama-server, or network beyond package registries.
@@ -1166,45 +1195,45 @@ Expected cost per smoke: BigQuery well under 1 GB billed (inside the free tier),
 
 ## 21. Production setup Nitish must do
 
-Order matters. Steps marked (dashboard) cannot be done from a CLI with the tools verified today. Every value goes into `~/Developer/projects/datatrust/.env.prod` (gitignored, created with `cp .env.example .env.prod && chmod 600 .env.prod`). Never put `CLOUDFLARE_API_TOKEN` in it (section 14.4).
+Production runs on the Cloudflare Workers Free plan and the shared Google Cloud project `master-magnet-444903-u4` (section 28). Nitish's operator runs these steps after the Free plan commits of section 23.1 land; no builder session creates, changes or deploys a cloud resource. Every value goes into `~/Developer/projects/datatrust/.env.prod` (gitignored, created with `cp .env.example .env.prod && chmod 600 .env.prod`). Never put `CLOUDFLARE_API_TOKEN` in it (section 14.4). "Done" reflects the read-only checks of 2026-10-10 (section 28.1). Step order matters.
 
 ### 21.1 Cloudflare
 
-| # | Step | Command or URL | Cost | Needed for | Verified |
-|---|---|---|---|---|---|
-| 1 | Cloudflare account | https://dash.cloudflare.com/sign-up | free | everything | standard |
-| 2 | Workers Paid plan (dashboard: Workers & Pages, Plans) | https://dash.cloudflare.com/?to=/:account/workers/plans | $5/month account minimum; includes 10M requests and 30M CPU ms, Queues 1M operations, Workflows 500k steps and 1 GB-month storage | Basin Pipelines (listed only under Workers Paid), Queues and Workflows headroom | pricing pages fetched 2026-10-10 |
-| 3 | Activate R2 with a payment card (dashboard: R2 Object Storage) | https://dash.cloudflare.com/?to=/:account/r2 | free tier 10 GB-month, 1M Class A, 10M Class B per month | artifacts bucket, Basin Catalog ("requires an active R2 subscription") | architect pass, docs fetched 2026-10-10 |
-| 4 | Zero Trust organization: choose a team name and the Free plan (dashboard: Zero Trust). Onboarding may ask for a payment card even on the Free plan | https://one.dash.cloudflare.com/ | Free plan, reported as up to 50 users | Access, service token | seat limit from Cloudflare's 2020 plan announcement and third-party pages; card requirement **UNVERIFIED** |
-| 5 | Log in wrangler (OAuth), and make sure no Cloudflare token is exported in the shell | `cd ~/Developer/projects/datatrust/apps/worker && unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL && npx wrangler login && npx wrangler whoami` | free | all CLI steps | wrangler 4.149.0: env credentials override the OAuth login (source read) |
-| 6 | Copy the account id into `.env.prod` as `CLOUDFLARE_ACCOUNT_ID` (shown by `npx wrangler whoami`) | `npx wrangler whoami` | free | AI Gateway API, catalog URIs | standard |
-| 7 | Narrow API token for the AI Gateway API only, saved as `DATATRUST_CF_API_TOKEN` (optional: the gateway can be created in the dashboard instead, AI, AI Gateway, Create Gateway, name `datatrust`) | https://dash.cloudflare.com/profile/api-tokens, account permissions "AI Gateway Read" and "AI Gateway Edit" | free | setup:prod step 8 | permission names on the API token permissions page, fetched 2026-10-10 |
-| 8 | R2 API token for Basin Catalog (dashboard: R2, Manage API tokens, Create Account API token, Admin Read & Write), saved as `BASIN_CATALOG_TOKEN` | https://dash.cloudflare.com/?to=/:account/r2/api-tokens | free | Pipelines sink, pyiceberg reads | architect pass, Basin Catalog get-started docs |
-| 9 | Set `DATATRUST_OPERATOR_EMAIL` (the email you will log in to Access with) in `.env.prod` | edit `.env.prod` | free | `ROLE_MAP_JSON` | n/a |
-| 10 | Run the Cloudflare bootstrap. The first run deploys the Worker with `ACCESS_AUD=unset` (every request 401, fail closed) and stops with "rerun after Access is configured" | `cd ~/Developer/projects/datatrust && npm run setup:prod -- --cloudflare-only` | Pipelines: ingress free; 50 GB/month SQL and 50 GB/month sink delivery included; Basin Catalog: 1M catalog ops included then $9/M | everything in section 18.1 steps 1-12 | all wrangler subcommands and flags checked in 4.149.0 help |
-| 11 | Protect the Worker with Access (dashboard: Workers & Pages, Overview, datatrust, Settings, Domains & Routes, **Enable Cloudflare Access** on the workers.dev entry; then **Manage Cloudflare Access** to allow your email). The toggle creates a reusable policy named `datatrust - Production` | https://dash.cloudflare.com/?to=/:account/workers-and-pages | free | auth | workers.dev routing docs and the 2025-10-03 one-click Access changelog (found by search 2026-10-10) |
-| 12 | Copy the Application Audience (AUD) tag (Zero Trust, Access, Applications, the datatrust app) into `ACCESS_AUD`, and `https://<team>.cloudflareaccess.com` into `ACCESS_TEAM_DOMAIN` | https://one.dash.cloudflare.com/ | free | JWT verification | AUD and issuer semantics in the Access JWT docs |
-| 13 | Create service token `datatrust-runner` with a 1-year duration (Zero Trust, Access, Service credentials, Service Tokens); copy Client ID and Secret into `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (the secret is shown once); add a second policy on the datatrust Access app with action **Service Auth** that includes this token | https://one.dash.cloudflare.com/ | free | runner auth | service token headers, Service Auth action, and service-token JWT claims (`common_name` = Client ID, empty `sub`) verified in docs |
-| 14 | Rerun the Cloudflare bootstrap to set the real secrets and redeploy | `npm run setup:prod -- --cloudflare-only` | free | Access verification live | `wrangler deploy --secrets-file` verified in 4.149.0 help |
-| 15 | Check | `npm run doctor -- --prod` | free | everything | n/a |
+| # | Step | Command or URL | Cost | Needed for | Done (2026-10-10) | Verified from |
+|---|---|---|---|---|---|---|
+| 1 | Cloudflare account `dc93c3bc8aa4f9e09a0d7e7354a80873` | https://dash.cloudflare.com/ | free | everything | yes | `npx wrangler whoami` |
+| 2 | Stay on the Workers Free plan; do not subscribe to Workers Paid | none (dashboard: Workers & Pages, Plans shows Free) | free | the whole design | yes (decision) | Nitish's account check: Basin Pipelines creation fails with code 1021 |
+| 3 | R2 activated with a payment card | https://dash.cloudflare.com/?to=/:account/r2 | free tier: 10 GB-month, 1M Class A, 10M Class B per month | both buckets; Basin Catalog needs an active R2 subscription | yes | Basin Catalog enable worked on the account (Nitish, 2026-10-10) |
+| 4 | wrangler logged in with OAuth, no Cloudflare token exported in the shell | `cd ~/Developer/projects/datatrust/apps/worker && unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL && npx wrangler whoami` | free | all CLI steps | yes | `npx wrangler whoami`: OAuth token on the account above |
+| 5 | workers.dev subdomain `nitish-ratakonda` | dashboard: Workers & Pages, Account details | free | the Worker URL | yes | account settings (brief, 2026-10-10) |
+| 6 | Zero Trust organization `old-truth-a7dc` on the Free plan (50 seats) | https://one.dash.cloudflare.com/ | $0 | Access, service tokens | yes | `curl https://old-truth-a7dc.cloudflareaccess.com/cdn-cgi/access/certs`: 200 with 2 keys |
+| 7 | Add the One-time PIN login method (new organizations no longer get it automatically) | Zero Trust, Integrations, Identity providers, Add new identity provider, One-time PIN | free | human Access logins | no (in progress) | One-time PIN docs |
+| 8 | Fill `.env.prod`: `CLOUDFLARE_ACCOUNT_ID=dc93c3bc8aa4f9e09a0d7e7354a80873`, `ACCESS_TEAM_DOMAIN=https://old-truth-a7dc.cloudflareaccess.com`, `DATATRUST_OPERATOR_EMAIL=<Access owner email>`, plus the Google values of 21.2 step 4 | `cp .env.example .env.prod && chmod 600 .env.prod`, then edit | free | setup-prod, `ROLE_MAP_JSON` | no | n/a |
+| 9 | R2 API token for Basin Catalog (R2, Manage API tokens, Create Account API token, Admin Read & Write), saved as `BASIN_CATALOG_TOKEN` | https://dash.cloudflare.com/?to=/:account/r2/api-tokens | free | `datatrust lake commit` and the smoke's read-back (no Pipelines sink any more) | no | Basin Catalog get-started docs |
+| 10 | Optional: narrow AI Gateway token (account permissions AI Gateway Read and AI Gateway Edit) saved as `DATATRUST_CF_API_TOKEN`; or create gateway `datatrust` in the dashboard (AI, AI Gateway, Create Gateway) | https://dash.cloudflare.com/profile/api-tokens | free (1 of 10 gateways per account) | setup-prod step 8 | no | API token permissions page |
+| 11 | Run the Cloudflare bootstrap: D1 `datatrust`, R2 `datatrust-artifacts` and `datatrust-lake`, Basin Catalog on `datatrust-lake`, the five `datatrust-*` queues, AI Gateway, migrations `0001` and `0002`, fail-closed first deploy (every API call answers 401), Worker URL saved as `DATATRUST_API_URL` | `cd ~/Developer/projects/datatrust && npm run setup:prod -- --cloudflare-only` | free | 18.1 steps 1 to 12 | no | read-only listings on 2026-10-10: no D1 database, queue, bucket or Workflow exists yet |
+| 12 | Protect the Worker with Access: Workers & Pages, datatrust, Settings, Domains & Routes, **Enable Cloudflare Access** on the workers.dev entry, then **Manage Cloudflare Access** to allow the owner email (persona logins use plus-addresses of it; each distinct email takes one of the 50 Free seats, shared by the four repos) | https://dash.cloudflare.com/?to=/:account/workers-and-pages | free | auth | no | one-click Access changelog (2025-10-03) |
+| 13 | Copy the Application Audience (AUD) tag of the datatrust Access application into `ACCESS_AUD` | https://one.dash.cloudflare.com/ | free | JWT verification | no | Access JWT docs |
+| 14 | Service tokens `datatrust-runner` and `datatrust-operator` (1-year duration); copy Client IDs and secrets into `CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET` and `CF_ACCESS_OPERATOR_CLIENT_ID`/`CF_ACCESS_OPERATOR_CLIENT_SECRET` (each secret is shown once); add one policy with action **Service Auth** that includes both | Zero Trust, Access, Service credentials, Service Tokens | free (2 of 50 tokens; tokens take no seat) | runner and operator auth | no | service token docs |
+| 15 | Rerun the Cloudflare bootstrap to set the real secrets and redeploy | `npm run setup:prod -- --cloudflare-only` | free | Access verification live | no | `wrangler deploy --secrets-file` in 4.149.0 help |
+| 16 | Optional: Basin Catalog snapshot expiration; leave compaction off | `npx wrangler basin catalog snapshot-expiration enable datatrust-lake` with an API token holding R2 storage and Basin Catalog read/write (check the flags with `--help`) | free | bounded snapshot history | no | Basin Catalog table-maintenance docs (needs wrangler 4.56 or later; 4.149 is installed) |
+| 17 | Check | `npm run doctor -- --prod` | free | everything | no | n/a |
 
-Workers AI needs no setup beyond the binding: 10,000 neurons/day free on both plans, then $0.011 per 1,000 neurons on Workers Paid; `llama-3.3-70b-instruct-fp8-fast` lists $0.293 per M input and $2.253 per M output tokens (architect pass, Workers AI pricing page). Estimate: about $0.0015 per summary at 2k input and 400 output tokens, roughly 70 summaries/day inside the free allocation (estimate, not measured). AI Gateway core features are free on all plans. Workflows step and storage billing starts on a date in the Workflows billing changelog (pricing page, fetched 2026-10-10); expected usage is tiny. There is no cron trigger, so nothing runs unless Nitish starts it.
+Workers AI needs no setup beyond the binding. Free gives the account 10,000 neurons per day with no overage, and DataTrust caps itself at 2,000 per UTC day (section 28.5.5). On `@cf/meta/llama-3.3-70b-instruct-fp8-fast` a summary measures about 1,083 input tokens and at most about 330 output tokens, 86 neurons typical and at most 382 with a repair (section 28.3). AI Gateway's core features are free. Workflows, Queues, D1 and R2 usage stays inside the Free amounts (section 28.6). There is no cron trigger, so nothing runs unless Nitish starts it.
 
-### 21.2 Google Cloud
+### 21.2 Google Cloud (shared project `master-magnet-444903-u4`)
 
-| # | Step | Command or URL | Cost | Needed for | Verified |
-|---|---|---|---|---|---|
-| 1 | Google account, accept Cloud terms | https://console.cloud.google.com/ | free | everything | standard |
-| 2 | Billing account with a card; set a $5 budget alert (Billing, Budgets & alerts) | https://console.cloud.google.com/billing | expected $0 at this data size: 1 TB of free query processing per month (cost best-practices page, fetched); storage free tier 10 GiB and on-demand $6.25 per TiB from the architect pass's search of the pricing page (direct fetch failed again today) | policy tags and masking require billing; the sandbox has no DML and expires tables after 60 days | billing requirement and sandbox limits: architect pass, docs |
-| 3 | Install the CLI | `brew install --cask gcloud-cli`, or the official `google-cloud-cli-darwin-arm.tar.gz` then `./google-cloud-sdk/install.sh` | free | `gcloud`, `bq` | architect pass (Homebrew cask and install docs) |
-| 4 | Initialize and authenticate | `gcloud init`, `gcloud auth login`, `gcloud auth application-default login` | free | bq, dbt oauth, Python clients | dbt BigQuery setup docs |
-| 5 | Create the project and link billing | `gcloud projects create datatrust-<suffix> --name=DataTrust`, `gcloud config set project datatrust-<suffix>`, `gcloud billing accounts list`, `gcloud billing projects link datatrust-<suffix> --billing-account=<ID>` | free | everything | billing link docs; `projects create` standard, not fetched |
-| 6 | Set the ADC quota project | `gcloud auth application-default set-quota-project datatrust-<suffix>` | free | Python clients for Data Catalog and data policies | command reference fetched 2026-10-10 (needs `serviceusage.services.use`, which Owner has) |
-| 7 | Set `.env.prod` | `DATATRUST_GCP_PROJECT=datatrust-<suffix>`, `DATATRUST_BQ_LOCATION=US` | free | setup | n/a |
-| 8 | Run the GCP bootstrap (APIs incl. IAM and IAM Credentials, datasets, time-travel window, analyst and prober service accounts, governance, `prod validate`, build, governance verify with propagation retry) | `npm run setup:prod -- --gcp-only` | about $0 | section 18.1 steps 13-21 | `bq update --max_time_travel_hours` (architect pass); `dbt build --empty` verified in dbt-core 1.12.5; dry runs free per BigQuery docs |
-| 9 | Check and smoke test | `npm run doctor -- --prod` then `npm run prod:smoke` | about $0 plus a few cents of Workers AI | flips README status labels (section 4.1) | n/a |
+| # | Step | Command or URL | Cost | Needed for | Done (2026-10-10) | Verified from |
+|---|---|---|---|---|---|---|
+| 1 | Use the shared project `master-magnet-444903-u4` (BigQuery location US, region us-central1); `gcloud` and `bq` installed and logged in, application default credentials created | `gcloud config list` | free | everything | yes | `gcloud config list` (account and project set) |
+| 2 | Enable billing on the project (a billing account is linked, but billing is off: reactivate or relink it) and add a budget alert scoped to the project ($5) | https://console.cloud.google.com/billing?project=master-magnet-444903-u4 | expected $0: 1 TiB of queries per month is free; storage free tier **UNVERIFIED** | policy tags and masking; DML (the sandbox rejects INSERT, MERGE and DELETE and expires tables after 60 days) | no | `gcloud billing projects describe master-magnet-444903-u4`: `billingEnabled: false`; sandbox errors seen by Nitish |
+| 3 | Set the ADC quota project | `gcloud auth application-default set-quota-project master-magnet-444903-u4` | free | Python clients for Data Catalog and data policies | unknown (checking needs the ADC file, which this pass does not read) | command reference |
+| 4 | `.env.prod`: `DATATRUST_GCP_PROJECT=master-magnet-444903-u4`, `DATATRUST_BQ_LOCATION=US` | edit `.env.prod` | free | setup | no | n/a |
+| 5 | Run the GCP bootstrap: enables `datacatalog`, `iam` and `iamcredentials` (`bigquery` and `bigquerydatapolicy` are already on); creates only `datatrust_raw`, `datatrust_staging`, `datatrust_marts`, `datatrust_restricted`, service accounts `datatrust-analyst` and `datatrust-prober`, taxonomy `datatrust-classification` and data policies `datatrust_*`; grants are dataset- or resource-scoped (section 28.5.10); then `prod validate`, the real build and governance verify | `npm run setup:prod -- --gcp-only` | about $0, every query capped | 18.1 steps 13 to 21 | no | `gcloud services list --enabled`; `bq ls` (no datasets); `gcloud iam service-accounts list` (only `nitish@...`) |
+| 6 | Check and smoke test (the smoke needs 1,940 neurons of Workers AI headroom in the UTC day) | `npm run doctor -- --prod` then `npm run prod:smoke` | about $0 | flips README status labels (section 4.1) | no | n/a |
+| 7 | Optional: GitHub Actions production runner with Workload Identity Federation, using the narrowed grants of section 28.5.10 | `docs/prod-runner-wif.md` | free | unattended runs | no | n/a |
 
-Nitish's identity needs Owner (or BigQuery Admin plus Data Catalog Policy Tag Admin plus Data Policy Admin plus Service Account Admin) on the project. Owner does not include Fine-Grained Reader, which governance apply grants explicitly, together with Service Account Token Creator on both service accounts.
+Nitish's identity needs Owner (or BigQuery Admin plus Data Catalog Policy Tag Admin plus Data Policy Admin plus Service Account Admin) on the project. Owner does not include Fine-Grained Reader, which governance apply grants explicitly on the DataTrust policy tags only, together with Service Account Token Creator on the two DataTrust service accounts (never on the project). The only project-level grants DataTrust adds are BigQuery Job User for its two service accounts, which lets them run jobs but reads no data.
 
 ---
 
@@ -1219,9 +1248,10 @@ Nitish's identity needs Owner (or BigQuery Admin plus Data Catalog Policy Tag Ad
 7. **Synthetic data.** Interviews should describe it as a synthetic workforce dataset modelled on HR, ATS and payroll systems, never as company data. Masking and tokens are pseudonymization, not anonymization.
 8. **Explainability.** Per Nitish's own rule, commits carry no AI co-author trailer, so he must be able to walk through the ranker, the probes and the Workflows in an interview.
 9. **Resume dates** for the project, and **license** (MIT assumed).
-10. **Cost acceptance:** Workers Paid at $5/month while the deployment is live, and a GCP billing account (expected $0).
+10. **Cost acceptance:** no Workers Paid (production fits the Free plan, section 28); a GCP billing account on the shared project, expected $0 with every query capped.
 11. **In-distribution caveat:** scenarios and checks are authored by the same person, and weights are tuned on dev seeds over the same 20 scenarios, so the test-seed result holds out values and severities, not defect types. The LOSO figure is the closer estimate for unseen defect types. Worth saying if asked.
-12. **Lake and governance are beyond the resume text.** Iceberg, Pipelines and BigQuery governance are not in the resume bullets. They stay "implemented, not executed" until the smoke, and nothing on the resume depends on them.
+12. **Lake and governance are beyond the resume text.** Iceberg (Basin Catalog through the committer) and BigQuery governance are not in the resume bullets. They stay "implemented, not executed" until the smoke, and nothing on the resume depends on them.
+13. **Free plan caps.** The Free plan makes no resume phrase untrue: Queues, Workflows, Workers AI (through AI Gateway) and OpenLineage all run on it. Workers AI summaries are capped at 2,000 neurons per UTC day, about 5 incidents in the worst case and 23 typically; beyond that an incident gets the template with reason `daily_neuron_cap`, and the README reports how many of the smoke's summaries came from Workers AI. Item 1 still applies: the wording waits for `prod smoke`.
 
 ---
 
@@ -1258,13 +1288,33 @@ Git in this repo only: `git config user.name "nitishsjsucs"`, `git config user.e
 
 README is updated in commits 1, 6, 10, 15, 16, 17, 18 and 19 so the published repo never claims more than exists. If time runs out after commit 15, the lake and governance work is cut, not half-shipped: the README then lists them under "not implemented".
 
+### 23.1 Free plan migration (builder 3, spec 1.2)
+
+Before F1, builder 3 resolves the interrupted session's uncommitted `PROGRESS.md` and `pipelines/tests/test_ops_scripts.py` changes. Migration commits (off Paid-only features) come first, then the Free-limit fixes, then the budget gates and docs. Each commit keeps `npm test`, `uv run pytest` and the CI jobs green and the README no more ambitious than the code; no commit runs setup, deploy or any cloud write. Same git identity, no Co-Authored-By trailer.
+
+| # | Commit | Contents and tests |
+|---|---|---|
+| F1 | `feat(lake): audit events through a Queue into immutable R2 objects` | `QueueSink` (validation, at most 50 events per message), `src/queues/audit-events.ts`, deterministic event ids, `/api/lake/export` (runner, both environments, settled objects only) replacing `/api/dev/lake-export`; remove `PipelinesSink`, `EVENTS`, `cloudflare:pipelines` and `--stream`; `misconfiguration()` requires `AUDIT_Q`; queues renamed to `datatrust-*` in all three wrangler configs, router and tests; first part of `free-plan.test.ts` (no `pipelines`, five queues, settings); README status row and what-runs-where row |
+| F2 | `feat(lake): exactly-once pyiceberg committer for Basin Catalog and the local catalog` | `lake/commit.py` (cursor as the table property `datatrust.lake.after`, dedupe by `event_id`, conflict retry), `datatrust lake commit --catalog local\|basin`, `lake sync` alias, runner `--env prod` commits every 15 minutes and on exit, smoke step 5, `test_lake_commit.py`, `test_lake_local.py` updated |
+| F3 | `feat(ops): setup, doctor and wizard for the Workers Free plan` | setup-prod without the stream, sink and pipeline steps and with five queues; render without a stream id; doctor checks of 18.2; wizard without the Workers Paid stage and with the known values of 28.1; `.env.example`; README production setup copied from section 21; `test_ops_scripts.py` |
+| F4 | `fix(worker): lineage ingest in POSTs of ten events with one bundle message` | runner `post_lineage` (at most 10 events, 256 KB), handler (413 above the limits, hash of the received JSON, no D1 write), bundle consumer with `max_batch_size 1`, `await-ingested` on row counts; tests: 413 cases, 14 messages for 140 events, runner batching |
+| F5 | `fix(worker): set-based D1 writes and request caps` | `json_each` statements for edges, lineage events, nodes, check results and dead letters (confirm `json_each` in Miniflare first); check results in one message per run; `checkResults` and `probeResults` capped at 100; `d1-statements.test.ts` |
+| F6 | `perf(rca): module-scope collator for id ordering` | `packages/rca/src/order.ts`, the 10 `localeCompare` call sites, `order.test.ts`; rerun `uv run datatrust bench --mode offline --seeds 101 --workers 2 --out bench-out --gate results/baseline-seed101.json` (the CI gate) and `npm run bench:e2e -- --pytest`: rankings must not change (stop and report if they do) |
+| F7 | `feat(llm): daily Workers AI neuron ledger and one AI call per workflow step` | migration `0002_ai_budget.sql`, `src/llm/budget.ts` (pinned rates, reservation, settlement), `AI_DAILY_NEURON_CAP` in the production template, steps `summarize-draft`, `summarize-repair` and `summarize-finalize`, `GET /api/ai/budget`, smoke headroom check, `budget.test.ts` |
+| F8 | `fix(runner): idle lease backoff up to 30 seconds` | `watch()` backoff and `--max-interval`, prod-runner workflow unchanged otherwise, `test_runner_client.py` |
+| F9 | `fix(worker): no second investigation after the 3-day Workflows retention` | investigate consumer checks `incidents` first; `investigation.test.ts` |
+| F10 | `fix(prod): shared Google Cloud project hygiene` | `maximum_bytes_billed` on governance verify and the smoke's bytes query, `app=datatrust` job labels (dbt and Python), smoke filters `JOBS_BY_PROJECT` by label, `docs/prod-runner-wif.md` without project `roles/viewer`, no project-level Masked Reader fallback; `test_prod_offline.py` |
+| F11 | `test: Free plan budget model and CPU budget gate` | `pipelines/datatrust/prod/free_budget.py`, `test_free_budget.py`, `scripts/cpu-budget.mjs`, `npm run budget:cpu`, CI step `npm run budget:cpu -- --gate 8`, rest of `free-plan.test.ts` |
+| F12 | `docs: README on the Workers Free plan` | README mermaid architecture (section 3.1), what-runs-where (section 4), status labels (4.1), production setup (21), a Free plan budget section quoting `npm run budget:cpu` and `test_free_budget.py` output with command and date, costs; PROGRESS.md |
+| F13 (stretch) | `feat(eval): resumable Workers AI summary eval under the daily neuron cap` | `POST /api/eval/summary`, `datatrust bench summaries --provider workers-ai --checkpoint ...`; implemented and tested offline with a mocked binding, executed only by Nitish |
+
 ---
 
 ## 24. Risks
 
-1. **Product renames.** Cloudflare docs (fetched 2026-10-10) call the products Basin Pipelines (formerly Cloudflare Pipelines) and Basin Catalog (formerly R2 Data Catalog), both GA; wrangler 4.149 exposes them under `wrangler basin ...`. Docs say old configs keep working but will be deprecated. Commands may change again; doctor checks the wrangler version.
-2. **Pipelines locally.** The binding shows mode "local" and `send()` resolved in wrangler dev, but delivery to any sink is not verified, so the local lake path does not depend on it.
-3. **Silent drops.** Pipelines drops schema-invalid records after accepting them; mitigated by schema validation tests (payload object, RFC 3339 timestamp) and the prod smoke reading the Iceberg table back.
+1. **Product renames.** Cloudflare docs (fetched 2026-10-10) call the products Basin Pipelines (formerly Cloudflare Pipelines) and Basin Catalog (formerly R2 Data Catalog), both GA; wrangler 4.149 exposes them under `wrangler basin ...`. Docs say old configs keep working but will be deprecated. Commands may change again; doctor checks the wrangler version. Since spec 1.2 only Basin Catalog is used; Basin Pipelines is Workers Paid only.
+2. **Lake path locally.** Since spec 1.2 the audit lake runs through the same Queue, consumer, export and committer locally and in production (Miniflare queues, SQLite catalog), so only the Basin Catalog REST endpoint is production-only.
+3. **Invalid audit events.** QueueSink rejects schema-invalid events before sending, so nothing is dropped silently (the Pipelines behavior that made this a risk is gone); the schema tests and the smoke's Iceberg read-back remain.
 4. **Workers AI locally.** Not available in `wrangler dev --local` ("Binding AI needs to be run remotely"); the summarizer stand-ins cover local, and the claim depends on production (section 22).
 5. **Ranker overfitting.** 20 hand-written scenarios; mitigated by frozen weights, held-out seeds, variable and on-path decoys, naive baselines, ablations, LOSO and reporting misses.
 6. **Column lineage gaps.** The OpenLineage SQL parser may not resolve every column (window functions, macros); dataset-level fallback and a reported coverage number.
@@ -1275,13 +1325,25 @@ README is updated in commits 1, 6, 10, 15, 16, 17, 18 and 19 so the published re
 11. **Fresh releases.** pyarrow 26.0.0 (2026-10-09), setup-node v7.1.0 and setup-uv v10.3.0 are days old; locks pin exact versions and CI pins majors. vitest 5 exists but v1 pins 4.1.11, the version verified with @cloudflare/vitest-plugin 1.4.0.
 12. **wrangler dev quirk** after `sendEvent` (one hung-request log line); e2e polls state.
 13. **Parallel builds on this machine.** Only ports 8792, 9242, 8160 are used; dev-down verifies they are free; every process started is killed.
-14. **Costs.** Workers Paid $5/month continues until Nitish downgrades; GCP billing is enabled but expected at $0 with a budget alert. No cron, so nothing runs or bills while idle beyond the plan minimum.
+14. **Costs.** No Workers Paid: Cloudflare usage stays inside the Free allowances by design (section 28.6), and Workers AI beyond the cap falls back to the template instead of billing. GCP billing is enabled on the shared project, expected at $0 with a budget alert and capped queries. No cron, so nothing runs while idle.
 15. **Fail-safe recovery** in BigQuery needs Cloud Customer Care; generated recovery commands only cover the time travel window.
 16. **Masked reads and dbt tests.** If Nitish's identity or the prober lacks Fine-Grained Reader, compensation checks and probes on marts read nulls and fail; governance apply grants it, verify retries through IAM propagation, doctor checks it.
-17. **Masked Reader grant level.** The masking docs both recommend granting Masked Reader on the data policy and say the role can only be granted on Resource Manager resources. governance apply uses the data-policy IAM API, and verify proves the effect. If the API refuses, the fallback is a project-level grant (which covers all data policies in this single-purpose project), recorded in the README.
+17. **Masked Reader grant level.** The masking docs both recommend granting Masked Reader on the data policy and say the role can only be granted on Resource Manager resources. governance apply uses the data-policy IAM API, and verify proves the effect. If the API refuses, governance apply stops: a project-level grant would cover the other repos' data policies in the shared project (section 28.5.10).
 18. **Wrangler auth from the environment.** A `CLOUDFLARE_API_TOKEN` in Nitish's shell overrides `wrangler login` for any command he runs by hand; setup strips it, doctor warns about it.
 19. **workers.dev for production.** Cloudflare recommends a route or custom domain for production Workers; v1 uses the Access-protected workers.dev hostname because Nitish may not have a zone. A custom domain is a later change in the prod template only.
-20. **Zero Trust onboarding** may ask for a payment card even on the Free plan (unverified).
+20. **Zero Trust onboarding** may ask for a payment card even on the Free plan (unverified). The organization `old-truth-a7dc` exists on the Free plan, so this no longer blocks anything.
+21. **Free CPU for queue consumers is not documented** (Queues page: 30 s default on both plans; Workers page: 10 ms only for HTTP and Cron). Consumers are sized to 10 ms anyway; the largest measured consumer path is 3.5 ms cold.
+22. **Edge CPU speed was not measured.** The 2x headroom assumes Cloudflare's CPUs are at most twice as slow as this Mac for this code; the CI `budget:cpu` gate on x86 runners is the closer check. How Workflows charge the replay of completed steps (per step or per invocation) is not documented; replaying the largest step result costs 0.25 ms.
+23. **Module-scope collator.** Moving ICU set-up into start-up assumes global-scope work counts against the 1 s start-up limit, not the first request's 10 ms. If it counted against the first request, that request would add about 5 ms; every path would still fit except possibly a cold diagnostics completion (about 9 ms), which the runner retries on any 5xx.
+24. **Shared account allowances.** The 25% share is a convention; only the neuron ledger enforces it. Another repo exhausting the account's requests (Error 1027 until 00:00 UTC), queue operations, Workflow steps or neurons blocks DataTrust too. Messages stay 24 h on Free, so an outage that outlasts the daily reset can expire messages; the DLQ and the run's `stale` timeout make it visible.
+25. **D1 database size.** 500 MB per database on Free is about 3,000 runs at 167 KB per run. A prune command (delete lineage rows of runs older than N days) is needed before that; `prod reset` exists today.
+26. **Workflows step cap.** What happens at 3,000 steps per day on Free is not documented; DataTrust stays under about 200 per smoke.
+27. **Batch counting in D1.** Whether `db.batch()` counts as one query against the 50 per invocation is not stated; set-based statements make the answer irrelevant.
+28. **Token counts are a proxy.** Neuron figures use Qwen3's tokenizer plus 25% for Llama 3.3's; the ledger records real usage when the response reports it, and the cap holds either way.
+29. **Lake latency.** Iceberg rows appear only when `lake commit` runs (Basin Pipelines committed continuously); the R2 objects are the durable record in between.
+30. **No cheaper JSON-mode model.** Among active models the JSON-mode list offers only llama-3.3-70b-instruct-fp8-fast, so cost is capped by the ledger, not by a smaller model; a model switch would need its own grounding eval.
+31. **Billing is still off on the Google project** (2026-10-10). Until it is enabled, governance, masking, DML and `prod validate` fail; doctor says so.
+32. **Access seats are account-wide.** The 50 Free seats are shared by the four repos' human logins, one per distinct email, plus-addresses included.
 
 ---
 
@@ -1324,6 +1386,8 @@ Google Cloud and dbt: BigQuery sandbox, editions feature table (on-demand includ
 Resolved by the review pass (section 27): the service-token `common_name` claim, the Access service-token permission name, the Pipelines timestamp input format (docs), wrangler JSON output for D1 and Pipelines listings (flags exist), and Workflows duplicate-id behaviour (docs).
 
 Still not verified: the Zero Trust Free plan card requirement; AI Gateway `cacheTtl` binding option (not used); Pipelines local delivery (not relied on); the text format of `wrangler basin catalog get` (no `--json`) and the exact field names inside the JSON listings (no Cloudflare account to run against; setup falls back to a paste prompt and doctor confirms on the first real run); BigQuery storage free tier and per-TiB price (pricing page fetch failed; the 1 TB monthly query free tier is verified); whether `bq cp` restores keep policy tags; the OpenLineage namespace format emitted for BigQuery; `gcloud projects create` and `bq mk` flags (standard, not fetched); whether BigQuery ever loads a Parquet timestamp as DATETIME (the docs' conversion table maps `TIMESTAMP_MICROS` to TIMESTAMP; the loader writes UTC-adjusted timestamps and asserts the loaded type either way); whether the data-policy-level Masked Reader grant is accepted by the API (docs contradict each other; verify proves the effect); whether a Workers AI binding call auto-creates a missing gateway (not relied on; setup creates it).
+
+Not verified in the Free plan pass (section 28): the Free CPU limit for queue consumers; whether D1 counts a batch as one query; what happens at 3,000 Workflow steps per day and how replay CPU is charged; whether global-scope work is charged to the first request; edge CPU speed relative to this Mac; which taxonomy-level role grants `datacatalog.taxonomies.get`; the BigQuery storage free tier; catalog operations per pyiceberg commit (estimated at about 10); `json_each` in D1 (to be confirmed in Miniflare and the D1 SQL docs before relying on it).
 
 ---
 
@@ -1386,3 +1450,217 @@ Additional issues found while verifying (not in the review):
 - E4. Free dry runs cannot validate a downstream model before its upstream exists, so `prod validate` uses `dbt build --empty` for models and tests and dry runs only for probes (18.1).
 - E5. The analyst needs BigQuery Job User to query at all, the prober needs Fine-Grained Reader for meaningful probe values, and impersonation needs the IAM Credentials API (17, 18.1).
 - E6. Cloudflare recommends a route or custom domain over workers.dev for production; recorded as a risk because Nitish may not have a zone (24).
+
+### 27.2 Free plan pass, 2026-10-10 (spec 1.1 to 1.2)
+
+Production moved onto the Workers Free plan after Nitish's account check (Basin Pipelines creation fails with code 1021). The audit, measurements, redesign and budget are in section 28; the decision is ADR-0008. Scratch work (21 captured seed-101 trials, the CPU harness, token counts) stayed in the session scratchpad under `freeplan/`. No repo code changed, no cloud resource was created or modified, and llama-server was stopped after counting tokens (port 8160 free).
+
+---
+
+## 28. Free plan design (2026-10-10)
+
+Status: accepted (ADR-0008). Production runs entirely on the Cloudflare Workers Free plan. This section wins over any older sentence in this spec that still says production uses Basin Pipelines, the Workers Paid plan, or limits other than the ones below. Sections 2, 3, 4, 4.1, 5, 9, 12.4, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24 and 27 were edited to match (28.8).
+
+### 28.1 Decision and constraints
+
+- **No Workers Paid anywhere.** Nitish chose to stay on the Workers Free plan on 2026-10-10. Checked on his account the same day: creating a Basin Pipelines resource fails with "This feature requires a Workers Paid plan [code: 1021]"; creating and deleting a Queue works; enabling Basin Catalog (Iceberg REST) on an R2 bucket works (R2 is activated with a card on file).
+- **Shared accounts.** One Cloudflare account (`dc93c3bc8aa4f9e09a0d7e7354a80873`, workers.dev subdomain `nitish-ratakonda`, Zero Trust team `old-truth-a7dc`) and one Google Cloud project (`master-magnet-444903-u4`, BigQuery location US, region us-central1) serve four repos. Every Free allowance that is counted per account or per day is therefore budgeted with a **25% share** for DataTrust, and every Cloudflare and Google resource DataTrust creates has a name starting with `datatrust` (28.5.8, 28.5.10).
+- **Margin rule.** A production path fits when (a) each per-invocation limit holds with at least 2x headroom over the value measured cold on this Mac (the 2x stands in for slower edge CPUs, which were not measured), and (b) the production smoke (one clean run and five fault runs) uses at most 50% of DataTrust's share of every daily allowance in the expected case and never more than the share in the worst case. Workers AI is the one metric whose worst case passes 50% of the share; there a hard cap in code enforces the limit (28.5.5).
+- **Read-only state on 2026-10-10** (no resource was created, changed or deployed): `npx wrangler whoami` (OAuth login on the account above); `wrangler d1 list --json`, `queues list`, `r2 bucket list` and `workflows list` all empty, so nothing of DataTrust exists in Cloudflare yet; `curl https://old-truth-a7dc.cloudflareaccess.com/cdn-cgi/access/certs` returns 200 with 2 keys; `gcloud config list` shows Nitish's account on `master-magnet-444903-u4`; `gcloud billing projects describe master-magnet-444903-u4` prints `billingEnabled: false` (a billing account is linked but billing is not enabled yet); `bq ls` lists no datasets; `gcloud services list --enabled` includes `bigquery` and `bigquerydatapolicy` but not `datacatalog`, `iam` or `iamcredentials`; the only service account is `nitish@...`.
+
+### 28.2 Free plan facts used by this design
+
+Checked against the official pages on 2026-10-10 (the brief's adversarial check, plus three pages fetched again by this pass and marked "refetched"). "Paid only" means unavailable on Workers Free.
+
+| Topic | Free plan value | Paid only | DataTrust use | Source | Confidence |
+|---|---|---|---|---|---|
+| Workers requests | 100,000 per day per account, reset 00:00 UTC; Error 1027 past it; Workflows executions count against the same allowance | no | every API call, queue consumer and Workflow step (counted conservatively as one request each) | https://developers.cloudflare.com/workers/platform/limits/ , https://developers.cloudflare.com/workflows/reference/limits/ | verified |
+| Workers CPU | 10 ms per HTTP request and per Cron Trigger; no duration charge | no | every handler | https://developers.cloudflare.com/workers/platform/limits/ | verified |
+| Queue consumer CPU | not stated for Free (Queues page: 30 s default on both plans; Workers page lists 10 ms only for HTTP and Cron) | no | consumers sized to 10 ms anyway | https://developers.cloudflare.com/queues/platform/limits/ | unverified |
+| Subrequests | 50 external plus 1,000 to Cloudflare services per invocation | no | max 101 (lake export) | https://developers.cloudflare.com/workers/platform/limits/ , https://developers.cloudflare.com/changelog/post/2026-02-11-subrequests-limit/ | verified |
+| Memory, size, start-up | 128 MB per isolate; 64 MiB uncompressed script, no compressed limit; 1 s start-up; 64 env vars; 6 simultaneous connections | no | bundle about 1 MB | https://developers.cloudflare.com/workers/platform/limits/ , https://developers.cloudflare.com/changelog/post/2026-09-04-increased-worker-size-limit/ | verified |
+| Cron Triggers, Workers | 5 cron triggers and 100 Workers per account | no | 0 crons, 1 Worker | https://developers.cloudflare.com/workers/platform/limits/ | verified |
+| Workers Logs | 200,000 events per day, 3-day retention, then 1% sampling | no | `observability.enabled` | https://developers.cloudflare.com/workers/observability/logs/workers-logs/ | verified |
+| Workflows | on Free: 3,000 steps per day, 1 GB-month storage, 10 ms CPU per step, 1,024 steps per Workflow, 100 concurrent running instances (sleeping or waiting ones excluded), 1 MiB per step result and event, 100 MB state per instance, completed instances kept 3 days | no | two Workflows | https://developers.cloudflare.com/workflows/reference/limits/ , https://developers.cloudflare.com/workflows/reference/pricing/ | verified |
+| Workflows subrequests | 50 external and 1,000 Cloudflare services (scope per instance or per request is unclear) | no | at most about 25 per investigation instance in total | https://developers.cloudflare.com/workflows/reference/limits/ | verified |
+| Queues availability | on Free since 2026-02-04, up to 10,000 queues, every feature | no | five queues | https://developers.cloudflare.com/changelog/post/2026-02-04-queues-free-plan/ | verified, and a queue was created and deleted on Nitish's account |
+| Queue operations | 10,000 per day; one operation per 64 KB written, read or deleted, counted per message; 3 per delivered message; each retry adds a read | no | 57 per failing run | https://developers.cloudflare.com/queues/platform/pricing/ | verified |
+| Queue retention and batching | retention fixed at 24 h on Free; `max_batch_size` up to 100, `max_batch_timeout` up to 60 s, messages up to 128 KB, `sendBatch` up to 100 messages or 256 KB | no | messages under 64 KB | https://developers.cloudflare.com/queues/platform/limits/ | verified |
+| Durable Objects | SQLite storage backend only | no | none | https://developers.cloudflare.com/durable-objects/platform/pricing/ | verified |
+| D1 | 5M rows read and 100,000 rows written per day (reset 00:00 UTC), 5 GB per account, 10 databases of 500 MB, 50 queries per Worker invocation, 100 bound parameters per query, 100 KB per SQL statement, 2 MB per row or string; "Indexes will add an additional written row when writes include the indexed column"; per-query limits "apply to each individual statement contained within a batch statement" (whether a batch counts as one query against the 50 is not stated) | no | one database | https://developers.cloudflare.com/d1/platform/limits/ , https://developers.cloudflare.com/d1/platform/pricing/ | verified, refetched (batch counting ambiguous) |
+| KV, Analytics Engine | KV 100,000 reads and 1,000 writes per day; Analytics Engine 100,000 writes and 10,000 queries per day | no | none | https://developers.cloudflare.com/kv/platform/pricing/ , https://developers.cloudflare.com/analytics/analytics-engine/pricing/ | verified |
+| R2 | 10 GB-month Standard storage, 1M Class A and 10M Class B operations per month, free egress | no | `datatrust-artifacts`, `datatrust-lake` | https://developers.cloudflare.com/r2/pricing/ | verified |
+| Basin Catalog | needs an active R2 subscription, not Workers Paid; 1M catalog operations, 10 GB compaction processed and 1M compaction objects per month included; compaction billed only when enabled; snapshot expiration free | no | Iceberg table `datatrust.audit_events` | https://developers.cloudflare.com/basin-catalog/platform/pricing/ , https://developers.cloudflare.com/changelog/post/2026-10-01-basin-ga/ | verified (enable worked on Nitish's account) |
+| Basin Pipelines | Workers Paid only | **yes** | removed | https://developers.cloudflare.com/basin-pipelines/ , https://developers.cloudflare.com/basin-pipelines/platform/pricing/ | verified (error 1021 on Nitish's account) |
+| Workers AI allowance | 10,000 neurons per day on both plans, reset 00:00 UTC; on Free requests fail once it is used (no overage) | no | incident summaries | https://developers.cloudflare.com/workers-ai/platform/pricing/ | verified |
+| `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | 26,668 neurons per M input and 204,805 per M output tokens; 24,000-token context; not on the paid-billing list; stays active per the 2026-05-08 deprecation notice | no | the production model | https://developers.cloudflare.com/workers-ai/models/llama-3.3-70b-instruct-fp8-fast/ , https://developers.cloudflare.com/changelog/post/2026-05-08-planned-model-deprecations/ | verified |
+| Workers AI JSON mode | supported models listed: llama-3.3-70b-instruct-fp8-fast, llama-3-8b-instruct, llama-3.1-8b-instruct, hermes-2-pro-mistral-7b, deepseek-coder-6.7b-instruct-awq, deepseek-r1-distill-qwen-32b; no streaming; "JSON Mode couldn't be met" must be handled | no | summaries use JSON mode | https://developers.cloudflare.com/workers-ai/features/json-mode/ | verified, refetched |
+| Models needing paid billing | kimi-k2.6, kimi-k2.7-code, glm-5.2, glm-5.3, glm-5.3-flash, deepseek-v4-flash-0731, deepseek-v4-pro-0813 (403 on Free) | **yes** | none used (test pins it) | https://developers.cloudflare.com/workers-ai/platform/pricing/ , https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/ | corrected |
+| AI Gateway | dashboard analytics, caching and rate limiting free; 10 gateways per account; Logpush Workers Paid only; logs follow Workers Logs for accounts whose first gateway is from 2026-09-24 on, otherwise 100,000 stored logs in total | Logpush only | one gateway `datatrust`, binding calls | https://developers.cloudflare.com/ai-gateway/reference/pricing/ , https://developers.cloudflare.com/ai-gateway/reference/limits/ | corrected |
+| Access | Zero Trust Free: 50 seats at $0 (a seat per authenticated user), 50 service tokens per account (no seat), 500 applications; One-time PIN available but no longer added automatically for new organizations | no | 1 application, 2 service tokens, 1 or 2 seats | https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/ , https://developers.cloudflare.com/cloudflare-one/account-limits/ , https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/ | verified |
+| Access on workers.dev | one click under Settings, Domains & Routes; reusable policy `<worker> - Production`; Worker-level Access (2026-08-14) also exists; no plan restriction stated | no | one-click on the workers.dev hostname (unchanged) | https://developers.cloudflare.com/changelog/post/2025-10-03-one-click-access-for-workers/ , https://developers.cloudflare.com/changelog/post/2026-08-14-workers-access/ | corrected |
+
+### 28.3 How the numbers were measured
+
+- **Per-run counts (seed 101, all 20 scenarios plus clean).** The 21 trials were driven through `datatrust.bench.harness.run_trial` from the architect's scratchpad, recording the inputs of every `rca` CLI call; the local Miniflare D1 and R2 state of the 71 e2e runs made earlier was read with `sqlite3 -readonly`. OpenLineage events per run: 124 to 140 (781,630 to 1,006,642 bytes of dbt-ol JSONL; the largest single event 21 KB; the 10 largest together 187 KB). Check results: 40 (41 with a contract error). Lineage stored per run: 42 nodes, up to 275 edges (50 dataset, 225 column). Probes per incident: 8 to 68 (68 is also the maximum over the 105 test-seed trials in `results/bench-2026-10-10-offline.json`); candidates at most 19.
+- **Storage per run** (local state over 71 runs): D1 file 11.85 MB, about 167 KB per run; R2 `lineage/` 60.8 MB in 9,598 objects (about 135 objects and 856 KB per run), `runs/` 4.8 MB, `incidents/` and `prompts/` 0.74 MB, `lake/` 0.26 MB; about 0.94 MB of R2 per run.
+- **CPU.** Each Worker code path bundled with esbuild from the repo sources and run under Node 25.9 on this Mac (Apple silicon), zod in `jitless` mode (workerd forbids `new Function`, so zod takes its non-JIT path there as well), CPU from `process.cpuUsage()`. "Cold" is the first call in a fresh process, median of 5 processes; "warm" is the median of 15 calls in one process. SHA-256 uses Node's native hash, because Node's WebCrypto adds about 2.8 ms of loader start-up that workerd does not have.
+- **Tokens.** The 20 seed-101 prompts, repair prompts and template drafts built with `@datatrust/rca`, counted with llama-server's `/tokenize` (the Qwen3-1.7B tokenizer, a proxy for Llama 3.3's; budgets add 25% to input counts for the difference). llama-server ran on 127.0.0.1:8160 with `-np 1 -c 8192 -ngl 99` and was stopped afterwards. Prompt 757 to 978 tokens (median 819), JSON schema 264, repair prompt 1,042 to 1,337, template draft 211 to 330 (median 284; used as the size of a model draft). Prompt text 2,970 to 3,909 characters, repair text 4,080 to 5,430, schema 971.
+- Builder 3 reproduces the CPU numbers in the repo with `npm run budget:cpu` and the counts with `test_free_budget.py` (commit F11, section 23.1).
+
+### 28.4 Audit (v1.1 design against the Free plan)
+
+| # | Production path | Paid feature or Free limit | Finding in v1.1 (measured) | Verdict | Fix |
+|---|---|---|---|---|---|
+| A1 | Audit events: `PipelinesSink`, `pipelines` binding `EVENTS` in `wrangler.prod.template.jsonc`, `misconfiguration()` requiring `EVENTS`, setup-prod steps 5 to 7 (stream, sink, pipeline), doctor stream/sink/pipeline checks, smoke step 5 | Basin Pipelines | Paid only (error 1021). On Free the stream cannot be created, so the template cannot be rendered, and without `EVENTS` every route answers 500 `misconfigured` | Paid dependency | 28.5.1 |
+| A2 | Setup: SPEC 21.1 row 2, README production step 2, `prod-wizard.sh` stage "Workers Paid plan ($5/month)", doctor `[warn] Workers Paid plan` | Workers Paid subscription | setup tells Nitish to subscribe | Paid dependency | 28.5.9 |
+| A3 | `POST /api/v1/lineage`, 50 events per POST | 10 ms CPU per request | 17 to 20 ms cold for a POST of 50 events (canonical JSON 4.9 ms, SHA-256 9.9 ms including Node's WebCrypto start-up, zod 4.2 ms); still 7.8 to 9.7 ms for 10 events | exceeds Free | 28.5.2 |
+| A4 | same handler | 50 D1 queries per invocation | `getJob` plus one `insertLineageEvent` per event: 51 statements for 50 events | exceeds Free | 28.5.2 |
+| A5 | Queue `dt-lineage-events` | 10,000 queue operations per day (account) | one message per OpenLineage event: 124 to 140 messages per run; with check results (2 messages) and the investigation, 429 operations per failing run; the smoke needs about 2,570 operations, 103% of the 2,500 share | exceeds the share | 28.5.2 |
+| A6 | Consumer `dt-check-results` (batch of 10 messages, 20 results each) | 50 D1 queries per invocation | `db.batch` of one upsert per result: up to 200 statements per invocation | exceeds Free under the conservative reading of the D1 limits page | 28.5.3 |
+| A7 | Consumer `dt-lineage-events` (batch 25) | 50 D1 queries per invocation | per event, one statement per edge plus one update: hundreds per invocation | exceeds Free | 28.5.2, 28.5.3 |
+| A8 | `POST /api/runner/jobs/:id/artifacts` (relations) | same | 42 node upserts plus `getJob`: 43 statements | fits by 7; fragile | 28.5.3 |
+| A9 | Workflow steps `trace-lineage`, `plan-probes`, `rank`; `GET /api/lineage/:runId/upstream` | 10 ms CPU per step or request | 7.2 to 8.2 ms cold for `rank` alone and for trace plus plan; 4.8 to 5.6 ms of it is the ICU collator built by the first `localeCompare` in an isolate; warm 0.1 to 0.4 ms | fails the 2x rule | 28.5.4 |
+| A10 | Other CPU paths, cold with ICU ready: diagnostics completion with 68 probes 3.3 to 3.9 ms (zod 2.6 ms); build completion with 40 results 1.4 ms; relations upload 0.5 ms; load-context 0.6 ms; evidence 0.25 ms; summarize (template, or two model drafts) 1.5 to 2.7 ms; JWT verification 0.7 ms; replaying the 105 KB load-context result 0.25 ms | 10 ms | fits with 2x, provided request sizes stay capped (`checkResults` and `probeResults` allowed up to 500 and 1,000) | fits; caps tightened | 28.5.3 |
+| A11 | Runner `--watch` | 100,000 requests per day (account) | an idle lease poll every 2 s is 43,200 requests per day, 173% of the share | exceeds the share | 28.5.6 |
+| A12 | Workers AI summaries | 10,000 neurons per day, no overage on Free | v1.1 assumed Paid overage. Per incident: 1,083 input tokens typical (prompt plus schema), up to 1,601 on a repair; output up to `max_tokens` 700. Worst case 382 neurons (two calls, full output, +25% input); typical 86 | smoke fits; a 20-incident Workers AI eval does not fit the share in one day in the worst case (7,421 neurons) | 28.5.5 |
+| A13 | `summarize` step | neurons under retries | up to two AI calls inside one step; a retried step repeats both | wastes the allowance | 28.5.5 |
+| A14 | Workflows | 3,000 steps per day, 3-day retention, 1 MiB results | 7 + 10 steps per failing run typical (35 worst with every retry); largest step result 105 KB; `create()` rejects a reused id only inside retention, so the same alert after 3 days would start a second investigation | fits; retention needs a guard | 28.5.7 |
+| A15 | Queues | message retention fixed at 24 h on Free | consumers are push Workers that drain in seconds | fits | none |
+| A16 | Durable Objects, KV, Analytics Engine, Cron, Logpush, `limits` | Durable Objects SQLite-only; Cron 5 per account; Logpush and `limits.cpu_ms` Paid only | none used (no classes, no crons, no Logpush, no `limits`) | fits | `free-plan.test.ts` pins it |
+| A17 | D1 rows and storage | 100,000 written and 5M read per day; 500 MB per database | about 1,030 rows written per run (index entries counted), up to 9,000 read; 167 KB per run | fits; about 3,000 runs fill a database | 28.6, risk 25 |
+| A18 | R2, Basin Catalog | monthly free amounts | about 150 Class A, 175 Class B and 0.94 MB per run; catalog used by the committer only, compaction off | fits | 28.5.1 |
+| A19 | AI Gateway, Access, Workers Logs | Free amounts | 1 gateway, at most 10 logged calls per smoke; 1 Access app, 2 service tokens, 1 or 2 seats; about 250 log events per run | fits | none |
+| A20 | Subrequests | 50 external, 1,000 Cloudflare | lineage ingest 50 R2 puts plus 51 D1 statements per POST; the dev lake export listed every `lake/` page per call | fits after the changes (max 101 Cloudflare, 1 external) | 28.5.1, 28.5.2 |
+| A21 | Queue names `dt-*` | one account for four repos | not prefixed with the repo name | collision risk | 28.5.8 |
+| A22 | Shared Google Cloud project | no project-level data access; every query capped | `governance verify` queries run without `maximum_bytes_billed`; the smoke's bytes-billed sum over `JOBS_BY_PROJECT` counts every repo's jobs; `docs/prod-runner-wif.md` grants project `roles/viewer`, and BigQuery's default dataset access gives project viewers READER on every dataset (not refetched today); risk 17's project-level Masked Reader fallback would cover other repos' data policies | violates the shared-project rule | 28.5.10 |
+
+### 28.5 Redesign
+
+Each change keeps the tested guarantees: replay (Workflows replay completed steps from storage), idempotency (deterministic ids, `ON CONFLICT`), retries (queue retries and DLQ, step retries) and exactly-once effects (D1 upserts, Iceberg dedupe by `event_id`).
+
+#### 28.5.1 Audit lake: Queue to immutable R2 objects to Basin Catalog
+
+- **Producer.** `QueueSink` replaces `PipelinesSink` and `R2NdjsonSink` in both environments. `send(events)` validates each event against `schemas/lake/audit_event.stream.json` (the file keeps its name; it is now the lake schema) and sends one message `{events}` (at most 50 events, under 64 KB, so one message is one operation) to `datatrust-audit-events` through binding `AUDIT_Q`.
+- **Deterministic event ids**, so redelivery and step retries repeat the same id: `evt_<runId>_check_<checkId>`, `evt_<runId>_run_completed`, `evt_<incidentId>_created`.
+- **Consumer** `datatrust-audit-events` (`max_batch_size 10`, `max_batch_timeout 30`, `max_retries 3`, DLQ): writes the whole batch as one new object `lake/<yyyy-mm-dd>/<ulid>.ndjson` in `datatrust-artifacts` (the key format the local stand-in already uses), then acks. Objects are never overwritten. Measured 1.5 to 3.9 ms cold for 500 events (10 messages of 50).
+- **Export.** `GET /api/lake/export?after=<key>` (role runner, both environments; replaces `/api/dev/lake-export`): one R2 `list` with `startAfter` and `limit 100`; only objects whose ULID time is at least 120 s old ("settled"), so an object that a concurrent consumer writes late with an earlier ULID is never skipped; at most 100 objects and 1 MB of NDJSON per response; `x-next-after` names the last settled key returned.
+- **Committer.** `datatrust lake commit --catalog basin|local` (pyiceberg 0.12.0; `lake sync` stays as an alias for `--catalog local`). `basin` uses `RestCatalog` with `BASIN_CATALOG_URI`, `BASIN_WAREHOUSE` and `BASIN_CATALOG_TOKEN`; `local` uses the existing SQLite `SqlCatalog`. Per page: read the cursor from the table property `datatrust.lake.after` (the local `cursor.json` goes away); fetch the page; drop events whose `event_id` is already in the table (an `In("event_id", ...)` scan of one column) or repeated within the page; then, in one Iceberg transaction, append the new rows and set `datatrust.lake.after` to the page's `x-next-after`. A commit conflict reloads the table and retries (3 attempts). Each event lands exactly once and the cursor moves atomically with the data. The committer creates namespace `datatrust` and table `audit_events` when missing (schema from the same JSON file, `payload` as a JSON string).
+- **Who commits.** The smoke (18.4 step 5), `datatrust runner --env prod --watch` every 15 minutes and once before it exits, and Nitish by hand. The R2 objects are the durable record, so a late commit only delays the Iceberg rows.
+- **Basin Catalog.** Compaction stays off (billed beyond 10 GB processed per month); snapshot expiration is free and optional (21.1 step 16).
+- **Parity.** Local and CI use the same Queue, consumer, export and committer (Miniflare queues, SQLite catalog), so the only production-only piece is the REST catalog.
+
+#### 28.5.2 Lineage ingest in POSTs of ten events, one bundle message each
+
+- The runner's `post_lineage` sends at most 10 events and 256 KB per POST (the 10 largest seed-101 events are 187 KB together). The Worker answers 413 above either limit.
+- Handler: per event, zod `RunEventSchema`; `eventId` = the first 32 hex characters of SHA-256 over `JSON.stringify(item)` of the event as received (the runner resends the same JSON on a retry, so the id is stable; `canonicalJson` leaves this path); R2 put `lineage/<runId>/<eventId>.json` (unchanged); then one queue message `{runId, events: [{eventId, r2Key}]}`. No D1 write. Measured 2.8 to 3.0 ms cold for the 10 largest events, 1.8 to 2.0 ms for 5.
+- Consumer `datatrust-lineage-events` with `max_batch_size 1`: one relations get, at most 10 event gets, `edgesFromEvent`, then two set-based statements (28.5.3): the edges, and the `lineage_events` rows, which are now inserted only here and already processed (`ON CONFLICT DO NOTHING`). Measured 2.8 to 3.5 ms cold for the 10 largest events (316 raw edges, a 29 KB JSON parameter).
+- `await-ingested` compares the run's `lineage_events` row count with `expectedLineageEvents` (every row is processed by construction).
+- Queue messages per run: 14 lineage bundles (was 124 to 140) and 1 check-results message of at most 50 results (was chunks of 20).
+- The endpoint still accepts a single event, so openlineage-python's HTTP transport can target it, but that costs 3 queue operations per event and is not used in production.
+
+#### 28.5.3 Set-based D1 writes and request caps
+
+- Each multi-row write becomes one statement over a JSON parameter, for example `INSERT INTO lineage_edges (run_id, src_node, src_column, dst_node, dst_column) SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]') FROM json_each(?2) WHERE true ON CONFLICT DO NOTHING`. The same pattern serves `lineage_events`, the `lineage_nodes` upsert, the `check_results` upsert and `dead_letters`. Two bound parameters (limit 100), short SQL (limit 100 KB), parameters up to about 60 KB (limit 2 MB). The builder confirms `json_each` in Miniflare D1 (SQLite JSON1) and in the D1 SQL docs before relying on it.
+- Statements per invocation afterwards: ingest 1, lineage consumer 2, relations upload 2, check-results consumer at most 10 (one per message), DLQ consumer 1, each workflow step at most 5. This holds whichever way D1 counts a batch.
+- Request caps that keep CPU bounded: `checkResults` at most 100 per completion (40 or 41 occur), `probeResults` at most 100 (68 is the measured maximum), lineage at most 10 events and 256 KB per POST.
+- Rows written do not change (each row and each index entry still counts); 28.6 budgets them.
+
+#### 28.5.4 Locale-stable ordering without first-call ICU cost
+
+- New `packages/rca/src/order.ts`: `const COLLATOR = new Intl.Collator()` at module scope and `compareIds(a, b) = COLLATOR.compare(a, b)`. It replaces all 10 `localeCompare` call sites in `packages/rca/src` and `apps/worker/src`. Same default locale, so every order and tie-break stays as it is; F6 reruns the seed-101 benchmark gate and the e2e parity test and stops if any ranking changes.
+- Building the collator at module scope moves the 4.8 to 5.6 ms ICU set-up into Worker start-up (1 s limit) instead of the first request or step.
+- Measured afterwards, cold: trace plus plan 1.5 to 3.8 ms and rank 1.7 to 3.4 ms (the upper ends when the process has just parsed the full trial capture).
+
+#### 28.5.5 Workers AI on Free: one model, a daily neuron ledger, one AI call per step
+
+- **Model.** Every Workers AI number comes from `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust` (unchanged). It is in the JSON-mode list fetched today, is not on the paid-billing list and stays active. The other JSON-mode models listed are deprecated (llama-3-8b-instruct, llama-3.1-8b-instruct) or not current, so the design caps spend instead of switching to a smaller model. Local numbers stay labelled with their own model: Qwen3-1.7B Q4_0 through llama-server, or the template.
+- **Rates in code.** 26,668 neurons per M input and 204,805 per M output tokens (pricing page, 2026-10-10). A production `WORKERS_AI_MODEL` without a pinned rate is a misconfiguration (500).
+- **Ledger.** D1 migration `0002_ai_budget.sql` adds `ai_budget(day TEXT PRIMARY KEY, reserved INTEGER NOT NULL, used INTEGER NOT NULL, calls INTEGER NOT NULL)`, keyed by the UTC date (the allowance resets 00:00 UTC). Before each call the Worker reserves the worst case for that call, `ceil(ceil((prompt chars + schema chars) / 3) * 26,668 / 1e6 + max_tokens * 204,805 / 1e6)`, with one conditional upsert that succeeds only while `reserved + cost <= AI_DAILY_NEURON_CAP`. For the seed-101 prompts that is at most 187 neurons for a first draft and 201 for a repair, so at most 388 per incident. After the call it replaces the reservation with the figure from the response's token usage when the response reports it (otherwise the reservation stands) and adds it to `used`. If the reservation fails, no call is made and the summary falls back to the template with `summary_fallback_reason = 'daily_neuron_cap'`.
+- **Cap.** `AI_DAILY_NEURON_CAP = 2000` in the production template: 80% of DataTrust's 2,500 share and 20% of the account's 10,000. The ledger cannot see the other repos; if the account runs out first, Workers AI returns errors and the grounded loop falls back with the provider error as the reason.
+- **Steps.** `summarize` becomes `summarize-draft` (AI call 1), `summarize-repair` (AI call 2, only when the first draft fails grounding) and `summarize-finalize` (validation, server-side rendering, template fallback). The two AI steps use `retries: {limit: 1}`. Completed steps replay from storage, so a later failure never repeats an AI call.
+- **Smoke.** Before the fault runs, `GET /api/ai/budget` (operator) must show at least 5 x 388 = 1,940 neurons of headroom; otherwise the smoke stops with "rerun after 00:00 UTC". The report records reserved and used neurons.
+- **Eval (stretch, 12.4).** `datatrust bench summaries --provider workers-ai --checkpoint results/summaries-workers-ai.checkpoint.jsonl` builds the 20 seed-101 evidence bundles offline (DuckDB stand-in), posts each to `POST /api/eval/summary` (operator, production only, the same grounded loop and ledger), appends one line per finished incident, and exits 0 with "resume after 00:00 UTC" when the ledger refuses. A rerun resumes. Measured budget: typical 1,735 neurons for all 20 (one day), worst case 7,421 (four days at the cap). The report is written once all 20 are done and lists neurons per UTC day.
+
+#### 28.5.6 Runner idle backoff
+
+- `watch()` polls 2 s after a job and doubles the wait while idle up to 30 s (`--interval` sets the start, new `--max-interval` the cap); a job resets it. An idle runner costs at most 2,880 requests per day. The smoke (5 s) and `datatrust run --wait` (3 s) keep their polling, bounded by each run.
+
+#### 28.5.7 Investigations after the 3-day Workflows retention
+
+- The `datatrust-investigate` consumer acks without creating an instance when the incident id already has a row in `incidents` (one indexed read). An alert repeated after the 3-day Free retention therefore cannot start a second investigation or spend neurons twice. Queue retention (24 h) is shorter than Workflows retention, so a redelivery alone never reaches this case.
+
+#### 28.5.8 Account hygiene and configuration guards
+
+- Queue names take the repo prefix: `datatrust-check-results`, `datatrust-lineage-events`, `datatrust-investigate`, `datatrust-audit-events`, `datatrust-dlq`. Everything else already starts with `datatrust` (Worker, D1 database, both buckets, both Workflows, AI Gateway, Access application and service tokens).
+- `misconfiguration()` requires `AUDIT_Q` instead of `EVENTS`, a pinned neuron rate for `WORKERS_AI_MODEL` and a numeric `AI_DAILY_NEURON_CAP`. The `EVENTS` binding, `PipelinesSink`, the `cloudflare:pipelines` types and the `--stream` option of `render-prod-config.mjs` are removed.
+
+#### 28.5.9 Setup, doctor and wizard without Workers Paid
+
+- setup-prod: steps 5 to 7 (stream, sink, pipeline) are deleted; step 4 creates the five `datatrust-*` queues; step 3 (Basin Catalog on `datatrust-lake`) and the R2 API token stay, because the committer needs them; the token check moves to the first `lake commit`.
+- doctor drops the stream, sink, pipeline and Workers Paid checks and adds: the five queues exist; `AI_DAILY_NEURON_CAP` is rendered; `GET /api/ai/budget` answers; `RestCatalog.list_namespaces()` succeeds.
+- The wizard drops the Workers Paid stage, marks the steps that are already done (28.1) and pre-fills the known values: account id, team domain `https://old-truth-a7dc.cloudflareaccess.com`, project `master-magnet-444903-u4`, location US.
+
+#### 28.5.10 Shared Google Cloud project hygiene
+
+- Every BigQuery query sets `maximum_bytes_billed`: `governance verify` and the smoke's bytes query get 100 MB, probes keep 100 MB, dbt keeps 1 GB per query.
+- Every DataTrust job carries the label `app=datatrust` (dbt `query-comment` with `job-label: true` plus a project-level `labels` model config; `QueryJobConfig.labels` in Python). The smoke's bytes-billed figure filters `JOBS_BY_PROJECT` on that label, so other repos' jobs are not counted.
+- `docs/prod-runner-wif.md` drops the project `roles/viewer` grant and grants read on the `datatrust-classification` taxonomy only (UNVERIFIED which predefined role the taxonomy IAM accepts; the builder checks the column-level security docs and doctor proves `datacatalog.taxonomies.get`).
+- Risk 17's project-level Masked Reader fallback is withdrawn: on the shared project it would cover other repos' data policies. If the data-policy grant fails, governance apply stops and says so.
+- Project-level grants that remain: BigQuery Job User for `datatrust-prober` and `datatrust-analyst` (permission to create jobs, no data access). Service Account Token Creator stays on each DataTrust service account, never on the project.
+
+### 28.6 Usage budget
+
+Per failing run, worst case unless marked. The smoke is one clean run plus five fault runs. "Share" is 25% of the account allowance (28.1). Counts come from 28.3; "about" marks rounded figures.
+
+| Metric | Free allowance (account) | DataTrust share | Per failing run | Smoke | Other DataTrust load | Smoke, % of share | Runs per day within the share | Pinned by |
+|---|---|---|---|---|---|---|---|---|
+| Workers requests (API calls, queue consumer and Workflow step invocations) | 100,000 per day | 25,000 | about 230 (runner 20: 2 leases, 2 artifacts, 14 lineage POSTs, 2 completions; operator up to 152 at 5 s polling over 12.5 minutes; consumers 19; steps up to 35); up to 436 if a run hits the smoke's 30-minute timeout | about 1,500 (worst about 2,700) | idle runner at most 2,880 per day | 6% (worst 11%) | about 96 | `test_free_budget.py`, runner backoff test |
+| Queue operations | 10,000 per day | 2,500 | 57 (19 messages: 1 check results, 14 lineage, 1 investigate, 3 audit) | 336 | none | 13% | 43 | `queues.test.ts` message counts, `test_free_budget.py` |
+| Workflow steps | 3,000 per day | 750 | 17 typical, 35 with every retry | at most 192 | optional daily prod-runner clean run, at most 17 | 26% | 21 (worst), 44 (typical) | workflow step-count test |
+| Workflows running at once | 100 | 25 | 1 or 2 | 2 | none | 8% | n/a | none needed |
+| D1 rows written | 100,000 per day | 25,000 | about 1,030 (edges 550, lineage events 280, nodes 84, check results 82, jobs 16, runs 5, incident 3, ledger up to 6; index entries counted) | about 6,200 | none | 25% | 24 | `test_free_budget.py` |
+| D1 rows read | 5,000,000 per day | 1,250,000 | up to 9,000 with 3,000 runs stored | up to 54,000 | idle lease polls about 6,000 | 4% | over 130 | none needed |
+| D1 statements per invocation | 50 | n/a | at most 10 (check-results consumer), otherwise at most 5 | n/a | n/a | n/a | n/a | `d1-statements.test.ts` |
+| D1 storage | 500 MB per database, 5 GB per account | 1.25 GB | 167 KB | 1 MB | none | under 0.1% | about 3,000 runs fill the database | risk 25 |
+| Worker CPU per invocation | 10 ms | n/a | largest cold path 3.9 ms (diagnostics completion, 68 probes); ingest 3.0 ms; lineage bundle 3.5 ms; rank 2.0 ms | n/a | n/a | n/a | n/a | `npm run budget:cpu -- --gate 8` |
+| Subrequests per invocation | 50 external, 1,000 Cloudflare | n/a | largest 101 Cloudflare (lake export), 13 (ingest, lineage bundle); 1 external (Access JWKS) | n/a | n/a | n/a | n/a | caps in `api.test.ts` |
+| Workers AI neurons | 10,000 per day | 2,500 (cap 2,000 in code) | 86 typical, 382 worst (reserved up to 388) | 432 typical, 1,907 worst | stretch eval, at most the cap per day | 17% typical, 76% worst (hard cap) | 23 incidents typical, 5 worst; then template fallback | `budget.test.ts` |
+| R2 storage | 10 GB-month | 2.5 GB | 0.94 MB | 5.6 MB | none | 0.2% | about 2,650 runs kept | `test_free_budget.py` |
+| R2 Class A operations | 1M per month | 250,000 | about 150 | about 900 | committer lists, a few per day | 0.4% of a month | over 50 per day | none needed |
+| R2 Class B operations | 10M per month | 2.5M | about 175 | about 1,050 | dashboard reads | under 0.1% of a month | n/a | none needed |
+| Basin Catalog operations | 1M per month | 250,000 | about 10 per commit (estimate) | about 30 | one commit per runner session | under 0.1% of a month | n/a | none needed |
+| Workers Logs events | 200,000 per day | 50,000 | about 250 | about 1,600 | idle polls 2,880 | 3% | n/a | none needed |
+| AI Gateway | 10 gateways; logs per Workers Logs | 1 gateway | up to 2 calls | up to 10 | none | n/a | n/a | none needed |
+| Access | 50 seats, 50 service tokens, 500 applications | n/a | n/a | 1 or 2 seats, 2 tokens, 1 application | none | n/a | n/a | none needed |
+| Cron triggers | 5 per account | n/a | 0 | 0 | 0 | n/a | n/a | `free-plan.test.ts` |
+| BigQuery (billing enabled) | 1 TiB of queries per month free | none (no Free plan limit; capped per query) | under 1 GB per run (dbt cap 1 GB per query, probes 100 MB) | under 6 GB | none | n/a | n/a | `test_prod_offline.py` caps and labels |
+
+Before the redesign the same smoke needed about 2,570 queue operations (103% of the share), up to 200 D1 statements in one invocation, 18 ms of CPU for one lineage POST, and an idle runner alone used 173% of the request share.
+
+DataTrust's sustained rate inside its share is therefore about 20 validation runs per day, bound by Workflow steps and D1 rows written; at least 5 of those incidents get Workers AI summaries in the worst case (23 typically), and any beyond the cap get the template, with the reason stored on the incident.
+
+### 28.7 Tests that pin the Free budgets
+
+| Test | Asserts |
+|---|---|
+| `apps/worker/test/free-plan.test.ts` | the rendered production template has no `pipelines`, `limits`, `triggers`, `tail_consumers`, `logpush` or `durable_objects` (and no `migrations` other than `new_sqlite_classes`, should any appear); exactly the five `datatrust-*` queues with the consumer settings of 28.5.1 and 28.5.2; a DLQ on every consumer except the DLQ; `WORKERS_AI_MODEL` has a pinned rate and is not on the paid-billing list; `AI_DAILY_NEURON_CAP` is at most 2,500 |
+| `apps/worker/test/d1-statements.test.ts` | a counting proxy around `env.DB` (`prepare`, `batch`, `exec`): relations upload of 42 nodes, a lineage POST of the 10 largest seed-101 events and its bundle, a check-results batch of 10 messages, a DLQ batch, and each workflow step stay within the statement counts of 28.5.3 |
+| `apps/worker/test/queues.test.ts` (additions) | 140 events posted 10 at a time give exactly 14 lineage messages; a 41-result completion gives 1 check-results message; audit messages carry at most 50 events; a redelivered message produces the same event ids |
+| `apps/worker/test/api.test.ts` (additions) | 11 events or more than 256 KB on `/api/v1/lineage` answer 413; more than 100 check or probe results answer 400; `/api/lake/export` returns no unsettled object and at most 100 objects or 1 MB |
+| `apps/worker/test/budget.test.ts` | reservation math (187 and 201 for the largest seed-101 prompts); a refused reservation gives the template with reason `daily_neuron_cap` and no AI call; settlement from token usage; a failure in `summarize-finalize` makes no second AI call; the UTC day boundary |
+| `apps/worker/test/investigation.test.ts` (addition) | an existing incident row makes the investigate consumer ack without `create()` |
+| `packages/rca/test/order.test.ts` | no `localeCompare` remains in `src`; `compareIds` orders every node and probe id in the fixtures exactly as `localeCompare` did |
+| `pipelines/tests/test_free_budget.py` | `pipelines/datatrust/prod/free_budget.py` holds the allowances of 28.2 with their URLs, `SHARE = 0.25`, and per-run counts derived from the code (runner `LINEAGE_POST_MAX_EVENTS = 10` and `LINEAGE_POST_MAX_BYTES = 262144`, the Worker's check-result message size, consumer settings read from the template) and from the seed-101 fixture; asserts 57 queue operations per failing run and that the smoke stays within 50% of the share for every metric except the Workers AI worst case, which must stay under the cap |
+| `pipelines/tests/test_runner_client.py` (additions) | lineage POSTs carry at most 10 events and 256 KB; idle waits are 2, 4, 8, 16, 30, 30 s and reset after a job |
+| `pipelines/tests/test_lake_commit.py` | SQLite catalog: commit twice from the same objects adds no rows; an event in two objects lands once; the cursor is a table property written in the same snapshot as the rows; a simulated commit conflict retries |
+| `pipelines/tests/test_prod_offline.py` (additions) | every BigQuery query path sets `maximum_bytes_billed` and the `app=datatrust` label (fake client records job configs); the bytes-billed query filters on the label |
+| `scripts/cpu-budget.mjs` (`npm run budget:cpu -- --gate 8`, CI `node` job) | rebuilds the 28.3 CPU measurements from committed fixtures (the S01 investigation fixture, its OpenLineage events and relations): ingest of 10 events, lineage bundle, relations upload, both completions, trace, plan, rank, evidence, summarize; median of 5 cold processes, zod jitless, collator at module scope; fails when any median passes 8 ms on the CI runner (x86 server cores are a closer proxy for the edge than this Mac) |
+
+### 28.8 What changed from v1.1
+
+- Removed from production: Basin Pipelines (stream, sink, pipeline, `pipelines` binding, `PipelinesSink`), the Workers Paid step, and the doctor's Workers Paid warning.
+- Added: Queue `datatrust-audit-events` with a batching consumer, `/api/lake/export` for the runner in both environments, the exactly-once `datatrust lake commit`, the D1 neuron ledger (`0002_ai_budget.sql`, `AI_DAILY_NEURON_CAP`, `/api/ai/budget`), split summary steps, the incident-exists guard, runner idle backoff, the CPU budget script and the budget tests.
+- Changed: lineage ingest (10 events and 256 KB per POST, one bundle message, consumer batch 1), set-based D1 writes, request caps, module-scope collator, queue names with the `datatrust-` prefix, check results in one message per run, shared-project hygiene on Google Cloud.
+- Unchanged: the resume mechanisms (Queues and Workflows coordinate validation, Workers AI writes summaries from sanitized evidence through AI Gateway, OpenLineage drives the trace), the 40 checks, the 20 scenarios, the frozen weights, the benchmark numbers, Access verification, the runner pull model and BigQuery governance.
+- Spec sections edited for consistency: 1 (version), 2, 3.1, 3.2, 4, 4.1, 5, 9, 12.4, 13.1, 13.3, 13.5, 13.6, 13.9, 13.10, 14.1, 14.2, 17, 18.1, 18.2, 18.4, 19, 20, 21, 22, 23.1, 24, 25.4 and 27.2.
