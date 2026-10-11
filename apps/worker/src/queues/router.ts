@@ -4,15 +4,9 @@ import { handleCheckResults } from './check-results';
 import { handleDeadLetters } from './dlq';
 import { handleInvestigate } from './investigate';
 import { handleLineageEvents } from './lineage-events';
+import { QUEUES } from './names';
 
-/** Queue names carry the repo prefix: one Cloudflare account serves four repos (SPEC 13.3, 28.5.8). */
-export const QUEUES = {
-  checkResults: 'datatrust-check-results',
-  lineageEvents: 'datatrust-lineage-events',
-  investigate: 'datatrust-investigate',
-  auditEvents: 'datatrust-audit-events',
-  dlq: 'datatrust-dlq',
-} as const;
+export { QUEUES };
 
 /** Dispatch by queue name (SPEC 13.3). */
 export async function queue(batch: MessageBatch<unknown>, env: AppEnv): Promise<void> {

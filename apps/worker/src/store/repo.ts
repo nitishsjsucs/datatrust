@@ -579,19 +579,18 @@ export async function listIncidents(db: D1Database, runId?: string | null): Prom
 
 // ------------------------------------------------------------------------------------------- dead letters
 
-/** Every dead letter of a DLQ batch with one statement (SPEC 28.5.3). */
+/** Every dead letter of a DLQ batch, each with its origin queue, with one statement (SPEC 28.5.3). */
 export async function insertDeadLetters(
   db: D1Database,
-  queue: string,
-  letters: Array<{ body: unknown; error: string | null }>,
+  letters: Array<{ queue: string; body: unknown; error: string | null }>,
 ): Promise<void> {
   if (!letters.length) return;
   await db
     .prepare(
       `INSERT INTO dead_letters (queue, body_json, error, created_at)
-       SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), ?3 FROM json_each(?2)`,
+       SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ?2 FROM json_each(?1)`,
     )
-    .bind(queue, JSON.stringify(letters.map((l) => [JSON.stringify(l.body ?? null), l.error])), nowIso())
+    .bind(JSON.stringify(letters.map((l) => [l.queue, JSON.stringify(l.body ?? null), l.error])), nowIso())
     .run();
 }
 

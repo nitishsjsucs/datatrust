@@ -160,11 +160,24 @@ describe('datatrust-investigate', () => {
 });
 
 describe('datatrust-dlq', () => {
-  it('records dead letters in D1', async () => {
-    const result = await deliver('datatrust-dlq', [{ runId: 'x', poison: true }]);
-    expect(result.explicitAcks).toEqual(['m0']);
-    const row = await env.DB.prepare('SELECT queue, body_json FROM dead_letters').first<{ queue: string; body_json: string }>();
-    expect(row?.queue).toBe('datatrust-dlq');
-    expect(JSON.parse(row!.body_json)).toEqual({ runId: 'x', poison: true });
+  it('records dead letters in D1 with the queue each came from', async () => {
+    const bodies = [
+      { runId: 'x', checkResults: [] },
+      { runId: 'x', events: [{ eventId: 'e1', r2Key: 'lineage/x/e1.json' }] },
+      { runId: 'x', incidentId: 'inc_x', trigger: 'checks' },
+      { events: [{ event_id: 'a1', event_type: 'check_result' }] },
+      { runId: 'x', poison: true },
+    ];
+    const result = await deliver('datatrust-dlq', bodies);
+    expect(result.explicitAcks).toEqual(['m0', 'm1', 'm2', 'm3', 'm4']);
+    const { results } = await env.DB.prepare('SELECT queue, body_json FROM dead_letters ORDER BY id').all<{ queue: string; body_json: string }>();
+    expect(results.map((r) => r.queue)).toEqual([
+      'datatrust-check-results',
+      'datatrust-lineage-events',
+      'datatrust-investigate',
+      'datatrust-audit-events',
+      'unknown',
+    ]);
+    expect(JSON.parse(results[4]!.body_json)).toEqual({ runId: 'x', poison: true });
   });
 });
