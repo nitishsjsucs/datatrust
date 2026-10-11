@@ -17,6 +17,8 @@ Tuning run on 2026-10-10:
 
 These values are frozen as `FROZEN_WEIGHTS` before the test seeds 101-105 run, and the test-seed results are reported whatever they are.
 
+Correction (2026-10-11 review): seed 101 was not fully held out. It was also the development smoke seed: before the freeze commit (`86ef4f1`), commit `1d95d3d` added `pipelines/tests/test_injection_detected_smoke.py`, which runs S01, T14 and S04 plus a clean trial on seed 101 with the initial weights and asserts detection and that the ground truth is in the ranked list. The README therefore also reports seeds 102-105 alone as the cleanly held-out figure (80/80 detected, 80/80 top-3, 72/80 top-1, `uv run datatrust report --from results/bench-2026-10-10-offline.json --seeds 102-105 --tag heldout-102-105`).
+
 ## Consequences
 
 - The dev-seed figures are tuning figures, not results, and the README does not quote them as results.

@@ -9,7 +9,11 @@ in time) or `error`. One ValidationRunWorkflow instance per run, with the run id
 
 **Runner**: the Python process that does warehouse work for the Worker. It leases **jobs** over HTTPS
 (outbound only): `dbt_build` (generate, inject, load, `dbt-ol build`) and `diagnostics` (run probes). A
-**lease** carries a token; every job call must present it. A job is leased at most three times.
+**lease** carries a token; every job call must present it. A job is leased at most three times. A lease past
+its expiry still holds until another runner re-leases the job, and a completion may be retried with the same
+token. A job older than its workflow's wait (6 hours for a build, 1 hour for diagnostics) is **failed**, never
+leased: nothing would receive its result. BigQuery runs go one at a time, because each builds the same
+`datatrust_*` datasets.
 
 **Principal** and **role**: who calls the Worker, resolved from the verified Access JWT. Humans are matched on
 email, service tokens on `common_name` (the Client ID). Roles: `viewer` (read runs and incidents),
@@ -70,8 +74,14 @@ a refused summary falls back to the template with reason `daily_neuron_cap`.
 **Prune**: removing the lineage detail of runs older than N days (at least 7) through `POST /api/admin/prune`
 (operator, `datatrust prune`): their D1 lineage edges, events and nodes and their raw OpenLineage events under R2
 `lineage/<runId>/`. Run rows, jobs, check results, incidents and the audit lake stay, and so does the latest
-passed run, whose model checksums are the next investigation's baseline. At most 10 runs per call, because
-deleted rows count as rows written.
+passed run, whose model checksums are the next investigation's baseline. At most 5 runs per call, because
+deleted rows count as rows written; the **prune ledger** (`prune_budget`, one row per UTC day) stops pruning
+for the day before 5,000 rows written.
+
+**Builder**: the service account `datatrust-builder` that the raw loads and dbt impersonate in production
+(`DATATRUST_BUILDER_SA`). It owns the four `datatrust_*` datasets and can read nothing else in the shared
+project. The **prober** (`datatrust-prober`) runs the read-only probes; the **analyst** (`datatrust-analyst`)
+is the masked reader that governance verify impersonates.
 
 **Share**: the 25% of an account-wide Free plan allowance that DataTrust budgets for itself, because four repos
 use the same Cloudflare account and Google Cloud project.
