@@ -226,9 +226,9 @@ class Assertion:
 
 def _q(bq: Any, sql: str) -> Any:
     """Every verification query is capped and labelled app=datatrust (shared project, SPEC 28.5.10)."""
-    from datatrust.warehouse.bigquery_wh import capped_job_config
+    from datatrust.warehouse.bigquery_wh import JOB_ID_PREFIX, capped_job_config
 
-    return bq.query(sql, job_config=capped_job_config(VERIFY_MAX_BYTES))
+    return bq.query(sql, job_config=capped_job_config(VERIFY_MAX_BYTES), job_id_prefix=JOB_ID_PREFIX)
 
 
 def _assertions(project: str) -> list[Assertion]:

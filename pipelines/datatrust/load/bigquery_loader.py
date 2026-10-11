@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from datatrust.synth import spec as S
-from datatrust.warehouse.bigquery_wh import JOB_LABELS
+from datatrust.warehouse.bigquery_wh import JOB_ID_PREFIX, JOB_LABELS
 
 EXPECTED_TYPES = {
     "int": {"INTEGER", "INT64"},
@@ -62,7 +62,9 @@ def load_raw_bigquery(
             decimal_target_types=["NUMERIC", "BIGNUMERIC"],
         )
         with (raw_dir / f"{table}.parquet").open("rb") as fh:
-            client.load_table_from_file(fh, dest, job_config=cfg, location=location).result()
+            client.load_table_from_file(
+                fh, dest, job_config=cfg, location=location, job_id_prefix=JOB_ID_PREFIX
+            ).result()
         loaded = client.get_table(dest)
         cols = (table_columns or {}).get(table)
         problems = check_schema(table, [(f.name, f.field_type) for f in loaded.schema], cols)

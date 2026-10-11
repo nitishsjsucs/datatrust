@@ -113,7 +113,8 @@ class FakeBQ:
     def __init__(self, rows):
         self.rows, self.calls = rows, []
 
-    def query(self, sql, job_config=None, location=None):
+    def query(self, sql, job_config=None, location=None, job_id_prefix=None):
+        assert job_id_prefix == "datatrust_"  # shared project: job ids start with the repo name
         self.calls.append(
             (sql, job_config.dry_run, job_config.maximum_bytes_billed, job_config.query_parameters)
         )
@@ -490,7 +491,7 @@ def test_smoke_report_records_bytes_billed_and_versions():
     seen = {}
 
     class Client:
-        def query(self, sql, job_config=None):
+        def query(self, sql, job_config=None, job_id_prefix=None):
             seen["sql"], seen["params"] = sql, job_config.query_parameters
             return SimpleNamespace(result=lambda: [{"billed": 10485760}])
 
@@ -546,22 +547,26 @@ def test_every_bigquery_query_path_is_capped_and_labelled(monkeypatch, tmp_path)
 
     # Probes: the dry run and the real query.
     configs: list = []
+    prefixes: list = []
 
     class Recording(FakeBQ):
-        def query(self, sql, job_config=None, location=None):
+        def query(self, sql, job_config=None, location=None, job_id_prefix=None):
             configs.append(job_config)
-            return super().query(sql, job_config=job_config, location=location)
+            prefixes.append(job_id_prefix)
+            return super().query(sql, job_config=job_config, location=location, job_id_prefix=job_id_prefix)
 
     wh = BigQueryWarehouse("my-project", "US", client=Recording([{"n": 1}]))
     wh.query("select 1 as n")
     wh.dry_run("select 1 as n")
     assert len(configs) == 3 and all(_capped_and_labelled(c, PROBE_MAX_BYTES) for c in configs)
+    assert prefixes == ["datatrust_"] * 3
 
     # Governance verify: every assertion query, as the analyst.
     seen: list = []
 
     class Analyst:
-        def query(self, sql, job_config=None):
+        def query(self, sql, job_config=None, job_id_prefix=None):
+            assert job_id_prefix == "datatrust_"
             seen.append((sql, job_config))
             if "datatrust_staging" in sql:
                 from google.api_core.exceptions import Forbidden
@@ -585,13 +590,13 @@ def test_every_bigquery_query_path_is_capped_and_labelled(monkeypatch, tmp_path)
     bytes_seen = {}
 
     class Jobs:
-        def query(self, sql, job_config=None):
-            bytes_seen.update(sql=sql, cfg=job_config)
+        def query(self, sql, job_config=None, job_id_prefix=None):
+            bytes_seen.update(sql=sql, cfg=job_config, prefix=job_id_prefix)
             return SimpleNamespace(result=lambda: [{"billed": 1}])
 
     assert bytes_billed_since(s, dt.datetime(2026, 10, 11, tzinfo=dt.UTC), client=Jobs()) == 1
     assert "l.key = 'app' and l.value = 'datatrust'" in bytes_seen["sql"]
-    assert _capped_and_labelled(bytes_seen["cfg"], 100 * 1000 * 1000)
+    assert _capped_and_labelled(bytes_seen["cfg"], 100 * 1000 * 1000) and bytes_seen["prefix"] == "datatrust_"
 
     # Loads (free, but attributed).
     load_cfgs: list = []
@@ -602,7 +607,8 @@ def test_every_bigquery_query_path_is_capped_and_labelled(monkeypatch, tmp_path)
         (tmp_path / "raw" / f"{table}.parquet").write_bytes(b"x")
 
     class Loader:
-        def load_table_from_file(self, fh, dest, job_config=None, location=None):
+        def load_table_from_file(self, fh, dest, job_config=None, location=None, job_id_prefix=None):
+            assert job_id_prefix == "datatrust_"
             load_cfgs.append(job_config)
             return SimpleNamespace(result=lambda: None)
 

@@ -86,7 +86,7 @@ def bytes_billed_since(settings: GcpSettings, start: dt.datetime, client: Any = 
     try:
         from google.cloud import bigquery
 
-        from datatrust.warehouse.bigquery_wh import capped_job_config
+        from datatrust.warehouse.bigquery_wh import JOB_ID_PREFIX, capped_job_config
 
         client = client or bigquery.Client(project=settings.project, location=settings.location)
         region = f"region-{settings.location.lower()}"
@@ -100,7 +100,7 @@ def bytes_billed_since(settings: GcpSettings, start: dt.datetime, client: Any = 
             BYTES_QUERY_MAX_BYTES,
             query_parameters=[bigquery.ScalarQueryParameter("start", "TIMESTAMP", start)],
         )
-        rows = list(client.query(sql, job_config=cfg).result())
+        rows = list(client.query(sql, job_config=cfg, job_id_prefix=JOB_ID_PREFIX).result())
         return int(rows[0]["billed"]) if rows else 0
     except Exception as err:  # noqa: BLE001 - the report says why the figure is missing
         return f"unavailable ({type(err).__name__})"

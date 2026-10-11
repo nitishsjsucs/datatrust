@@ -13,6 +13,9 @@ PROBE_MAX_BYTES = 100 * 1000 * 1000  # 100 MB per probe; a query over the cap fa
 # The Google Cloud project is shared by four repos (SPEC 28.5.10): every DataTrust job carries this label, so
 # its bytes can be told apart in INFORMATION_SCHEMA.JOBS_BY_PROJECT, and every query is capped.
 JOB_LABELS = {"app": "datatrust"}
+# ... and its job ids start with the repo name, like every other DataTrust resource on the shared project.
+# dbt-bigquery mints its own uuid4 job ids, so dbt jobs are told apart by the same label instead.
+JOB_ID_PREFIX = "datatrust_"
 
 
 def capped_job_config(max_bytes: int = PROBE_MAX_BYTES, **kwargs: Any):
@@ -72,20 +75,23 @@ class BigQueryWarehouse:
             self.max_bytes, dry_run=dry_run, use_query_cache=False, query_parameters=query_params
         )
 
+    def _submit(self, sql: str, cfg: Any):
+        return self.client.query(sql, job_config=cfg, location=self.location, job_id_prefix=JOB_ID_PREFIX)
+
     def query(
         self, sql: str, params: Mapping[str, object] | None = None, *, max_rows: int = 1000
     ) -> list[dict]:
         assert_read_only(sql, "bigquery")
-        dry = self.client.query(sql, job_config=self._config(params, dry_run=True), location=self.location)
+        dry = self._submit(sql, self._config(params, dry_run=True))
         self.bytes_dry_run += int(getattr(dry, "total_bytes_processed", 0) or 0)
-        job = self.client.query(sql, job_config=self._config(params, dry_run=False), location=self.location)
+        job = self._submit(sql, self._config(params, dry_run=False))
         rows = job.result(max_results=max_rows)
         self.bytes_billed += int(getattr(job, "total_bytes_billed", 0) or 0)
         return [dict(r.items()) for r in rows]
 
     def dry_run(self, sql: str) -> int:
         assert_read_only(sql, "bigquery")
-        job = self.client.query(sql, job_config=self._config(None, dry_run=True), location=self.location)
+        job = self._submit(sql, self._config(None, dry_run=True))
         return int(getattr(job, "total_bytes_processed", 0) or 0)
 
     def relation_columns(self, node: Mapping[str, Any]) -> set[str]:
