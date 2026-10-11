@@ -23,7 +23,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | implemented, not executed (tests mock the AI binding; the local stand-ins are llama-server with Qwen3-1.7B and a deterministic template) |
 | Basin Pipelines, Basin Catalog (Iceberg) | implemented, not executed (local pyiceberg SQL catalog stand-in executed: `uv run datatrust lake sync`) |
-| BigQuery path, policy tags, masking, authorized view, time travel | in progress: dialect macros, BigQuery profiles, policy-tag and authorized-view config implemented, not executed (CI renders the BigQuery macro branches and runs `dbt parse --target bigquery` only) |
+| BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check) |
 | `setup:prod` and `doctor` | planned |
 
 ## Synthetic dataset

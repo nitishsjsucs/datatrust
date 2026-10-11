@@ -25,7 +25,9 @@
     "dev:up": "bash scripts/dev-up.sh",
     "dev:down": "bash scripts/dev-down.sh",
     "dev:reset": "rm -rf apps/worker/.wrangler/state .data",
-    "bench:e2e": "bash scripts/bench-e2e.sh"
+    "bench:e2e": "bash scripts/bench-e2e.sh",
+    "prod:validate": "uv run datatrust prod validate",
+    "prod:smoke": "uv run datatrust prod smoke"
   },
   "devDependencies": {
     "typescript": "5.9.3",

@@ -282,6 +282,64 @@ def _cmd_lake(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_prod(args: argparse.Namespace) -> int:
+    from datatrust.prod.settings import NotConfigured
+
+    try:
+        if args.prod_command == "governance":
+            from datatrust.prod import governance
+            from datatrust.prod.settings import GcpSettings
+
+            settings = GcpSettings.from_env()
+            if args.action == "apply":
+                import os
+
+                email = os.environ.get("DATATRUST_OPERATOR_EMAIL")
+                if not email:
+                    raise NotConfigured(
+                        "set DATATRUST_OPERATOR_EMAIL in .env.prod (your Google account email)"
+                    )
+                state = governance.apply(settings, email)
+                print(json.dumps(state.__dict__, indent=2))
+                return 0
+            results = governance.verify(settings)
+            print(json.dumps(results, indent=2))
+            return 0 if all(r["ok"] for r in results) else 1
+        if args.prod_command == "validate":
+            from datatrust.prod.validate import main as validate_main
+
+            return validate_main()
+        if args.prod_command == "smoke":
+            from datatrust.prod.smoke import smoke
+
+            report = smoke(skip_validate=args.skip_validate)
+            print(
+                json.dumps(
+                    {k: report.get(k) for k in ("ok", "clean_ok", "workers_ai_incidents", "fallback_rate")}
+                )
+            )
+            return 0 if report.get("ok") else 1
+        if args.prod_command == "reset":
+            if not args.yes:
+                print("refusing without --yes: this deletes DataTrust tables in BigQuery", file=sys.stderr)
+                return 2
+            from google.cloud import bigquery
+
+            from datatrust.prod.settings import DATASETS, GcpSettings
+
+            settings = GcpSettings.from_env()
+            client = bigquery.Client(project=settings.project, location=settings.location)
+            for ds in DATASETS:
+                for t in client.list_tables(f"{settings.project}.{ds}"):
+                    client.delete_table(t, not_found_ok=True)
+                    print(f"deleted {t.full_table_id}")
+            return 0
+    except NotConfigured as err:
+        print(f"not configured: {err}", file=sys.stderr)
+        return 2
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="datatrust", description=__doc__)
     parser.add_argument("--version", action="version", version=f"datatrust {__version__}")
@@ -348,6 +406,19 @@ def build_parser() -> argparse.ArgumentParser:
     q = lake.add_parser("query", help="query the local Iceberg table with DuckDB")
     q.add_argument("--sql", help="SQL over the table audit_events")
     p.set_defaults(func=_cmd_lake)
+
+    p = sub.add_parser("prod", help="production path: governance, validate, smoke, reset (needs .env.prod)")
+    prod = p.add_subparsers(dest="prod_command", required=True)
+    g = prod.add_parser("governance", help="BigQuery taxonomy, policy tags, masking and IAM")
+    g.add_argument("action", choices=["apply", "verify"])
+    prod.add_parser(
+        "validate", help="compile, build --empty, probe dry runs and banned-construct check on BigQuery"
+    )
+    sm = prod.add_parser("smoke", help="end-to-end production smoke; writes results/prod-smoke-<date>.*")
+    sm.add_argument("--skip-validate", action="store_true")
+    rs = prod.add_parser("reset", help="delete the DataTrust tables in the four BigQuery datasets")
+    rs.add_argument("--yes", action="store_true")
+    p.set_defaults(func=_cmd_prod)
 
     p = sub.add_parser("baseline", help="extract the gate numbers from a benchmark report")
     p.add_argument("--from", dest="from_path", required=True)

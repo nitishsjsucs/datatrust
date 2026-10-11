@@ -15,25 +15,9 @@ import pytest
 import sqlglot
 
 from datatrust.dbt.build import run_dbt
+from datatrust.dbt.dialect_check import banned_hits
 
 DBT_DIR = Path(__file__).resolve().parents[2] / "dbt"
-
-BANNED_IN_BIGQUERY = [
-    (r"::", "postgres-style cast"),
-    (r"median\s*\(", "median() is DuckDB-only"),
-    (r"\blist\s*\(", "list() is DuckDB-only"),
-    (r"\brange\s*\(", "range() is DuckDB-only"),
-    (r"\btimezone\s*\(", "timezone() is DuckDB-only"),
-    (r"//", "integer division operator"),
-    (r"decimal\s*\(", "decimal(p,s) type"),
-    (r"timestamptz", "timestamptz type"),
-    (r"date_diff\s*\(\s*'", "DuckDB date_diff argument order"),
-    (r"date_trunc\s*\(\s*'", "DuckDB date_trunc argument order"),
-    (
-        r"percentile_(cont|disc)\s*\([^)]*\)\s*over\s*\([^)]*(order\s+by|rows|range)",
-        "percentile window frame",
-    ),
-]
 
 
 def render(dialect: str, tmp_path: Path) -> dict[str, str]:
@@ -51,10 +35,6 @@ def render(dialect: str, tmp_path: Path) -> dict[str, str]:
 def rendered(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("dialect")
     return {"bigquery": render("bigquery", tmp), "duckdb": render("duckdb", tmp)}
-
-
-def banned_hits(sql: str) -> list[str]:
-    return [why for pattern, why in BANNED_IN_BIGQUERY if re.search(pattern, sql, re.I)]
 
 
 def test_both_dialects_render_the_same_macros(rendered):

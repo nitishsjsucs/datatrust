@@ -33,6 +33,10 @@ jobs:
       - name: Worker bundles (local config)
         run: npx wrangler deploy --dry-run --outdir dist
         working-directory: apps/worker
+      - name: Worker bundles (production template rendered with placeholder ids)
+        run: |
+          node scripts/render-prod-config.mjs --placeholders
+          cd apps/worker && npx wrangler deploy --dry-run --outdir dist-prod -c wrangler.prod.jsonc
 
   python:
     runs-on: ubuntu-latest

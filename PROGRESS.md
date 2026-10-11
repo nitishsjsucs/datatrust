@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 16 of 19 (core) done: `feat(lake): event sink with Basin Pipelines and local pyiceberg catalog`.
+Commit 17 of 19 (core) done: `feat(prod): production wrangler template and BigQuery governance`.
 
 ## Done
 
@@ -26,10 +26,11 @@ Commit 16 of 19 (core) done: `feat(lake): event sink with Basin Pipelines and lo
 - 15. `bench/e2e.py` (POST /api/runs as operator, runner loop in-process, polling run and incident state, records), `datatrust bench --mode e2e [--parity]`, e2e report writer, `scripts/bench-e2e.sh` (dev-up, trap dev-down), `npm run bench:e2e`, `test_e2e_parity.py` (marked `e2e`), CI `e2e` job, portable port checks (`lsof` or `ss`). Verified on 2026-10-10: `npm run bench:e2e -- --pytest` passed (S01, T14, S04 incidents with expected fields; top-3 identical to offline); a full seed-101 e2e run before this commit gave 20/20 detected, 20/20 top-3, parity yes (results rerun at the clean commit in 15b).
 - 15b (extra). `npm run bench:e2e` at commit df7496b (clean), 2026-10-10, 327.7 s of e2e trials (412 s with dev-up and the offline parity run): 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, offline parity yes. `results/bench-2026-10-10-e2e.{json,md}`; README Results and status updated.
 - 16. `schemas/lake/audit_event.stream.json` (Basin Pipelines stream schema), Worker `sinks/event-sink.ts` (`PipelinesSink` on the EVENTS binding, `R2NdjsonSink` locally, schema validation before every send because Pipelines drops invalid records silently), `check_result` events from the dt-check-results consumer, `run_completed` from ValidationRunWorkflow finalize, `incident_created` from InvestigationWorkflow persist, `/api/dev/lake-export` (runner, local only), Python `lake/{schema,iceberg_local,iceberg_basin,sync}.py` (SqlCatalog on SQLite with an absolute `file://` warehouse; RestCatalog reader for Basin Catalog), `datatrust lake sync|query`, `event-sink.test.ts`, `test_lake_local.py` (append, read, snapshot time travel, cwd independence). Verified by hand on 2026-10-10: one S03 run through `wrangler dev`, then `datatrust lake sync` appended 42 events (40 check_result, 1 run_completed, 1 incident_created) to the local Iceberg table; stack stopped, ports free.
+- 17. `apps/worker/wrangler.prod.template.jsonc` (AI, Pipelines, `workers_dev: true`, `preview_urls: false`, no cron, production vars, `secrets.required`), `scripts/render-prod-config.mjs` (fail-closed `https://unset.cloudflareaccess.com` default; `--placeholders` for CI), CI dry-run deploy of the rendered template; Python `prod/settings.py` (.env.prod, placeholder refusal), `warehouse/bigquery_wh.py` (impersonated `datatrust-prober`, dry run then capped query, parameterized information schema), `load/bigquery_loader.py` (Parquet loads, type assertions), `prod/governance.py` (taxonomy, three policy tags, SHA256 / DATE_YEAR_MASK / ALWAYS_NULL data policies, Fine-Grained Reader and Masked Reader IAM with read-modify-write, dataset readers, `.prod/dbt_vars.yml`, analyst verification with 10 s doubling retries for 10 minutes), `prod/validate.py` (steps a-f), `prod/smoke.py`, `dbt/dialect_check.py` (shared banned-construct check), runner BigQuery build and diagnostics paths, `datatrust prod governance apply|verify|validate|smoke|reset`, `npm run prod:validate|prod:smoke`, `test_prod_offline.py` (11 tests with fakes). `datatrust prod validate` on this machine stops at step a and names the missing `DATATRUST_GCP_PROJECT`, as designed. Nothing here has run against Google Cloud or Cloudflare.
 
 ## Next
 
-- 17. `feat(prod): production wrangler template and BigQuery governance` (template, governance.py, validate.py, smoke; time-boxed, label "implemented, not executed").
+- 18. `feat(ops): idempotent setup:prod and doctor` (scripts/setup-prod.sh, scripts/doctor.sh + `datatrust doctor`, Makefile targets, README production setup).
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
@@ -37,7 +38,7 @@ Commit 16 of 19 (core) done: `feat(lake): event sink with Basin Pipelines and lo
 - `npm run test:rca`: 49 passed
 - `npm run test:worker`: 57 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 123 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
+- `uv run pytest`: 134 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
 
 ## Deviations from SPEC.md
 
@@ -52,5 +53,6 @@ Commit 16 of 19 (core) done: `feat(lake): event sink with Basin Pipelines and lo
 - Worker secrets are declared with `secrets.required` in the wrangler config, so `wrangler types` output does not depend on a machine's `.dev.vars` (otherwise `wrangler types --check` would differ between the Mac and CI). `/api/whoami` (any role) was added for the smoke and doctor checks.
 - Workflow step results are serialized to JSON strings explicitly (`workflows/steps.ts`), which keeps step outputs visibly serializable and avoids TypeScript's deep `Serializable<T>` instantiation on lineage types. Tests that inspect step results parse the JSON.
 - The grounding validator reads a root cause given as a candidate key (`candidate.1`) as that candidate's node, and treats the run and incident ids as known identifiers.
+- Project-level IAM (BigQuery Job User for the prober and analyst, Service Account Token Creator for Nitish) is granted by gcloud in `setup-prod.sh` rather than `governance.py`, because it needs the Resource Manager and IAM APIs; dataset-level reader grants are in `governance.py`. `datatrust prod reset --yes` deletes the tables in the four datasets (it never runs unless Nitish asks).
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.

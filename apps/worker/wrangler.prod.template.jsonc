@@ -1,0 +1,54 @@
+// Production template (committed). `npm run setup:prod` renders it to wrangler.prod.jsonc (gitignored) with the
+// real D1 database id, the Basin Pipelines stream id and the Access team domain, then deploys with
+// `wrangler deploy -c apps/worker/wrangler.prod.jsonc --secrets-file .prod/secrets.json`.
+// No cron trigger in v1 (review finding I6). Only the Access-protected workers.dev hostname serves.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "datatrust",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "datatrust",
+      "database_id": "${D1_DATABASE_ID}",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "datatrust-artifacts" }],
+  "ai": { "binding": "AI" },
+  "pipelines": [{ "binding": "EVENTS", "stream": "${STREAM_ID}" }],
+  "secrets": { "required": ["ACCESS_AUD", "ROLE_MAP_JSON", "EVIDENCE_HMAC_KEY"] },
+  "queues": {
+    "producers": [
+      { "binding": "CHECK_RESULTS_Q", "queue": "dt-check-results" },
+      { "binding": "LINEAGE_Q", "queue": "dt-lineage-events" },
+      { "binding": "INVESTIGATE_Q", "queue": "dt-investigate" }
+    ],
+    "consumers": [
+      { "queue": "dt-check-results", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "dt-dlq" },
+      { "queue": "dt-lineage-events", "max_batch_size": 25, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "dt-dlq" },
+      { "queue": "dt-investigate", "max_batch_size": 5, "max_batch_timeout": 1, "max_retries": 3, "dead_letter_queue": "dt-dlq" },
+      { "queue": "dt-dlq", "max_batch_size": 10, "max_batch_timeout": 1 }
+    ]
+  },
+  "workflows": [
+    { "name": "datatrust-validation-run", "binding": "VALIDATION_RUN", "class_name": "ValidationRunWorkflow" },
+    { "name": "datatrust-investigation", "binding": "INVESTIGATION", "class_name": "InvestigationWorkflow" }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "ACCESS_MODE": "cloudflare",
+    "SUMMARIZER": "workers-ai",
+    "LOCAL_LLM_URL": "",
+    "WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "AI_GATEWAY_ID": "datatrust",
+    "ACCESS_TEAM_DOMAIN": "${ACCESS_TEAM_DOMAIN}",
+    "ACCESS_ISSUER": "",
+    "VERSION": "0.1.0"
+  }
+}

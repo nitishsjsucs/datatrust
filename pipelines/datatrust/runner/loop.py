@@ -67,8 +67,7 @@ def handle_dbt_build(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
     from datatrust.synth.generator import generate, write_dataset
 
     p = job.payload
-    if p.get("target", "duckdb") != "duckdb":
-        raise NotImplementedError("BigQuery builds land with the production path (SPEC 23, commit 17)")
+    target = p.get("target", "duckdb")
     seed = int(p.get("seed") or 101)
     scenario = BY_ID[p["scenario"]] if p.get("scenario") else None
     work = run_dir(job.run_id)
@@ -82,19 +81,38 @@ def handle_dbt_build(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
     patches = patches_for(seed, scenario)[0] if scenario else []
     project = make_overlay(work / "dbt", patches)
     db = work / "warehouse.duckdb"
-    load_raw(work / "raw", db)
     snapshots = config.snapshot_dir()
-    res = build_with_lineage(
-        project_dir=project,
-        target_path=work / "target",
-        duckdb_path=db,
-        env_extra={"DATATRUST_SNAPSHOT_DIR": str(snapshots)},
-    )
+    if target == "bigquery":
+        from datatrust.load.bigquery_loader import load_raw_bigquery
+        from datatrust.prod.settings import GcpSettings, dbt_vars_arg
+        from datatrust.prod.validate import bigquery_env
+
+        settings = GcpSettings.from_env()
+        load_raw_bigquery(
+            work / "raw",
+            settings.project,
+            settings.location,
+            table_columns={name: t.columns for name, t in ds.tables.items()},
+        )
+        res = build_with_lineage(
+            project_dir=project,
+            target_path=work / "target",
+            env_extra=bigquery_env(settings),
+            extra_args=["--vars", dbt_vars_arg()],
+        )
+    else:
+        load_raw(work / "raw", db)
+        res = build_with_lineage(
+            project_dir=project,
+            target_path=work / "target",
+            duckdb_path=db,
+            env_extra={"DATATRUST_SNAPSHOT_DIR": str(snapshots)},
+        )
     if not (work / "target" / "run_results.json").exists():
         raise RuntimeError("dbt produced no run_results.json")
     checks = [c.to_json() for c in classify(res.run_results(), res.manifest())]
     relations = json.loads((work / "target" / "relations.json").read_text())
-    if not any(c["status"] in ("fail", "error") for c in checks):
+    if target == "duckdb" and not any(c["status"] in ("fail", "error") for c in checks):
         snapshot_marts(db, snapshots, job.run_id, relations)
     client.upload_artifact(job, "relations", relations)
     client.upload_artifact(job, "run_results", _slim_run_results(res.run_results()))
@@ -125,8 +143,16 @@ def handle_diagnostics(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
     work = run_dir(job.run_id)
     relations = json.loads((work / "target" / "relations.json").read_text())
     requests_ = [ProbeRequest.from_json(x) for x in p.get("probes", [])]
-    with DuckDBWarehouse(work / "warehouse.duckdb", snapshot_dir=config.snapshot_dir()) as wh:
-        raw = [r.to_json() for r in run_probes(requests_, wh, relations)]
+    if p.get("target") == "bigquery":
+        from datatrust.prod.settings import GcpSettings
+        from datatrust.warehouse.bigquery_wh import BigQueryWarehouse
+
+        settings = GcpSettings.from_env()
+        with BigQueryWarehouse(settings.project, settings.location, principal=settings.prober_sa) as wh:
+            raw = [r.to_json() for r in run_probes(requests_, wh, relations)]
+    else:
+        with DuckDBWarehouse(work / "warehouse.duckdb", snapshot_dir=config.snapshot_dir()) as wh:
+            raw = [r.to_json() for r in run_probes(requests_, wh, relations)]
     sanitized = rca(
         "sanitize",
         {"probeResults": raw, "relations": relations},

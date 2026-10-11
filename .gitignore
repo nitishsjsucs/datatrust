@@ -21,6 +21,7 @@ __pycache__/
 
 # build outputs
 dist/
+dist-prod/
 target/
 dbt/target/
 dbt/logs/
