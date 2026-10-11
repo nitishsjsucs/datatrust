@@ -267,6 +267,8 @@ Workers AI needs no setup beyond the binding (10,000 neurons per day free, then 
 
 Your Google identity needs Owner on the project (or BigQuery Admin, Data Catalog Policy Tag Admin, Data Policy Admin and Service Account Admin). Owner does not include Fine-Grained Reader, which the bootstrap grants you explicitly so dbt tests can read real values.
 
+Optional: to run the production runner on GitHub Actions instead of your machine, without a service-account key, follow [`docs/prod-runner-wif.md`](docs/prod-runner-wif.md) (Workload Identity Federation; off unless you start it).
+
 Only `npm run prod:smoke` may move a status label above to "executed in production"; it writes `results/prod-smoke-<date>.*` with the commands, run ids, the Workers AI grounding pass rate and fallback rate, the Iceberg row count and BigQuery bytes billed.
 
 ## Results

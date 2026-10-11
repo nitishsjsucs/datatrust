@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` done; 21 in progress (eval harness committed, results next); 22 `ci: nightly full five-seed benchmark` done; 23 not started. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
+All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` done; 21 in progress (eval harness committed, results next); 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
 ## Done
 
@@ -33,6 +33,7 @@ All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incid
 - 21a (stretch, harness). The grounded summarize loop, `TemplateSummarizer` and `OpenAICompatSummarizer` moved into `packages/rca/src/summary/grounded.ts` (the Worker re-exports them; Workers AI stays in the Worker), `rca summarize` (records raw drafts), `bench/pii.py` (shared PII finder), `bench/summaries.py`, `datatrust bench summaries --provider template|local-llm`, `scripts/eval-summaries.sh` (starts and always stops llama-server on 8160), `npm run eval:summaries`. Violations are reported by grounding rule (`violation_rule`).
 - Gap fill (items in the SPEC 5 file tree and SPEC 19 test plan that were missing): `schemas/api/{check_result,probe_result,runner_job,incident_summary}.json` (the last generated from the zod schema with `rca schema` and asserted equal in `summary-validate.test.ts`), closed inputs for every `rca` CLI command (an unexpected key such as a scenario id is rejected, so ground truth cannot reach the ranker), `test_api_schemas.py` (real check results, the recorded contract failure, sanitized probe results and job payloads validate; `rca rank` refuses `scenario`), `test_restricted_views.py` (reads only the untagged aggregate, no personal columns, exactly the department-months with at least 5 employees reported), `jsonschema` declared as a dev dependency.
 - 22 (stretch). `.github/workflows/nightly.yml`: daily and on demand, the five-seed offline benchmark with the frozen weights and the LOSO figure, gated against `results/baseline.json` (no clean false positives; detection and top-3 within 0.05), report uploaded as an artifact. Not yet run (nothing pushed).
+- 23 (stretch). `.github/workflows/prod-runner.yml` (manual runs; the schedule acts only when the repository variable `DATATRUST_SCHEDULED_RUNNER` is `true`; `google-github-actions/auth@v2` with Workload Identity Federation, Access service-token secrets, `datatrust runner --env prod --target bigquery --watch --idle-exit 600`; dbt vars passed through an environment variable, not interpolated into the script) and `docs/prod-runner-wif.md` (service account, dataset and project grants, workload identity pool and GitHub OIDC provider restricted to the repository, GitHub variables and secrets). Implemented, not executed; the `@v2` major of the auth action is assumed, not checked against today's release list.
 
 ## Next
 
@@ -40,7 +41,7 @@ Core v1 is complete locally. What remains:
 
 - Production execution, which needs Nitish's accounts (README, production setup): `npm run setup:prod -- --cloudflare-only` (twice, around the Access steps), `npm run setup:prod -- --gcp-only`, `npm run doctor -- --prod`, `npm run prod:smoke`. Only the smoke may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e); not yet observed.
-- Stretch (SPEC 23, below the cut line): 21 results (local LLM eval run), 23 `feat(eval): summary faithfulness eval with local Qwen3-1.7B`.
+- Stretch (SPEC 23, below the cut line): the results half of 21 (run the local-LLM summary eval at a clean commit and commit `results/summaries-<date>-*`).
 
 ## Check status (at the final commit, 2026-10-10, macOS; CI not yet run because nothing is pushed)
 

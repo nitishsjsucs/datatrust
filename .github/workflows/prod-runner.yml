@@ -1,0 +1,72 @@
+name: prod-runner
+
+# Stretch (SPEC 14.3): run the production runner on GitHub Actions instead of a laptop. It authenticates to
+# Google Cloud with Workload Identity Federation (no service-account key) and to the Worker with the Access
+# service token, then drains queued jobs and exits after ten idle minutes.
+# Disabled by default: manual runs only, and the schedule acts only when the repository variable
+# DATATRUST_SCHEDULED_RUNNER is "true". Setup: docs/prod-runner-wif.md.
+on:
+  workflow_dispatch:
+    inputs:
+      start_run:
+        description: "Also POST /api/runs for a clean seed-101 run"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "41 6 * * *"
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity Federation
+
+concurrency:
+  group: prod-runner
+  cancel-in-progress: false
+
+env:
+  DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
+  DBT_PROFILES_DIR: dbt
+
+jobs:
+  runner:
+    if: github.event_name == 'workflow_dispatch' || vars.DATATRUST_SCHEDULED_RUNNER == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DATATRUST_API_URL: ${{ vars.DATATRUST_API_URL }}
+      DATATRUST_GCP_PROJECT: ${{ vars.DATATRUST_GCP_PROJECT }}
+      DATATRUST_BQ_LOCATION: ${{ vars.DATATRUST_BQ_LOCATION }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      EVIDENCE_HMAC_KEY: ${{ secrets.EVIDENCE_HMAC_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @datatrust/rca
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - id: gcp
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.DATATRUST_WIF_PROVIDER }}
+          service_account: ${{ vars.DATATRUST_RUNNER_SA }}
+      - name: policy-tag vars for dbt
+        env:
+          DBT_VARS_YAML: ${{ vars.DATATRUST_DBT_VARS_YAML }}
+        run: |
+          mkdir -p .prod
+          printf '%s\n' "$DBT_VARS_YAML" > .prod/dbt_vars.yml
+      - name: optionally start a clean run
+        if: inputs.start_run
+        run: |
+          curl -fsS -X POST "$DATATRUST_API_URL/api/runs" \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            -H 'content-type: application/json' -d '{"target":"bigquery","seed":101}'
+      - name: drain queued jobs
+        run: uv run datatrust runner --env prod --target bigquery --watch --idle-exit 600
