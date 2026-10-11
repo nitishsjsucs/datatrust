@@ -20,6 +20,6 @@ datatrust:
       location: US
       threads: 1
       job_execution_timeout_seconds: 600
-      api_endpoint: http://dt-bqemu:9050
+      api_endpoint: http://datatrust-bqemu:9050
 YML
-uv run python /bqemu/load.py http://dt-bqemu:9050
+uv run python /bqemu/load.py http://datatrust-bqemu:9050

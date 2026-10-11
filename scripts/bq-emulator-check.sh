@@ -12,7 +12,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 EMU_IMAGE=ghcr.io/goccy/bigquery-emulator:0.8.1
-NET=dt-bqemu-net VOL=dt-bqemu-data EMU=dt-bqemu RUN=dt-bqemu-run IMG=datatrust-bqemu-runner
+NET=datatrust-bqemu-net VOL=datatrust-bqemu-data EMU=datatrust-bqemu RUN=datatrust-bqemu-run IMG=datatrust-bqemu-runner
 WORK="$(mktemp -d)"
 cleanup() {
   docker rm -f "$RUN" "$EMU" >/dev/null 2>&1

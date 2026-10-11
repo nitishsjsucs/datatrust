@@ -10,7 +10,15 @@ import pytest
 
 from datatrust import config, doctor
 
-SCRIPTS = ["setup-prod.sh", "doctor.sh", "dev-up.sh", "dev-down.sh", "bench-e2e.sh", "prod-wizard.sh"]
+SCRIPTS = [
+    "setup-prod.sh",
+    "doctor.sh",
+    "dev-up.sh",
+    "dev-down.sh",
+    "bench-e2e.sh",
+    "prod-wizard.sh",
+    "bq-emulator-check.sh",
+]
 
 
 @pytest.mark.parametrize("script", SCRIPTS)
