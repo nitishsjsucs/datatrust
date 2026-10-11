@@ -51,3 +51,29 @@ jobs:
         run: uv run pytest pipelines/tests/test_clean_baseline.py
         env:
           TZ: America/Los_Angeles
+
+  bench-offline:
+    # Seed 101 only: 20 injected trials + 1 clean trial on DuckDB (local stand-in for BigQuery).
+    # Gates: no clean false positives; detection and top-3 within 0.05 of results/baseline-seed101.json.
+    needs: [node, python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @datatrust/rca
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: >-
+          uv run datatrust bench --mode offline --seeds 101 --workers 2 --out bench-out
+          --gate results/baseline-seed101.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: bench-offline-seed101
+          path: bench-out/

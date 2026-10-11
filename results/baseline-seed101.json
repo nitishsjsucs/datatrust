@@ -1,0 +1,22 @@
+{
+  "cleanFalsePositives": 0,
+  "cleanTrials": 1,
+  "command": "uv run datatrust bench --mode offline --seeds 101 --workers 4 --out .data/seed101 --tag seed101",
+  "date": "2026-10-10",
+  "detectionRecall": 1.0,
+  "gitCommit": "86ef4f1658f7ac5bff239a79aca1fe3100dc152e-dirty",
+  "injectedTrials": 20,
+  "report": "bench-2026-10-10-offline-seed101.json",
+  "seeds": [
+    101
+  ],
+  "top1": 0.9,
+  "top3": 1.0,
+  "warehouse": "DuckDB 1.5.6 via dbt-duckdb 1.11.0, local stand-in for BigQuery",
+  "weights": {
+    "anomaly": 0.3,
+    "changed": 0.15,
+    "coverage": 0.4,
+    "unexplainedPass": 0.1
+  }
+}

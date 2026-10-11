@@ -18,7 +18,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | dbt models, 22 enforced contracts, 40 checks | implemented: 29 models, 22 enforced contracts and 40 checks build and pass on clean seeds on DuckDB (stand-in), tested locally; CI configured to run them under `TZ=UTC` and `TZ=America/Los_Angeles` |
 | OpenLineage capture and column-level lineage graph | implemented: `dbt-ol build` (openlineage-dbt 1.53.0, file transport) on DuckDB (stand-in), TypeScript graph and upstream closure; tested locally |
 | Diagnostic probes, root-cause ranker, baselines | implemented: 14 read-only probe templates (DuckDB executed, BigQuery rendered only), TypeScript trace, planner, ranker, ablations, naive baselines and HMAC sanitizer; tested locally |
-| Fault-injection benchmark (20 scenarios) | implemented: 13 source and 7 transformation scenarios, 12 decoy patches, offline harness on DuckDB (stand-in); results pending |
+| Fault-injection benchmark (20 scenarios) | executed locally on DuckDB (stand-in), 2026-10-10, `uv run datatrust bench --seeds 101-105` (see Results); CI gate on seed 101 configured |
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | planned |
 | Access JWT verification | planned |
 | Workers AI summaries, AI Gateway | planned |
@@ -192,7 +192,29 @@ Planned. Production needs a Cloudflare account (Workers Paid plan, R2, Zero Trus
 
 ## Results
 
-No results yet. This section will quote only numbers produced by this repo's scripts, each with the command and date that produced it. Benchmark numbers will come from DuckDB 1.5.6 as the local stand-in for BigQuery.
+All numbers below were produced by this repo's scripts on 2026-10-10 on the local warehouse stand-in, **DuckDB 1.5.6 via dbt-duckdb 1.11.0, not BigQuery**. Nothing in this section ran on Cloudflare or Google Cloud.
+
+Command (test seeds 101-105, weights frozen beforehand from dev seeds 1-3, ADR-0004):
+
+```sh
+uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json
+```
+
+Full report: [`results/bench-2026-10-10-offline.md`](results/bench-2026-10-10-offline.md) (data in the matching `.json`; gate numbers in `results/baseline.json`).
+
+| Metric (100 injected trials: 20 scenarios x 5 seeds) | Measured | Wilson 95% | Scenario-clustered bootstrap 95% |
+|---|---|---|---|
+| Detection recall (target 95%) | 100% (100/100) | 96.3% to 100% | 100% to 100% |
+| Top-3 root-cause accuracy (target 90%) | 100% (100/100) | 96.3% to 100% | 100% to 100% |
+| Top-1 root-cause accuracy | 90% (90/100) | 82.6% to 94.5% | 75% to 100% |
+
+- Clean false positives over the 5 clean trials (decoys applied): 0.
+- Leave-one-scenario-out top-3 (weights re-tuned without the held-out scenario): 100% over 100 trials.
+- Naive baselines on the same candidate sets: `change_only` top-3 77%, `nearest_upstream_source` 60%, `random_in_closure` 73.4% expected. The ranker's top-3 gain over the best baseline is 23 percentage points.
+- Ablations: `coverage_only` top-3 85%, `no_probes` 95%, `dataset_lineage_only` 98%, `no_change_signal` 100%.
+- Median candidate-set size 4 (IQR 2 to 6), so top-3 is a short list; top-1 (90%) is the more demanding number. The 10 top-1 misses are S10 (currency mismatch) and S11 (payroll after termination), where the ground truth ranked second in every trial.
+
+How to read this honestly: the scenarios, checks and probes were written by the same author, and the weights were tuned on dev seeds over the same 20 scenarios, so the test seeds hold out values and severities, not defect types. The benchmark is in-distribution; it shows the mechanism works on these defect classes, not that it generalizes to unseen ones.
 
 ## License
 

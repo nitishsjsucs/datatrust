@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 9 of 19 (core) done, plus an extra commit freezing the dev-tuned weights (ADR-0004) before the test-seed run.
+Commit 10 of 19 (core) done: `docs: offline benchmark results on test seeds`.
 
 ## Done
 
@@ -18,10 +18,11 @@ Commit 9 of 19 (core) done, plus an extra commit freezing the dev-tuned weights 
 - 8. Python: `warehouse/{base,readonly,duckdb_wh}.py` (sqlglot guard, read-only DuckDB connection, information-schema column lookup), `diagnostics/probes.py` + 14 Jinja templates with DuckDB/BigQuery branches, probe expression language (`tz_local_date`, `int_div`), `rca_cli.py` (calls `packages/rca/dist/cli.mjs`); probe meta added to sources and staging. TypeScript: `rca/{trace,plan,rank,baselines,weights,tune}.ts`, `evidence/sanitize.ts` (WebCrypto HMAC tokens + Worker-side re-check), `cli.ts` bundled with esbuild (`npm run build`). Tests: `trace.test.ts`, `rank.test.ts`, `baselines.test.ts`, `sanitize.test.ts`, `test_probes_render.py`, `test_readonly_guard.py`, `test_probes_clean.py` (every planned probe on clean seed 101: status ok, anomaly 0). CI python job now sets up Node and builds the RCA CLI first.
 - 9. `bench/scenarios.py` (20 scenarios, injections, severities, decoy draw with `random.Random(seed * 1000 + index)`), 7 scenario patches and 12 decoy patches, `dbt/overlay.py` (strict unified-diff applier), `bench/harness.py` (offline trials in a process pool), `bench/metrics.py` (Wilson, scenario-clustered bootstrap, ablations, baselines, candidate-set size), `bench/report.py`, `datatrust bench` and `datatrust tune` CLI, `npm run bench`, `make bench`. Tests: `test_scenarios.py`, `test_patch_combinations.py` (every drawn combination for seeds 1-3 and 101-105; all 12 decoys together build clean), `test_injection_detected_smoke.py` (S01, T14, S04 and a clean trial through dbt), `test_metrics.py`. First look with initial weights on dev seed 1 only: 20/20 detected, 0 clean false positives (not a reported result).
 - 9b (extra). Dev tuning: `uv run datatrust bench --seeds 1-3 --workers 6 --tag dev` (results/bench-2026-10-10-offline-dev.*), `uv run datatrust tune --from results/bench-2026-10-10-offline-dev.json` gave coverage 0.40, anomaly 0.30, changed 0.15, unexplained_pass 0.10; frozen in `weights.ts`; ADRs 0001-0007 written; `datatrust bench --gate` for the CI seed-101 gate.
+- 10. Test seeds 101-105 with frozen weights (`uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json`, 2026-10-10, 136 s): detection 100/100, top-3 100/100, top-1 90/100, 0 clean false positives, LOSO top-3 100%, median candidate set 4. `results/bench-2026-10-10-offline.{json,md}`, `results/baseline.json`, `results/baseline-seed101.json` (from a separate seed-101 run, the command CI repeats), `datatrust baseline`, CI `bench-offline` job, README Results section.
 
 ## Next
 
-- 10. `docs: offline benchmark results on test seeds` (tune on dev seeds 1-3, freeze weights with ADR-0004, run seeds 101-105, commit results and the seed-101 CI gate).
+- 11. `feat(worker): Hono API, D1 schema and Access JWT verification`.
 
 ## Check status (at this commit, 2026-10-10, macOS)
 

@@ -161,6 +161,26 @@ def _cmd_tune(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_baseline(args: argparse.Namespace) -> int:
+    from datatrust.bench.metrics import baseline_from
+
+    report = json.loads(Path(args.from_path).read_text())
+    meta = report["meta"]
+    out = {
+        **baseline_from(report["summary"]),
+        "seeds": meta["seeds"],
+        "date": meta["date"],
+        "command": meta["command"],
+        "gitCommit": meta["gitCommit"],
+        "warehouse": meta["warehouse"],
+        "weights": meta["weights"],
+        "report": Path(args.from_path).name,
+    }
+    Path(args.out).write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(out, indent=2, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="datatrust", description=__doc__)
     parser.add_argument("--version", action="version", version=f"datatrust {__version__}")
@@ -202,6 +222,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("tune", help="grid-search ranking weights on a dev-seed report (ADR-0004)")
     p.add_argument("--from", dest="from_path", required=True)
     p.set_defaults(func=_cmd_tune)
+
+    p = sub.add_parser("baseline", help="extract the gate numbers from a benchmark report")
+    p.add_argument("--from", dest="from_path", required=True)
+    p.add_argument("--out", required=True)
+    p.set_defaults(func=_cmd_baseline)
 
     return parser
 

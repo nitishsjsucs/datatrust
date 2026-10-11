@@ -12,4 +12,4 @@ test:
 
 bench:
 	npm run build -w @datatrust/rca
-	uv run datatrust bench --mode offline --seeds 101-105
+	uv run datatrust bench --mode offline --seeds 101-105 --dev-results results/bench-2026-10-10-offline-dev.json
