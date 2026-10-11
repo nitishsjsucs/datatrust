@@ -95,6 +95,8 @@ Builder 4 (2026-10-11) continues from 98d1914: every local check passed again fi
 
 - Builder 4, e2e results at the current code: `npm run bench:e2e -- --out .data/e2e-2026-10-11` at commit 6437742 on 2026-10-11 (223.7 s of trials, 277 s in all): 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, offline parity yes; the 21 records equal `results/bench-2026-10-10-e2e.json` in status, failing checks, rankings, ground-truth ranks and summary fields, and differ only in run, job and incident ids, wall time and provenance (the 2026-10-10 file still names the removed Pipelines lake sink; the new one records the audit queue path, `summarizer.neurons` and T20's time-travel delta, 144 then 150 rows). Committed as `results/bench-2026-10-11-e2e.{json,md}`; ports 8792, 9242 and 8160 free afterwards.
 
+- Builder 4, summary faithfulness eval at the current code: `npm run eval:summaries -- --template` and `npm run eval:summaries` at commit 6154828 on 2026-10-11 (llama-server started and stopped by the script; port 8160 free afterwards): template 100% JSON, 100% grounded, 0 fallback, 20/20, 0 PII leaks (same as 2026-10-10); Qwen3-1.7B first draft JSON 100%, grounded 10%, repaired 5%, fallback 85%, accepted drafts naming a top-3 root cause 3/3, PII leaks 0 (2026-10-10: 15%, 5%, 80%, 4/4; the uncommitted earlier run of 2026-10-10 gave exactly today's 10/5/85). `results/summaries-2026-10-11-{template,local-llm}.{json,md}` committed; README shows both runs. The Workers AI eval still needs the deployed Worker.
+
 ## Next
 
 - SPEC 23.1: F1 to F13 done. The Workers AI summary eval (F13) is for Nitish to run after the production smoke.

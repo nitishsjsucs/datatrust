@@ -1,0 +1,931 @@
+{
+ "meta": {
+  "date": "2026-10-11",
+  "seed": 101,
+  "provider": "local-llm",
+  "model": "Qwen3-1.7B Q4_0 via llama-server (local stand-in for Workers AI)",
+  "gitCommit": "615482823e454c6e8272fa229f3fcb49465db16c",
+  "versions": {
+   "python": "3.12.13",
+   "duckdb": "1.5.6",
+   "dbt-core": "1.12.5",
+   "dbt-duckdb": "1.11.0",
+   "openlineage-dbt": "1.53.0",
+   "sqlglot": "30.22.0",
+   "pyarrow": "26.0.0",
+   "node": "v25.9.0"
+  },
+  "wallSeconds": 303.5,
+  "command": "uv run datatrust bench summaries --provider local-llm --workers 4"
+ },
+ "summary": {
+  "incidents": 20,
+  "jsonValidRate": 1.0,
+  "groundingPassRate": 0.1,
+  "repairRate": 0.05,
+  "fallbackRate": 0.85,
+  "acceptedDrafts": 3,
+  "acceptedRootCauseInTop3": 3,
+  "piiLeaks": 0,
+  "violationKinds": {
+   "unknown diagnostic SQL id": 17,
+   "number outside a placeholder": 14,
+   "unknown evidence ref": 12,
+   "untokenized identifier": 5,
+   "root cause not in top five": 2,
+   "schema": 1
+  }
+ },
+ "rows": [
+  {
+   "trial": "s101-S01",
+   "scenario": "S01",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "reasoning[3]: contains the number \"05\" outside a placeholder",
+    "nextSteps[1]: contains the number \"05\" outside a placeholder",
+    "evidenceRefs: unknown key \"diagnosticSqlIds\""
+   ],
+   "rootCause": "source.datatrust.raw.hires",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "U05 traced to raw_hires",
+    "impact": "A uniqueness check on fct_hires failed with 6 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.hires",
+     "column": "application_id",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "U05 (a uniqueness check) failed on fct_hires with 6 failing rows.",
+     "Column-level lineage connects raw_hires to 100.0% of the failing checks, and it ranks first with score 0.617.",
+     "The dup_key_rate probe on raw_hires measured 1.6% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.u05",
+     "candidate.1",
+     "dup_key_rate.raw_hires.application_id"
+    ],
+    "diagnosticSqlIds": [
+     "dup_key_rate.raw_hires.application_id"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_hires and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_hires, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S02",
+   "scenario": "S02",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnosticSqlIds\""
+   ],
+   "rootCause": "source.datatrust.raw.applications",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "Failing checks traced to raw_applications",
+    "impact": "A referential-integrity check on stg_applications failed with 7 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.applications",
+     "column": "requisition_id",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "R04 (a referential-integrity check) failed on stg_applications with 7 failing rows.",
+     "S05 (a recruiting-stage check) failed on stg_stage_events with 1 failing rows.",
+     "Column-level lineage connects raw_applications to 50.0% of the failing checks, and it ranks first with score 0.433.",
+     "The orphan_rate probe on raw_applications measured 0.1% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.r04",
+     "check.s05",
+     "candidate.1",
+     "orphan_rate.raw_applications.requisition_id"
+    ],
+    "diagnosticSqlIds": [
+     "orphan_rate.raw_applications.requisition_id"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_applications and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_applications, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S03",
+   "scenario": "S03",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnostic probe fx_stale_run.raw_fx_rates.rate_to_usd\"",
+    "diagnosticSqlIds: unknown id \"SELECT value, anomaly FROM fx_stale_run.raw_fx_rates.rate_to_usd\""
+   ],
+   "rootCause": "source.datatrust.raw.fx_rates",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "C03 traced to raw_fx_rates",
+    "impact": "A compensation or FX check on stg_fx_rates failed with 1 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.fx_rates",
+     "column": "currency",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "C03 (a compensation or FX check) failed on stg_fx_rates with 1 failing rows.",
+     "Column-level lineage connects raw_fx_rates to 100.0% of the failing checks, and it ranks first with score 0.625.",
+     "The fx_stale_run probe on raw_fx_rates measured 35 (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.c03",
+     "candidate.1",
+     "fx_stale_run.raw_fx_rates.rate_to_usd"
+    ],
+    "diagnosticSqlIds": [
+     "fx_stale_run.raw_fx_rates.rate_to_usd"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_fx_rates and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_fx_rates, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S04",
+   "scenario": "S04",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "schema: impact Too big: expected string to have <=600 characters"
+   ],
+   "rootCause": "source.datatrust.raw.stage_events",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "S05 traced to raw_stage_events",
+    "impact": "A recruiting-stage check on stg_stage_events failed with 1 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.stage_events",
+     "column": "entered_at",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "S05 (a recruiting-stage check) failed on stg_stage_events with 1 failing rows.",
+     "Column-level lineage connects raw_stage_events to 100.0% of the failing checks, and it ranks first with score 0.614.",
+     "The tz_hour_profile probe on raw_stage_events measured 28.7% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.s05",
+     "candidate.1",
+     "tz_hour_profile.raw_stage_events.entered_at"
+    ],
+    "diagnosticSqlIds": [
+     "tz_hour_profile.raw_stage_events.entered_at"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_stage_events and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_stage_events, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S05",
+   "scenario": "S05",
+   "attempts": 1,
+   "firstDraftJson": true,
+   "firstDraftGrounded": true,
+   "repaired": false,
+   "fallback": false,
+   "violations": [],
+   "rootCause": "source.datatrust.raw.job_assignments",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "inc_s101-S05",
+    "impact": "Failing checks on candidate data sources affecting data integrity and consistency.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.job_assignments",
+     "column": "employee_id,valid_from,valid_to",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "Ranked root-cause candidate: source.datatrust.raw.job_assignments with probes on employee_id, valid_from, valid_to.",
+     "Other candidates have lower confidence or no probes.",
+     "Failing checks indicate data inconsistency or invalid ranges in job assignments."
+    ],
+    "evidenceRefs": [
+     "check.h01",
+     "check.h02",
+     "candidate.1",
+     "candidate.2",
+     "candidate.3",
+     "candidate.4"
+    ],
+    "diagnosticSqlIds": [
+     "interval_overlap.raw_job_assignments.employee_id_valid_from_valid_to"
+    ],
+    "nextSteps": [
+     "Review and validate the data in source.datatrust.raw.job_assignments.",
+     "Check for inconsistencies in employee_id, valid_from, and valid_to fields.",
+     "Run diagnostic probe: interval_overlap.raw_job_assignments.employee_id_valid_from_valid_to.",
+     "Identify and fix any invalid or duplicate job assignments.",
+     "Revalidate the data integrity in the affected tables."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S06",
+   "scenario": "S06",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"model.datatrust.stg_fx_rates\"",
+    "diagnosticSqlIds: unknown id \"SELECT metric, value FROM date_gaps WHERE metric = 'max_missing_days_per_key'\"",
+    "diagnosticSqlIds: unknown id \"SELECT metric, value FROM date_gaps WHERE metric = 'max_missing_days_per_key'\""
+   ],
+   "rootCause": "source.datatrust.raw.fx_rates",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "C04 traced to raw_fx_rates",
+    "impact": "A compensation or FX check on stg_fx_rates failed with 9 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.fx_rates",
+     "column": "currency",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "C04 (a compensation or FX check) failed on stg_fx_rates with 9 failing rows.",
+     "Column-level lineage connects raw_fx_rates to 100.0% of the failing checks, and it ranks first with score 0.614.",
+     "The date_gaps probe on raw_fx_rates measured 9 (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.c04",
+     "candidate.1",
+     "date_gaps.raw_fx_rates.rate_date"
+    ],
+    "diagnosticSqlIds": [
+     "date_gaps.raw_fx_rates.rate_date"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_fx_rates and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_fx_rates, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S07",
+   "scenario": "S07",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnosticSqlIds\""
+   ],
+   "rootCause": "source.datatrust.raw.fx_rates",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "C05 traced to raw_fx_rates",
+    "impact": "A compensation or FX check on stg_fx_rates failed with 3 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.fx_rates",
+     "column": "currency",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "C05 (a compensation or FX check) failed on stg_fx_rates with 3 failing rows.",
+     "Column-level lineage connects raw_fx_rates to 100.0% of the failing checks, and it ranks first with score 0.625.",
+     "The fx_band_violation probe on raw_fx_rates measured 0.1% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.c05",
+     "candidate.1",
+     "fx_band_violation.raw_fx_rates.rate_to_usd"
+    ],
+    "diagnosticSqlIds": [
+     "fx_band_violation.raw_fx_rates.rate_to_usd"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_fx_rates and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_fx_rates, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S08",
+   "scenario": "S08",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnosticSqlIds\"",
+    "diagnosticSqlIds: unknown id \"transition_violation.raw_stage_events.stage:transition_violation\""
+   ],
+   "rootCause": "source.datatrust.raw.stage_events",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "Failing checks traced to raw_stage_events",
+    "impact": "A recruiting-stage check on stg_stage_events failed with 49 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.stage_events",
+     "column": "application_id",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "S02 (a recruiting-stage check) failed on stg_stage_events with 49 failing rows.",
+     "S03 (a recruiting-stage check) failed on stg_stage_events with 21 failing rows.",
+     "Column-level lineage connects raw_stage_events to 100.0% of the failing checks, and it ranks first with score 0.629.",
+     "The transition_violation probe on raw_stage_events measured 0.4% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.s02",
+     "check.s03",
+     "candidate.1",
+     "transition_violation.raw_stage_events.stage"
+    ],
+    "diagnosticSqlIds": [
+     "transition_violation.raw_stage_events.stage"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_stage_events and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_stage_events, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S09",
+   "scenario": "S09",
+   "attempts": 1,
+   "firstDraftJson": true,
+   "firstDraftGrounded": true,
+   "repaired": false,
+   "fallback": false,
+   "violations": [],
+   "rootCause": "source.datatrust.raw.payroll_lines",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "inc_s101-S09",
+    "impact": "Failing checks related to payroll reconciliation and payroll lines. Potential data inconsistencies in payroll records.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.payroll_lines",
+     "column": "employee_id,pay_month",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "Ranked root-cause candidate 'candidate.1' has the highest confidence and is likely the source of the issue.",
+     "The diagnostic probe 'dup_key_rate.raw_payroll_lines.employee_id_pay_month' indicates a duplicate key issue in the payroll lines.",
+     "The failing check 'check.x01' relates to payroll reconciliation and gross pay local minor values.",
+     "The candidate 'candidate.2' has lower confidence but is also a potential root-cause candidate.",
+     "The diagnostic probe 'dup_key_rate.raw_payroll_lines.employee_id_pay_month' indicates a duplicate key issue in the payroll lines."
+    ],
+    "evidenceRefs": [
+     "check.x01",
+     "candidate.1",
+     "candidate.2",
+     "candidate.3",
+     "candidate.4",
+     "candidate.5",
+     "dup_key_rate.raw_payroll_lines.employee_id_pay_month"
+    ],
+    "diagnosticSqlIds": [
+     "dup_key_rate.raw_payroll_lines.employee_id_pay_month"
+    ],
+    "nextSteps": [
+     "Analyze the diagnostic probe 'dup_key_rate.raw_payroll_lines.employee_id_pay_month' for duplicate key issues in the payroll lines.",
+     "Review the failing check 'check.x01' for reconciliation issues in the payroll reconciliation model.",
+     "Check the candidate 'candidate.1' for the highest confidence and potential root-cause of the issue.",
+     "Run diagnostic probes to confirm the duplicate key issue in the payroll lines.",
+     "Investigate the root-cause candidate 'candidate.1' and address the duplicate key issue in the payroll lines."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S10",
+   "scenario": "S10",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.stg_compensation\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.raw.compensation\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.fct_payroll_reconciliation\""
+   ],
+   "rootCause": "model.datatrust.stg_compensation",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "Failing checks traced to stg_compensation",
+    "impact": "A compensation or FX check on fct_compensation_usd failed with 16 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.stg_compensation",
+     "column": "currency",
+     "confidence": "low"
+    },
+    "reasoning": [
+     "C06 (a compensation or FX check) failed on fct_compensation_usd with 16 failing rows.",
+     "X03 (a SQL reconciliation) failed on metric_payroll_cost_usd_monthly with 9 failing rows.",
+     "Column-level lineage connects stg_compensation to 100.0% of the failing checks, and it ranks first with score 0.325."
+    ],
+    "evidenceRefs": [
+     "check.c06",
+     "check.x03",
+     "candidate.1"
+    ],
+    "diagnosticSqlIds": [],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against stg_compensation and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at stg_compensation, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S11",
+   "scenario": "S11",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "suspectedRootCause.node \"model.datatrust.stg_payroll_lines [employee_id, pay_month]\" is not one of the top five candidates",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.stg_payroll_lines WHERE employee_id = ?\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM source.datatrust.raw.payroll_lines WHERE employee_id = ?\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.stg_employees WHERE termination_date = ?\""
+   ],
+   "rootCause": "model.datatrust.stg_payroll_lines",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "H07 traced to stg_payroll_lines",
+    "impact": "A historical-interval check on stg_payroll_lines failed with 9 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.stg_payroll_lines",
+     "column": "employee_id",
+     "confidence": "low"
+    },
+    "reasoning": [
+     "H07 (a historical-interval check) failed on stg_payroll_lines with 9 failing rows.",
+     "Column-level lineage connects stg_payroll_lines to 100.0% of the failing checks, and it ranks first with score 0.350."
+    ],
+    "evidenceRefs": [
+     "check.h07",
+     "candidate.1"
+    ],
+    "diagnosticSqlIds": [],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against stg_payroll_lines and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at stg_payroll_lines, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S12",
+   "scenario": "S12",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "reasoning[0]: contains the number \"05\" outside a placeholder",
+    "reasoning[1]: contains the number \"1\" outside a placeholder",
+    "reasoning[3]: contains the number \"2\" outside a placeholder",
+    "evidenceRefs: unknown key \"diagnosticSqlIds\""
+   ],
+   "rootCause": "source.datatrust.raw.hires",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "R05 traced to raw_hires",
+    "impact": "A referential-integrity check on stg_hires failed with 1 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.hires",
+     "column": "employee_id",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "R05 (a referential-integrity check) failed on stg_hires with 1 failing rows.",
+     "Column-level lineage connects raw_hires to 100.0% of the failing checks, and it ranks first with score 0.614.",
+     "The orphan_rate probe on raw_hires measured 0.3% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.r05",
+     "candidate.1",
+     "orphan_rate.raw_hires.employee_id"
+    ],
+    "diagnosticSqlIds": [
+     "orphan_rate.raw_hires.employee_id"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_hires and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_hires, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-S13",
+   "scenario": "S13",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnosticSqlIds\""
+   ],
+   "rootCause": "source.datatrust.raw.compensation",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "schema_contract:stg_compensation traced to raw_compensation",
+    "impact": "An enforced schema contract on stg_compensation failed with 1 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "source.datatrust.raw.compensation",
+     "column": "base_salary_local_minor",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "schema_contract:stg_compensation (an enforced schema contract) failed on stg_compensation with 1 failing rows.",
+     "Column-level lineage connects raw_compensation to 100.0% of the failing checks, and it ranks first with score 0.700.",
+     "The cast_failure probe on raw_compensation measured 100.0% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.schema_contract_stg_compensation",
+     "candidate.1",
+     "cast_failure.raw_compensation.base_salary_local_minor"
+    ],
+    "diagnosticSqlIds": [
+     "cast_failure.raw_compensation.base_salary_local_minor"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against raw_compensation and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at raw_compensation, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-T14",
+   "scenario": "T14",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnosticSqlIds\""
+   ],
+   "rootCause": "model.datatrust.int_compensation_usd",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "Failing checks traced to int_compensation_usd",
+    "impact": "A uniqueness check on fct_compensation_usd failed with 1200 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.int_compensation_usd",
+     "column": "base_salary_usd",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "U02 (a uniqueness check) failed on fct_compensation_usd with 1200 failing rows.",
+     "C02 (a compensation or FX check) failed on fct_compensation_usd with 323941 failing rows.",
+     "Column-level lineage connects int_compensation_usd to 50.0% of the failing checks, and it ranks first with score 0.583.",
+     "The fanout_ratio probe on int_compensation_usd measured 365.000 (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.u02",
+     "check.c02",
+     "candidate.1",
+     "fanout_ratio.int_compensation_usd.compensation_id"
+    ],
+    "diagnosticSqlIds": [
+     "fanout_ratio.int_compensation_usd.compensation_id"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against int_compensation_usd and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at int_compensation_usd, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-T15",
+   "scenario": "T15",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "reasoning[3]: contains the number \"06\" outside a placeholder",
+    "nextSteps[0]: contains the number \"06\" outside a placeholder",
+    "nextSteps[4]: contains the number \"06\" outside a placeholder",
+    "suspectedRootCause.node \"model.datatrust.dim_employee[employee_id]\" is not one of the top five candidates"
+   ],
+   "rootCause": "model.datatrust.dim_employee",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "U06 traced to dim_employee",
+    "impact": "A uniqueness check on dim_employee failed with 840 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.dim_employee",
+     "column": "employee_id",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "U06 (a uniqueness check) failed on dim_employee with 840 failing rows.",
+     "Column-level lineage connects dim_employee to 100.0% of the failing checks, and it ranks first with score 0.850.",
+     "The fanout_ratio probe on dim_employee measured 2.350 (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.u06",
+     "candidate.1",
+     "fanout_ratio.dim_employee.employee_id"
+    ],
+    "diagnosticSqlIds": [
+     "fanout_ratio.dim_employee.employee_id"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against dim_employee and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at dim_employee, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-T16",
+   "scenario": "T16",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": true,
+   "fallback": false,
+   "violations": [],
+   "rootCause": "model.datatrust.stg_stage_events",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "inc_s101-T16",
+    "impact": "Failing checks related to stage transitions and hire dates. Root cause candidate is under evaluation.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.stg_stage_events",
+     "column": "event_local_date",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "Ranked root-cause candidates include model.datatrust.stg_stage_events and source.datatrust.raw.hires.",
+     "Diagnostic probe recompute_delta.stg_stage_events.event_local_date indicates potential error in event_local_date field.",
+     "Candidate with node model.datatrust.stg_stage_events has higher confidence in the root cause.",
+     "Other candidates have lower confidence in their root cause candidates.",
+     "Need to validate the root cause candidate with diagnostic probe recompute_delta.stg_stage_events.event_local_date."
+    ],
+    "evidenceRefs": [
+     "check.s07",
+     "candidate.1",
+     "candidate.2",
+     "candidate.3",
+     "candidate.4"
+    ],
+    "diagnosticSqlIds": [
+     "recompute_delta.stg_stage_events.event_local_date"
+    ],
+    "nextSteps": [
+     "Validate the root cause candidate with diagnostic probe recompute_delta.stg_stage_events.event_local_date.",
+     "Review the evidence and candidate data to determine the root cause.",
+     "Implement the root cause candidate and monitor the impact.",
+     "If the root cause is confirmed, proceed with the necessary actions.",
+     "Document the findings and next steps for the data team."
+    ]
+   }
+  },
+  {
+   "trial": "s101-T17",
+   "scenario": "T17",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "impact: contains the number \"08\" outside a placeholder",
+    "reasoning[0]: contains the number \"1\" outside a placeholder",
+    "reasoning[0]: contains an untokenized identifier",
+    "reasoning[1]: contains the number \"2\" outside a placeholder",
+    "reasoning[1]: contains an untokenized identifier",
+    "reasoning[2]: contains the number \"3\" outside a placeholder",
+    "reasoning[2]: contains an untokenized identifier",
+    "reasoning[3]: contains the number \"5\" outside a placeholder",
+    "reasoning[3]: contains an untokenized identifier",
+    "nextSteps[2]: contains the number \"1\" outside a placeholder",
+    "nextSteps[2]: contains an untokenized identifier",
+    "evidenceRefs: unknown key \"diagnostic probes\""
+   ],
+   "rootCause": "model.datatrust.int_employee_month",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "Failing checks traced to int_employee_month",
+    "impact": "A uniqueness check on fct_payroll_reconciliation failed with 780 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.int_employee_month",
+     "column": "base_salary_local_minor",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "U08 (a uniqueness check) failed on fct_payroll_reconciliation with 780 failing rows.",
+     "X01 (a SQL reconciliation) failed on fct_payroll_reconciliation with 780 failing rows.",
+     "Column-level lineage connects int_employee_month to 100.0% of the failing checks, and it ranks first with score 0.817.",
+     "The fanout_ratio probe on int_employee_month measured 1.054 (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.u08",
+     "check.x01",
+     "candidate.1",
+     "fanout_ratio.int_employee_month.employee_id_month_start"
+    ],
+    "diagnosticSqlIds": [
+     "fanout_ratio.int_employee_month.employee_id_month_start"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against int_employee_month and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at int_employee_month, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-T18",
+   "scenario": "T18",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnosticProbe.recompute_delta.fct_payroll_reconciliation.expected_gross_local_minor\"",
+    "diagnosticSqlIds: unknown id \"SELECT recompute_delta.fct_payroll_reconciliation.expected_gross_local_minor FROM source.datatrust.raw.payroll_lines WHERE gross_pay_local_minor = actual_gross_local_minor;\""
+   ],
+   "rootCause": "model.datatrust.fct_payroll_reconciliation",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "X01 traced to fct_payroll_reconciliation",
+    "impact": "A SQL reconciliation on fct_payroll_reconciliation failed with 12060 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.fct_payroll_reconciliation",
+     "column": "actual_gross_local_minor",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "X01 (a SQL reconciliation) failed on fct_payroll_reconciliation with 12060 failing rows.",
+     "Column-level lineage connects fct_payroll_reconciliation to 100.0% of the failing checks, and it ranks first with score 0.800.",
+     "The recompute_delta probe on fct_payroll_reconciliation measured 100.0% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.x01",
+     "candidate.1",
+     "recompute_delta.fct_payroll_reconciliation.expected_gross_local_minor"
+    ],
+    "diagnosticSqlIds": [
+     "recompute_delta.fct_payroll_reconciliation.expected_gross_local_minor"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against fct_payroll_reconciliation and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at fct_payroll_reconciliation, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-T19",
+   "scenario": "T19",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "evidenceRefs: unknown key \"diagnosticSqlIds\"",
+    "diagnosticSqlIds: unknown id \"transition_violation:model.datatrust.stg_stage_events:stage_order\""
+   ],
+   "rootCause": "model.datatrust.stg_stage_events",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "Failing checks traced to stg_stage_events",
+    "impact": "A recruiting-stage check on stg_stage_events failed with 3840 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.stg_stage_events",
+     "column": "application_id",
+     "confidence": "high"
+    },
+    "reasoning": [
+     "S02 (a recruiting-stage check) failed on stg_stage_events with 3840 failing rows.",
+     "S03 (a recruiting-stage check) failed on stg_stage_events with 1080 failing rows.",
+     "Column-level lineage connects stg_stage_events to 100.0% of the failing checks, and it ranks first with score 0.779.",
+     "The transition_violation probe on stg_stage_events measured 22.5% (anomaly 1.000), which its parents do not show."
+    ],
+    "evidenceRefs": [
+     "check.s02",
+     "check.s03",
+     "candidate.1",
+     "transition_violation.stg_stage_events.stage_order"
+    ],
+    "diagnosticSqlIds": [
+     "transition_violation.stg_stage_events.stage_order"
+    ],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against stg_stage_events and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at stg_stage_events, then rerun the validation run."
+    ]
+   }
+  },
+  {
+   "trial": "s101-T20",
+   "scenario": "T20",
+   "attempts": 2,
+   "firstDraftJson": true,
+   "firstDraftGrounded": false,
+   "repaired": false,
+   "fallback": true,
+   "violations": [
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.metric_headcount_monthly\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.int_employee_month\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.stg_compensation\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM source.datatrust.raw.compensation\"",
+    "diagnosticSqlIds: unknown id \"SELECT * FROM model.datatrust.stg_employees\""
+   ],
+   "rootCause": "model.datatrust.metric_headcount_monthly",
+   "rootCauseInTop3": true,
+   "groundTruthInTop3": true,
+   "piiLeaks": [],
+   "summary": {
+    "title": "X02 traced to metric_headcount_monthly",
+    "impact": "A SQL reconciliation on metric_headcount_monthly failed with 6 failing rows; downstream marts and metrics built from it are suspect.",
+    "suspectedRootCause": {
+     "node": "model.datatrust.metric_headcount_monthly",
+     "column": "headcount",
+     "confidence": "low"
+    },
+    "reasoning": [
+     "X02 (a SQL reconciliation) failed on metric_headcount_monthly with 6 failing rows.",
+     "Column-level lineage connects metric_headcount_monthly to 100.0% of the failing checks, and it ranks first with score 0.550."
+    ],
+    "evidenceRefs": [
+     "check.x02",
+     "candidate.1"
+    ],
+    "diagnosticSqlIds": [],
+    "nextSteps": [
+     "Run the attached diagnostic SQL against metric_headcount_monthly and inspect the tokenized sample keys.",
+     "Fix the data or the transformation at metric_headcount_monthly, then rerun the validation run."
+    ]
+   }
+  }
+ ]
+}
