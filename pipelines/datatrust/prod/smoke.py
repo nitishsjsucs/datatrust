@@ -75,21 +75,30 @@ def versions() -> dict[str, str]:
     return out
 
 
+BYTES_QUERY_MAX_BYTES = 100 * 1000 * 1000
+
+
 def bytes_billed_since(settings: GcpSettings, start: dt.datetime, client: Any = None) -> int | str:
-    """BigQuery bytes billed in the project since `start` (every identity: Nitish, prober, analyst), from
-    INFORMATION_SCHEMA.JOBS_BY_PROJECT, which Owner can read. Reported, never asserted."""
+    """BigQuery bytes billed by DataTrust jobs since `start` (every DataTrust identity: Nitish's dbt runs, the
+    prober and the analyst), from INFORMATION_SCHEMA.JOBS_BY_PROJECT, which Owner can read. The project is
+    shared by four repos, so only jobs labelled app=datatrust count (SPEC 28.5.10). Reported, never
+    asserted."""
     try:
         from google.cloud import bigquery
+
+        from datatrust.warehouse.bigquery_wh import capped_job_config
 
         client = client or bigquery.Client(project=settings.project, location=settings.location)
         region = f"region-{settings.location.lower()}"
         sql = (
             "select coalesce(sum(total_bytes_billed), 0) as billed "
             f"from `{settings.project}`.`{region}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT "
-            "where creation_time >= @start"
+            "where creation_time >= @start "
+            "and exists (select 1 from unnest(labels) as l where l.key = 'app' and l.value = 'datatrust')"
         )
-        cfg = bigquery.QueryJobConfig(
-            query_parameters=[bigquery.ScalarQueryParameter("start", "TIMESTAMP", start)]
+        cfg = capped_job_config(
+            BYTES_QUERY_MAX_BYTES,
+            query_parameters=[bigquery.ScalarQueryParameter("start", "TIMESTAMP", start)],
         )
         rows = list(client.query(sql, job_config=cfg).result())
         return int(rows[0]["billed"]) if rows else 0

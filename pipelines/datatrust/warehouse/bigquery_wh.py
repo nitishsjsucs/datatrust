@@ -10,6 +10,18 @@ from typing import Any
 from datatrust.warehouse.readonly import assert_read_only
 
 PROBE_MAX_BYTES = 100 * 1000 * 1000  # 100 MB per probe; a query over the cap fails without charge
+# The Google Cloud project is shared by four repos (SPEC 28.5.10): every DataTrust job carries this label, so
+# its bytes can be told apart in INFORMATION_SCHEMA.JOBS_BY_PROJECT, and every query is capped.
+JOB_LABELS = {"app": "datatrust"}
+
+
+def capped_job_config(max_bytes: int = PROBE_MAX_BYTES, **kwargs: Any):
+    """A QueryJobConfig with the DataTrust label and `maximum_bytes_billed` (a capped query fails, free)."""
+    from google.cloud import bigquery
+
+    return bigquery.QueryJobConfig(maximum_bytes_billed=max_bytes, labels=dict(JOB_LABELS), **kwargs)
+
+
 SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 
@@ -56,11 +68,8 @@ class BigQueryWarehouse:
         from google.cloud import bigquery
 
         query_params = [bigquery.ScalarQueryParameter(k, "STRING", str(v)) for k, v in (params or {}).items()]
-        return bigquery.QueryJobConfig(
-            dry_run=dry_run,
-            use_query_cache=False,
-            maximum_bytes_billed=self.max_bytes,
-            query_parameters=query_params,
+        return capped_job_config(
+            self.max_bytes, dry_run=dry_run, use_query_cache=False, query_parameters=query_params
         )
 
     def query(

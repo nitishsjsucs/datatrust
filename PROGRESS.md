@@ -6,7 +6,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` and 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B` done; 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
-Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F9.
+Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F10.
 
 ## Done
 
@@ -73,9 +73,11 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 3, F9 `fix(worker): no second investigation after the 3-day Workflows retention`: the `datatrust-investigate` consumer first looks up the incident id (`incidentExists`, one primary-key read) and acks without `create()` when the row exists, so the same alert after the Free plan's 3-day instance retention starts no second investigation and spends no neurons twice. Tests: `investigation.test.ts` (first delivery creates, the same alert after an incident row exists acks without `create()`), `d1-statements.test.ts` (investigate batch of 5: at most 5 statements).
 
+- Builder 3, F10 `fix(prod): shared Google Cloud project hygiene`: `JOB_LABELS = {"app": "datatrust"}` and `capped_job_config` in `warehouse/bigquery_wh.py`; probes and dry runs (100 MB), `governance verify` (100 MB, `VERIFY_MAX_BYTES`) and the smoke's bytes query (100 MB) are capped and labelled; the smoke's bytes-billed figure filters `JOBS_BY_PROJECT` on the label; Parquet loads carry the label; dbt sets `query-comment: {"app": "datatrust"}` with `job-label: true` (dbt-bigquery 1.12.1 turns it into job labels, checked in its source and in a test) and `+labels: {app: datatrust}` on every model (confirmed in a BigQuery-target manifest), and keeps its 1 GB per-query cap; `governance apply` stops with a clear error when the per-data-policy Masked Reader grant fails (no project-level fallback) and gained `--taxonomy-admin MEMBER` (Policy Tags Admin on the `datatrust-classification` taxonomy only); `docs/prod-runner-wif.md` drops the project `roles/viewer` grant, uses `--taxonomy-admin`, names the pool `datatrust-github`, and marks the taxonomy-level grant UNVERIFIED with a fallback that never grants Project Viewer (the BigQuery column-level security docs, fetched 2026-10-11, list `datacatalog.taxonomies.get` in Policy Tags Admin and Project Viewer). Tests in `test_prod_offline.py`: every query path (probe query and dry run, five verify assertions, the bytes query, loads) records the cap and the label; dbt labels and caps; no Masked Reader fallback; taxonomy-only admin grant; the WIF doc. Nothing ran against Google Cloud.
+
 ## Next
 
-- SPEC 23.1, Free plan migration, in order (F1 to F9 done): F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
+- SPEC 23.1, Free plan migration, in order (F1 to F10 done): F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
 - Production execution, by Nitish's operator after the builder gate (a rerun of `setup:prod -- --cloudflare-only` redeploys later Worker changes and applies new migrations): SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux container, not yet observed on ubuntu-latest.
 
@@ -86,7 +88,7 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 - `npm run test:worker`: 88 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 189 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F7)
+- `uv run pytest`: 194 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F7)
 - `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template (no `pipelines` binding)
 
 ## Deviations from SPEC.md

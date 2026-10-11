@@ -7,10 +7,14 @@ It stays off unless started by hand, or unless the repository variable `DATATRUS
 
 ## One-time Google Cloud setup
 
-Replace `P` with the project id and `OWNER/REPO` with `nitishsjsucs/datatrust`.
+The project `master-magnet-444903-u4` is shared by four repos (SPEC 28.5.10), so every resource below is named
+`datatrust*` and every grant is scoped to DataTrust's own datasets, taxonomy and service accounts. The runner
+gets no project-level data role: in particular not Project Viewer, which would give it READER on every
+dataset in the project through BigQuery's default dataset access. Its only project-level role is BigQuery Job
+User, which lets it run jobs and reads no data. Replace `OWNER/REPO` with `nitishsjsucs/datatrust`.
 
 ```sh
-P=datatrust-<suffix>
+P=master-magnet-444903-u4
 NUM=$(gcloud projects describe $P --format='value(projectNumber)')
 
 # Service account the workflow becomes
@@ -18,33 +22,41 @@ gcloud iam service-accounts create datatrust-runner-ci --project=$P --display-na
 SA=datatrust-runner-ci@$P.iam.gserviceaccount.com
 gcloud projects add-iam-policy-binding $P --member=serviceAccount:$SA --role=roles/bigquery.jobUser --condition=None
 # dbt replaces tables and views and re-applies policy tags with persist_docs. Setting a policy tag needs
-# bigquery.tables.setCategory (BigQuery Data Owner, not Data Editor) and datacatalog.taxonomies.get (Project
-# Viewer or Policy Tags Admin), per the BigQuery column-level security docs.
+# bigquery.tables.setCategory (BigQuery Data Owner, granted on the DataTrust datasets only) and
+# datacatalog.taxonomies.get (in Policy Tags Admin and Project Viewer, per the BigQuery column-level security
+# docs). Policy Tags Admin is granted on the datatrust-classification taxonomy only, by governance apply below.
 for D in datatrust_raw datatrust_staging datatrust_marts datatrust_restricted; do
   bq add-iam-policy-binding --member=serviceAccount:$SA --role=roles/bigquery.dataOwner $P:$D
 done
-gcloud projects add-iam-policy-binding $P --member=serviceAccount:$SA --role=roles/viewer --condition=None
-# The runner impersonates datatrust-prober for probes, so it needs Token Creator on the prober
+# The runner impersonates datatrust-prober for probes, so it needs Token Creator on the prober only
 gcloud iam service-accounts add-iam-policy-binding datatrust-prober@$P.iam.gserviceaccount.com --project=$P \
   --member=serviceAccount:$SA --role=roles/iam.serviceAccountTokenCreator --condition=None
-# dbt tests read masked columns, so the runner also needs Fine-Grained Reader on the three policy tags
-uv run datatrust prod governance apply --extra-reader serviceAccount:$SA
+# dbt tests read masked columns, so the runner also needs Fine-Grained Reader on the three DataTrust policy
+# tags; and Policy Tags Admin on the DataTrust taxonomy for datacatalog.taxonomies.get
+uv run datatrust prod governance apply --extra-reader serviceAccount:$SA --taxonomy-admin serviceAccount:$SA
 
 # Workload identity pool and GitHub OIDC provider, restricted to this repository
-gcloud iam workload-identity-pools create github --project=$P --location=global --display-name="GitHub Actions"
+gcloud iam workload-identity-pools create datatrust-github --project=$P --location=global \
+  --display-name="DataTrust GitHub Actions"
 gcloud iam workload-identity-pools providers create-oidc datatrust --project=$P --location=global \
-  --workload-identity-pool=github --issuer-uri=https://token.actions.githubusercontent.com \
+  --workload-identity-pool=datatrust-github --issuer-uri=https://token.actions.githubusercontent.com \
   --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository \
   --attribute-condition="assertion.repository=='OWNER/REPO'"
 gcloud iam service-accounts add-iam-policy-binding $SA --project=$P --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/$NUM/locations/global/workloadIdentityPools/github/attribute.repository/OWNER/REPO"
+  --member="principalSet://iam.googleapis.com/projects/$NUM/locations/global/workloadIdentityPools/datatrust-github/attribute.repository/OWNER/REPO"
 ```
+
+UNVERIFIED (no Google Cloud account was used to write this): that a Policy Tags Admin grant on the taxonomy,
+rather than on the project, satisfies the `datacatalog.taxonomies.get` check when dbt sets policy tags. The
+first workflow run proves it: if dbt fails with a permission error on `datacatalog.taxonomies.get`, the grant
+is not enough, and the fallback is to run the production runner on your machine (README), never to grant
+Project Viewer on the shared project.
 
 ## GitHub settings
 
 Repository variables: `DATATRUST_API_URL` (the Worker URL), `DATATRUST_GCP_PROJECT`, `DATATRUST_BQ_LOCATION`,
 `DATATRUST_RUNNER_SA` (`datatrust-runner-ci@<project>.iam.gserviceaccount.com`), `DATATRUST_WIF_PROVIDER`
-(`projects/<number>/locations/global/workloadIdentityPools/github/providers/datatrust`),
+(`projects/<number>/locations/global/workloadIdentityPools/datatrust-github/providers/datatrust`),
 `DATATRUST_DBT_VARS_YAML` (the contents of `.prod/dbt_vars.yml`, policy-tag resource names, not secret), and
 optionally `DATATRUST_SCHEDULED_RUNNER=true`. Optionally also `BASIN_CATALOG_URI` and `BASIN_WAREHOUSE` (from
 `.env.prod`) with the secret `BASIN_CATALOG_TOKEN`, so the runner commits the audit lake to Basin Catalog every

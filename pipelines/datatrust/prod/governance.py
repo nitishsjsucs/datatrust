@@ -1,9 +1,11 @@
 """BigQuery governance (SPEC 17): taxonomy, policy tags, data masking policies and IAM, all idempotent, and a
 verification that impersonates the analyst and retries through IAM propagation. Implemented, not executed.
 
-Project-level grants (BigQuery Job User for the prober and the analyst, Service Account Token Creator for
-Nitish on both service accounts) are made by `scripts/setup-prod.sh` with gcloud, because they need the
-Resource Manager and IAM admin APIs rather than the BigQuery and Data Catalog clients used here.
+The project is shared by four repos (SPEC 28.5.10), so every grant here is on a DataTrust resource: Fine-
+Grained Reader on the three policy tags, Masked Reader on the three data policies, dataset READER on the
+DataTrust datasets, and optionally Policy Tags Admin on the DataTrust taxonomy for the CI runner. The only
+project-level grant DataTrust makes is BigQuery Job User for its two service accounts (no data access), by
+`scripts/setup-prod.sh` with gcloud; Service Account Token Creator is granted on each service account.
 """
 
 from __future__ import annotations
@@ -26,6 +28,9 @@ TAGS: dict[str, tuple[str, str]] = {
     "pii_date": ("DATE_YEAR_MASK", "Personal dates: birth dates (year only)"),
     "compensation": ("ALWAYS_NULL", "Per-person compensation amounts (NULL for masked readers)"),
 }
+# Verification reads a few rows of DataTrust tables; 100 MB is far above what they scan (SPEC 28.5.10).
+VERIFY_MAX_BYTES = 100 * 1000 * 1000
+POLICY_TAG_ADMIN = "roles/datacatalog.categoryAdmin"
 PROBER_DATASETS = ("datatrust_raw", "datatrust_staging", "datatrust_marts")
 ANALYST_DATASETS = ("datatrust_marts", "datatrust_restricted")
 
@@ -169,6 +174,7 @@ def apply(
     user_email: str,
     *,
     extra_readers: list[str] | None = None,
+    taxonomy_admins: list[str] | None = None,
     ptm=None,
     dps=None,
     bq=None,
@@ -189,8 +195,21 @@ def apply(
         if ensure_binding(ptm, tag, FINE_GRAINED_READER, readers):
             state.created.append(f"fine-grained readers on {key}")
     for key, policy in state.data_policies.items():
-        if ensure_binding(dps, policy, MASKED_READER, [f"serviceAccount:{settings.analyst_sa}"]):
+        try:
+            granted = ensure_binding(dps, policy, MASKED_READER, [f"serviceAccount:{settings.analyst_sa}"])
+        except Exception as err:
+            # No project-level fallback: on the shared project it would cover other repos' data policies.
+            raise RuntimeError(
+                f"Masked Reader could not be granted on data policy {policy} ({type(err).__name__}: {err}). "
+                "DataTrust grants it per data policy only and never on the shared project (SPEC 28.5.10)."
+            ) from err
+        if granted:
             state.created.append(f"masked reader on {key}")
+    for member in taxonomy_admins or []:
+        # Setting policy tags needs datacatalog.taxonomies.get, which Policy Tags Admin includes; granted on
+        # the DataTrust taxonomy only, never Project Viewer (SPEC 28.5.10, docs/prod-runner-wif.md).
+        if ensure_binding(ptm, state.taxonomy, POLICY_TAG_ADMIN, [member]):
+            state.created.append(f"policy tag admin on {TAXONOMY} for {member}")
     ensure_dataset_readers(bq, settings, state)
     write_dbt_vars(state)
     return state
@@ -205,18 +224,25 @@ class Assertion:
     check: Callable[[Any], None]
 
 
+def _q(bq: Any, sql: str) -> Any:
+    """Every verification query is capped and labelled app=datatrust (shared project, SPEC 28.5.10)."""
+    from datatrust.warehouse.bigquery_wh import capped_job_config
+
+    return bq.query(sql, job_config=capped_job_config(VERIFY_MAX_BYTES))
+
+
 def _assertions(project: str) -> list[Assertion]:
     marts = f"`{project}.datatrust_marts`"
 
     def hashed_strings(bq: Any) -> None:
-        rows = list(bq.query(f"select first_name, work_email from {marts}.dim_employee limit 20").result())
+        rows = list(_q(bq, f"select first_name, work_email from {marts}.dim_employee limit 20").result())
         assert rows, "dim_employee returned no rows"
         for r in rows:
             for v in (r["first_name"], r["work_email"]):
                 assert v is not None and "@" not in v and len(v) >= 32, f"not hashed: {v!r}"
 
     def year_only_dates(bq: Any) -> None:
-        rows = list(bq.query(f"select birth_date from {marts}.dim_employee limit 20").result())
+        rows = list(_q(bq, f"select birth_date from {marts}.dim_employee limit 20").result())
         assert rows and all(r["birth_date"].month == 1 and r["birth_date"].day == 1 for r in rows), (
             "dates not masked"
         )
@@ -224,8 +250,8 @@ def _assertions(project: str) -> list[Assertion]:
     def null_compensation(bq: Any) -> None:
         row = next(
             iter(
-                bq.query(
-                    f"select countif(base_salary_usd is not null) n from {marts}.fct_compensation_usd"
+                _q(
+                    bq, f"select countif(base_salary_usd is not null) n from {marts}.fct_compensation_usd"
                 ).result()
             )
         )
@@ -236,7 +262,7 @@ def _assertions(project: str) -> list[Assertion]:
             f"select count(*) n, countif(total_base_salary_usd is null) nulls "
             f"from `{project}.datatrust_restricted`.rpt_compensation_by_dept"
         )
-        row = next(iter(bq.query(sql).result()))
+        row = next(iter(_q(bq, sql).result()))
         assert row["n"] > 0 and row["nulls"] == 0, (
             f"authorized view rows {row['n']}, null aggregates {row['nulls']}"
         )
@@ -245,7 +271,7 @@ def _assertions(project: str) -> list[Assertion]:
         from google.api_core.exceptions import Forbidden
 
         try:
-            list(bq.query(f"select 1 from `{project}.datatrust_staging`.stg_employees limit 1").result())
+            list(_q(bq, f"select 1 from `{project}.datatrust_staging`.stg_employees limit 1").result())
         except Forbidden:
             return
         raise AssertionError("analyst can read datatrust_staging")

@@ -10,6 +10,13 @@ analysis-paths: ["analyses"]
 target-path: target
 clean-targets: ["target", "logs"]
 
+# Shared Google Cloud project (SPEC 28.5.10): every dbt job on BigQuery carries the label app=datatrust
+# (dbt-bigquery turns the JSON query comment into job labels) and every table the label app=datatrust.
+# profiles.yml caps each query at 1 GB with maximum_bytes_billed.
+query-comment:
+  comment: '{"app": "datatrust"}'
+  job-label: true
+
 flags:
   send_anonymous_usage_stats: false
   partial_parse: false
@@ -29,6 +36,8 @@ vars:
 
 models:
   datatrust:
+    +labels:
+      app: datatrust
     staging:
       +schema: staging
       +materialized: view

@@ -526,3 +526,140 @@ def test_smoke_needs_1940_neurons_of_workers_ai_headroom():
     assert check_ai_headroom(Ops(1940))["headroom"] == 1940
     with pytest.raises(SmokeStopped, match="rerun after 00:00 UTC"):
         check_ai_headroom(Ops(1939))
+
+
+# ------------------------------------------------------------------------------- shared project hygiene
+
+
+def _capped_and_labelled(cfg, max_bytes):
+    return cfg.maximum_bytes_billed == max_bytes and dict(cfg.labels) == {"app": "datatrust"}
+
+
+def test_every_bigquery_query_path_is_capped_and_labelled(monkeypatch, tmp_path):
+    """SPEC 28.5.10: the project is shared by four repos, so every DataTrust query sets maximum_bytes_billed
+    and the label app=datatrust (fake clients record the job configs)."""
+    import datetime as dt
+
+    from datatrust.load.bigquery_loader import load_raw_bigquery
+    from datatrust.prod.smoke import bytes_billed_since
+    from datatrust.warehouse.bigquery_wh import PROBE_MAX_BYTES
+
+    # Probes: the dry run and the real query.
+    configs: list = []
+
+    class Recording(FakeBQ):
+        def query(self, sql, job_config=None, location=None):
+            configs.append(job_config)
+            return super().query(sql, job_config=job_config, location=location)
+
+    wh = BigQueryWarehouse("my-project", "US", client=Recording([{"n": 1}]))
+    wh.query("select 1 as n")
+    wh.dry_run("select 1 as n")
+    assert len(configs) == 3 and all(_capped_and_labelled(c, PROBE_MAX_BYTES) for c in configs)
+
+    # Governance verify: every assertion query, as the analyst.
+    seen: list = []
+
+    class Analyst:
+        def query(self, sql, job_config=None):
+            seen.append((sql, job_config))
+            if "datatrust_staging" in sql:
+                from google.api_core.exceptions import Forbidden
+
+                raise Forbidden("denied")
+            rows = {
+                "first_name": "a" * 64,
+                "work_email": "b" * 64,
+                "birth_date": dt.date(1990, 1, 1),
+                "n": 5 if "rpt_compensation" in sql else 0,
+                "nulls": 0,
+            }
+            return SimpleNamespace(result=lambda: [rows])
+
+    s = GcpSettings("datatrust-abc123", "US", "p@x", "a@x")
+    out = governance.verify(s, bq=Analyst(), sleep=lambda _: None)
+    assert all(r["ok"] for r in out) and len(out) == 5
+    assert len(seen) == 5 and all(_capped_and_labelled(c, governance.VERIFY_MAX_BYTES) for _, c in seen)
+
+    # The smoke's bytes figure counts only DataTrust's jobs, with a capped query.
+    bytes_seen = {}
+
+    class Jobs:
+        def query(self, sql, job_config=None):
+            bytes_seen.update(sql=sql, cfg=job_config)
+            return SimpleNamespace(result=lambda: [{"billed": 1}])
+
+    assert bytes_billed_since(s, dt.datetime(2026, 10, 11, tzinfo=dt.UTC), client=Jobs()) == 1
+    assert "l.key = 'app' and l.value = 'datatrust'" in bytes_seen["sql"]
+    assert _capped_and_labelled(bytes_seen["cfg"], 100 * 1000 * 1000)
+
+    # Loads (free, but attributed).
+    load_cfgs: list = []
+    (tmp_path / "raw").mkdir()
+    from datatrust.synth import spec as S
+
+    for table in S.TABLE_ORDER:
+        (tmp_path / "raw" / f"{table}.parquet").write_bytes(b"x")
+
+    class Loader:
+        def load_table_from_file(self, fh, dest, job_config=None, location=None):
+            load_cfgs.append(job_config)
+            return SimpleNamespace(result=lambda: None)
+
+        def get_table(self, dest):
+            return SimpleNamespace(schema=[], num_rows=0)
+
+    monkeypatch.setattr("datatrust.load.bigquery_loader.check_schema", lambda *a, **k: [])
+    load_raw_bigquery(tmp_path / "raw", "my-project", "US", client=Loader())
+    assert load_cfgs and all(dict(c.labels) == {"app": "datatrust"} for c in load_cfgs)
+
+
+def test_dbt_jobs_are_labelled_and_capped():
+    import yaml
+    from dbt.adapters.bigquery.connections import BigQueryConnectionManager
+
+    project = yaml.safe_load((config.REPO_ROOT / "dbt" / "dbt_project.yml").read_text())
+    qc = project["query-comment"]
+    assert qc["job-label"] is True and json.loads(qc["comment"]) == {"app": "datatrust"}
+    # dbt-bigquery turns the JSON query comment into job labels.
+    assert BigQueryConnectionManager._labels_from_query_comment(None, qc["comment"]) == {"app": "datatrust"}
+    assert project["models"]["datatrust"]["+labels"] == {"app": "datatrust"}
+    profiles = yaml.safe_load((config.REPO_ROOT / "dbt" / "profiles.yml").read_text())
+    for name in ("bigquery", "bigquery_sa"):
+        assert profiles["datatrust"]["outputs"][name]["maximum_bytes_billed"] == 1_000_000_000
+
+
+def test_governance_never_falls_back_to_a_project_level_masked_reader(monkeypatch, tmp_path):
+    monkeypatch.setattr(governance, "DBT_VARS", tmp_path / "dbt_vars.yml")
+    monkeypatch.setattr(governance, "PROD_DIR", tmp_path)
+    s = GcpSettings("datatrust-abc123", "US", "p@x.iam.gserviceaccount.com", "a@x.iam.gserviceaccount.com")
+
+    class RefusingDPS(FakeDPS):
+        def set_iam_policy(self, request):
+            from google.api_core.exceptions import InvalidArgument
+
+            raise InvalidArgument("role not supported on this resource")
+
+    with pytest.raises(RuntimeError, match="never on the shared project"):
+        governance.apply(s, "nitish@example.com", ptm=FakePTM(), dps=RefusingDPS(), bq=FakeDatasets())
+
+
+def test_ci_runner_gets_policy_tags_admin_on_the_datatrust_taxonomy_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(governance, "DBT_VARS", tmp_path / "dbt_vars.yml")
+    monkeypatch.setattr(governance, "PROD_DIR", tmp_path)
+    s = GcpSettings("datatrust-abc123", "US", "p@x.iam.gserviceaccount.com", "a@x.iam.gserviceaccount.com")
+    ptm = FakePTM()
+    member = "serviceAccount:datatrust-runner-ci@datatrust-abc123.iam.gserviceaccount.com"
+    state = governance.apply(
+        s, "nitish@example.com", taxonomy_admins=[member], ptm=ptm, dps=FakeDPS(), bq=FakeDatasets()
+    )
+    binding = ptm.policies[state.taxonomy].bindings[0]
+    assert binding.role == governance.POLICY_TAG_ADMIN and list(binding.members) == [member]
+    assert all(r.startswith(state.taxonomy) for r in ptm.policies)
+
+
+def test_wif_doc_grants_no_project_viewer_and_names_datatrust_resources():
+    text = (config.REPO_ROOT / "docs" / "prod-runner-wif.md").read_text()
+    assert "roles/viewer" not in text
+    assert "--taxonomy-admin serviceAccount:$SA" in text
+    assert "workload-identity-pools create datatrust-github" in text

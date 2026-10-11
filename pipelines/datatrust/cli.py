@@ -364,7 +364,12 @@ def _cmd_prod(args: argparse.Namespace) -> int:
             if args.action == "apply":
                 from datatrust.prod.settings import gcp_user_email
 
-                state = governance.apply(settings, gcp_user_email(), extra_readers=args.extra_reader)
+                state = governance.apply(
+                    settings,
+                    gcp_user_email(),
+                    extra_readers=args.extra_reader,
+                    taxonomy_admins=args.taxonomy_admin,
+                )
                 print(json.dumps(state.__dict__, indent=2))
                 return 0
             results = governance.verify(settings)
@@ -547,6 +552,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="MEMBER",
         help="also grant Fine-Grained Reader on the policy tags, e.g. serviceAccount:<ci runner sa>",
+    )
+    g.add_argument(
+        "--taxonomy-admin",
+        action="append",
+        default=[],
+        metavar="MEMBER",
+        help="grant Policy Tags Admin on the DataTrust taxonomy only (a CI runner that sets policy tags)",
     )
     ws = prod.add_parser("worker-secrets", help="write the Worker secrets JSON for wrangler --secrets-file")
     ws.add_argument("--out", required=True)

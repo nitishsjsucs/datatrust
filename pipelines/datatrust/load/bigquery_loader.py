@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from datatrust.synth import spec as S
+from datatrust.warehouse.bigquery_wh import JOB_LABELS
 
 EXPECTED_TYPES = {
     "int": {"INTEGER", "INT64"},
@@ -55,6 +56,7 @@ def load_raw_bigquery(
     for table in S.TABLE_ORDER:
         dest = f"{project}.{dataset}.{table}"
         cfg = bigquery.LoadJobConfig(
+            labels=dict(JOB_LABELS),  # load jobs are free; the label attributes them on the shared project
             source_format=bigquery.SourceFormat.PARQUET,
             write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
             decimal_target_types=["NUMERIC", "BIGNUMERIC"],
