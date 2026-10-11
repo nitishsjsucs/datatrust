@@ -134,6 +134,38 @@ def _slim_run_results(rr: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+TIME_TRAVEL_WINDOW_MS = 7 * 24 * 3600 * 1000  # BigQuery time travel window set by setup:prod (168 hours)
+
+
+def resolve_time_travel(
+    requests_: list[Any], target: str, relations: dict[str, Any], snapshot_root: Path, now_ms: int
+) -> list[Any]:
+    """Turn the Worker's `delta_vs_last_green` requests (last green run id and finish time only) into what
+    this runner can query (SPEC 10): locally the Parquet snapshot that run left (marts only; dropped when
+    absent), on BigQuery a constant `as_of_ms` clamped to [now - 7 days + 1 hour, now]."""
+    import dataclasses
+    import re
+
+    out = []
+    for r in requests_:
+        if r.probe != "delta_vs_last_green":
+            out.append(r)
+            continue
+        run_id = str(r.params.get("lastGreenRunId", ""))
+        node = relations["nodes"].get(r.node)
+        if not re.fullmatch(r"run_[A-Za-z0-9]+", run_id) or node is None:
+            continue
+        if target == "bigquery":
+            finished = int(r.params.get("lastGreenFinishedAtMs") or 0)
+            as_of = min(max(finished, now_ms - TIME_TRAVEL_WINDOW_MS + 3600 * 1000), now_ms)
+            out.append(dataclasses.replace(r, params={"as_of_ms": as_of}))
+        else:
+            path = snapshot_root / run_id / f"{node['name']}.parquet"
+            if path.exists():
+                out.append(dataclasses.replace(r, params={"snapshot_path": str(path)}))
+    return out
+
+
 def handle_diagnostics(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
     from datatrust.diagnostics.probes import ProbeRequest, run_probes
     from datatrust.rca_cli import rca
@@ -142,7 +174,13 @@ def handle_diagnostics(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
     p = job.payload
     work = run_dir(job.run_id)
     relations = json.loads((work / "target" / "relations.json").read_text())
-    requests_ = [ProbeRequest.from_json(x) for x in p.get("probes", [])]
+    requests_ = resolve_time_travel(
+        [ProbeRequest.from_json(x) for x in p.get("probes", [])],
+        p.get("target", "duckdb"),
+        relations,
+        config.snapshot_dir(),
+        int(time.time() * 1000),
+    )
     if p.get("target") == "bigquery":
         from datatrust.prod.settings import GcpSettings
         from datatrust.warehouse.bigquery_wh import BigQueryWarehouse

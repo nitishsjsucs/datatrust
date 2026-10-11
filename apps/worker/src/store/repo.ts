@@ -329,6 +329,22 @@ export async function baselineChecksums(db: D1Database, runId: string): Promise<
   return results.length ? Object.fromEntries(results.map((r) => [r.node_id, r.checksum])) : null;
 }
 
+/** The last passed run of the same target created before this one (time-travel evidence, SPEC 10). */
+export async function lastGreenRun(db: D1Database, runId: string): Promise<{ runId: string; finishedAtMs: number } | null> {
+  const prev = await db
+    .prepare(
+      `SELECT r.run_id, r.finished_at FROM runs r JOIN runs cur ON cur.run_id = ?
+       WHERE r.status = 'passed' AND r.run_id <> cur.run_id AND r.target = cur.target AND r.finished_at IS NOT NULL
+         AND r.created_at <= cur.created_at
+       ORDER BY r.created_at DESC LIMIT 1`,
+    )
+    .bind(runId)
+    .first<{ run_id: string; finished_at: string }>();
+  if (!prev) return null;
+  const ms = Date.parse(prev.finished_at);
+  return Number.isFinite(ms) ? { runId: prev.run_id, finishedAtMs: ms } : null;
+}
+
 // ------------------------------------------------------------------------------------------- incidents
 
 export interface IncidentInsert {

@@ -31,3 +31,13 @@ export function byDistance<T extends { distance: number; node: string }>(nodes: 
 export function isStandIn(value: unknown): boolean {
   return typeof value === 'string' && /stand-in|template|local/i.test(value);
 }
+
+/** Time-travel evidence from provenance: row counts now vs the last green run (evidence only, never ranked). */
+export function timeTravelText(tt: unknown): string {
+  const t = (tt ?? {}) as { lastGreenRunId?: string | null; nodes?: Array<{ node: string; rowsNow?: unknown; rowsThen?: unknown }> };
+  if (!t.lastGreenRunId) return 'no earlier green run of this target';
+  const nodes = t.nodes ?? [];
+  if (nodes.length === 0) return `no snapshot or history available vs ${t.lastGreenRunId}`;
+  const parts = nodes.map((n) => `${shortNode(n.node)} ${String(n.rowsThen ?? '?')} to ${String(n.rowsNow ?? '?')} rows`);
+  return `vs ${t.lastGreenRunId}: ${parts.join('; ')}`;
+}

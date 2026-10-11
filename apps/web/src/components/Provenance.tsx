@@ -1,4 +1,4 @@
-import { isStandIn } from '../format';
+import { isStandIn, timeTravelText } from '../format';
 
 /** Where this incident's evidence and summary came from; local stand-ins are labelled (ADR-0003). */
 export function Provenance({ provenance }: { provenance: Record<string, unknown> }) {
@@ -9,6 +9,7 @@ export function Provenance({ provenance }: { provenance: Record<string, unknown>
     ['Summarizer', `${String(summarizer['provider'] ?? 'n/a')} (${String(summarizer['model'] ?? 'n/a')})`],
     ['Lake sink', String(provenance['lakeSink'] ?? 'n/a')],
     ['Candidates traced', String(provenance['candidateCount'] ?? 'n/a')],
+    ['Time travel (evidence only)', timeTravelText(provenance['timeTravel'])],
   ];
   return (
     <section className="card">

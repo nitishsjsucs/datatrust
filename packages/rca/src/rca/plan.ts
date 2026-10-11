@@ -175,3 +175,43 @@ export function planProbes(
   for (const r of [...byId.values()]) for (const lifted of liftToParents(r, g, relations)) add(lifted);
   return [...byId.values()].sort((a, b) => a.probeId.localeCompare(b.probeId));
 }
+
+/** The last passed run of the same target before the investigated run (the "last green" build). */
+export interface LastGreen {
+  runId: string;
+  /** When that run finished, epoch milliseconds. */
+  finishedAtMs: number;
+}
+
+/**
+ * Evidence-only time-travel probes (SPEC 10, `delta_vs_last_green`): row count now against the last green
+ * run, for each candidate that has a historical version. Never used in ranking (rank.ts skips them).
+ * - DuckDB (local stand-in): the runner snapshots mart tables to Parquet after every green run, so only
+ *   mart table materializations qualify.
+ * - BigQuery: `FOR SYSTEM_TIME AS OF` works on tables, not views, so sources and table materializations
+ *   qualify; the runner clamps the timestamp to the 7-day window and inlines it as a constant.
+ * The Worker sends only the last green run id and time; the runner resolves the snapshot path or timestamp.
+ */
+export function planTimeTravelProbes(
+  candidates: TraceCandidate[],
+  relations: RelationsMap,
+  lastGreen: LastGreen | null,
+): ProbeRequest[] {
+  if (!lastGreen) return [];
+  const out: ProbeRequest[] = [];
+  for (const node of [...new Set(candidates.map((c) => c.node))].sort()) {
+    const rel = relations.nodes[node];
+    if (!rel) continue;
+    const isTable = rel.kind === 'model' && (rel.materialization === 'table' || rel.materialization === 'incremental');
+    const eligible =
+      relations.dialect === 'bigquery' ? rel.kind === 'source' || isTable : isTable && rel.schema === 'marts';
+    if (!eligible) continue;
+    out.push(
+      req('delta_vs_last_green', node, [], {
+        lastGreenRunId: lastGreen.runId,
+        lastGreenFinishedAtMs: lastGreen.finishedAtMs,
+      }),
+    );
+  }
+  return out;
+}

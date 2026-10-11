@@ -79,6 +79,65 @@ describe('InvestigationWorkflow', () => {
     expect((JSON.parse(row!.ranked_json) as unknown[]).length).toBeGreaterThan(0);
   });
 
+  it('adds evidence-only time-travel probes against the last green run of the same target', async () => {
+    const green = 'run_green_1';
+    const earlier = new Date(Date.now() - 3_600_000).toISOString();
+    await baseEnv.DB.prepare(
+      `INSERT INTO runs (run_id, target, seed, scenario, status, created_at, finished_at) VALUES (?, 'duckdb', 101, NULL, 'passed', ?, ?)`,
+    )
+      .bind(green, earlier, earlier)
+      .run();
+    // A passed BigQuery run is newer but has another target, so it is not the baseline for a DuckDB run.
+    await baseEnv.DB.prepare(
+      `INSERT INTO runs (run_id, target, seed, scenario, status, created_at, finished_at) VALUES ('run_green_bq', 'bigquery', 101, NULL, 'passed', ?, ?)`,
+    )
+      .bind(new Date(Date.now() - 60_000).toISOString(), new Date(Date.now() - 60_000).toISOString())
+      .run();
+    const runId = 'run_inv_4';
+    await seedRun(runId);
+    const ids = await investigationIds(runId, 'checks');
+    const probeKey = `runs/${runId}/probe_results/job_${ids.incidentId}_diag.json`;
+    const delta = {
+      probeId: 'delta_vs_last_green:model.datatrust.fct_hires:',
+      probe: 'delta_vs_last_green',
+      node: 'model.datatrust.fct_hires',
+      columns: [],
+      metric: 'rowcount_vs_last_green',
+      value: 1.04,
+      anomaly: 0,
+      sql: ['select 1'],
+      dialect: 'duckdb',
+      status: 'ok',
+      sampleKeys: [],
+      details: { n_rows_now: 374, n_rows_then: 360 },
+    };
+    await baseEnv.ARTIFACTS.put(probeKey, JSON.stringify([...s01.probeResults, delta]));
+    await using instance = await introspectWorkflowInstance(baseEnv.INVESTIGATION, ids.instanceId);
+    await instance.modify(async (m) => {
+      await m.mockEvent({
+        type: 'diagnostics-complete',
+        payload: { jobId: `job_${ids.incidentId}_diag`, status: 'completed', probeResultsKey: probeKey },
+      });
+    });
+    await baseEnv.INVESTIGATION.create({ id: ids.instanceId, params: { runId, incidentId: ids.incidentId, trigger: 'checks' } });
+    await instance.waitForStatus('complete');
+
+    const job = await getJob(baseEnv.DB, `job_${ids.incidentId}_diag`);
+    const payload = JSON.parse(job!.payload_json) as { probes: Array<{ probe: string; node: string; params: Record<string, unknown> }> };
+    const tt = payload.probes.filter((p) => p.probe === 'delta_vs_last_green');
+    expect(tt.map((p) => p.node)).toContain('model.datatrust.fct_hires');
+    expect(tt.every((p) => p.params['lastGreenRunId'] === green && typeof p.params['lastGreenFinishedAtMs'] === 'number')).toBe(true);
+    // Only mart tables have local snapshots; sources and views get no time-travel probe on DuckDB.
+    expect(tt.some((p) => p.node.startsWith('source.') || p.node.includes('.stg_'))).toBe(false);
+
+    const row = await getIncident(baseEnv.DB, ids.incidentId);
+    const provenance = JSON.parse(row!.provenance_json) as { timeTravel: { lastGreenRunId: string; nodes: Array<Record<string, unknown>> } };
+    expect(provenance.timeTravel.lastGreenRunId).toBe(green);
+    expect(provenance.timeTravel.nodes).toEqual([{ node: 'model.datatrust.fct_hires', rowsNow: 374, rowsThen: 360 }]);
+    // Evidence only: the ranking is unchanged by the time-travel result.
+    expect((JSON.parse(row!.ranked_json) as Array<{ node: string }>)[0]!.node).toBe('source.datatrust.raw.hires');
+  });
+
   it('investigates a failed metric reported as an alert', async () => {
     const runId = 'run_inv_3';
     await seedRun(runId);

@@ -8,8 +8,10 @@ import {
   type CheckResult,
   findUnsanitized,
   FROZEN_WEIGHTS,
+  type LastGreen,
   type LineageGraph,
   planProbes,
+  planTimeTravelProbes,
   type ProbeResult,
   type RankedCandidate,
   rankAll,
@@ -27,6 +29,7 @@ import {
   baselineChecksums,
   getRun,
   insertJob,
+  lastGreenRun,
   listCheckResults,
   loadLineageGraph,
   setRunIncident,
@@ -53,6 +56,7 @@ interface Context {
   graph: LineageGraph;
   relations: RelationsMap;
   baseline: Record<string, string | null> | null;
+  lastGreen: LastGreen | null;
 }
 
 export function alertAsCheck(alert: Alert): CheckResult {
@@ -90,12 +94,17 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
         graph: await loadLineageGraph(db, runId),
         relations: await readRelations(env, runId),
         baseline: await baselineChecksums(db, runId),
+        lastGreen: await lastGreenRun(db, runId),
       };
     }, RETRY_LOAD);
 
     const trace = await jsonStep(step, 'trace-lineage', async () => traceUpstream(ctx.checks, ctx.graph, 'column'));
 
-    const probes = await jsonStep(step, 'plan-probes', async () => planProbes(trace.candidates, ctx.graph, ctx.relations));
+    // Ranking probes, plus evidence-only time-travel probes against the last green run (never ranked).
+    const probes = await jsonStep(step, 'plan-probes', async () => [
+      ...planProbes(trace.candidates, ctx.graph, ctx.relations),
+      ...planTimeTravelProbes(trace.candidates, ctx.relations, ctx.lastGreen ?? null),
+    ]);
 
     const diagJobId = await jsonStep(step, 'request-diagnostics', async () =>
       insertJob(db, {
@@ -144,6 +153,13 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
           missing: results.filter((r) => r.status === 'missing').length,
           diagnostics: diag.status === 'completed' ? 'completed' : (diag.error ?? 'failed'),
         },
+        // Which nodes have time-travel evidence against the last green run (SPEC 10); evidence only.
+        timeTravel: {
+          lastGreenRunId: ctx.lastGreen?.runId ?? null,
+          nodes: results
+            .filter((r) => r.probe === 'delta_vs_last_green' && r.status === 'ok')
+            .map((r) => ({ node: r.node, rowsNow: r.details['n_rows_now'] ?? null, rowsThen: r.details['n_rows_then'] ?? null })),
+        },
         probeResultsKey: diag.probeResultsKey ?? null,
       };
     });
@@ -181,6 +197,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
         lakeSink: createSink(env).kind === 'basin-pipelines' ? 'basin-pipelines' : 'r2-ndjson (local stand-in for Basin Pipelines)',
         weights: FROZEN_WEIGHTS,
         probes: ranking.probeStatus,
+        timeTravel: ranking.timeTravel,
         candidateCount: ranking.candidateCount,
       };
       const failing = ctx.checks.filter((c) => c.status === 'fail' || c.status === 'error');
