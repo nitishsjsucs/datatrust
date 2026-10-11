@@ -96,3 +96,19 @@ def test_gate():
         ]
     )
     assert any("clean false positives" in p for p in gate(clean_fp, base))
+
+
+def test_summary_violation_rules():
+    from datatrust.bench.summaries import violation_rule
+
+    assert (
+        violation_rule('impact: contains the number "5" outside a placeholder')
+        == "number outside a placeholder"
+    )
+    assert violation_rule('evidenceRefs: unknown key "x"') == "unknown evidence ref"
+    assert violation_rule("reasoning[0]: unknown placeholder {ev:a.b}") == "unknown placeholder"
+    assert violation_rule('suspectedRootCause.node "m" is not one of the top five candidates') == (
+        "root cause not in top five"
+    )
+    assert violation_rule("schema: title Required") == "schema"
+    assert violation_rule("provider error: TypeError") == "provider error"

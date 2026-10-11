@@ -20,6 +20,24 @@ from datatrust.bench.pii import find_leaks, pii_strings
 from datatrust.bench.report import git_commit, versions
 from datatrust.rca_cli import rca
 
+RULES = (
+    ("schema:", "schema"),
+    ("unknown placeholder", "unknown placeholder"),
+    ("outside a placeholder", "number outside a placeholder"),
+    ("email address", "email"),
+    ("phone number", "phone"),
+    ("untokenized identifier", "untokenized identifier"),
+    ("not one of the top five", "root cause not in top five"),
+    ("evidenceRefs: unknown key", "unknown evidence ref"),
+    ("diagnosticSqlIds: unknown id", "unknown diagnostic SQL id"),
+    ("provider error", "provider error"),
+)
+
+
+def violation_rule(v: str) -> str:
+    """The grounding rule (SPEC 13.7) a violation message belongs to."""
+    return next((name for needle, name in RULES if needle in v), "other")
+
 
 def evaluate_summaries(
     seed: int, provider: str, *, llm_url: str, workers: int = 4, work_dir: Path | None = None
@@ -60,10 +78,7 @@ def evaluate_summaries(
         )
     n = len(rows)
     accepted = [x for x in rows if not x["fallback"]]
-    rules = Counter()
-    for x in rows:
-        for v in x["violations"]:
-            rules[v.split(":", 1)[1].strip().split(" ")[0] if ":" in v else v] += 1
+    rules = Counter(violation_rule(v) for x in rows for v in x["violations"])
     return {
         "meta": {
             "date": dt.date.today().isoformat(),
