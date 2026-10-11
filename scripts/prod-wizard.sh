@@ -402,7 +402,7 @@ fi
 pause
 
 stage "Check everything, then the production smoke test"
-run_cmd npm run doctor -- --prod
+run_cmd npm run doctor -- --prod --adc
 say "When the doctor shows nothing missing, the smoke runs one clean and five fault runs on BigQuery"
 say "through the deployed Queues and Workflows, with Workers AI summaries inside the Free allowance."
 if confirm "Run \`npm run prod:smoke\` now?"; then

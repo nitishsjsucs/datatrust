@@ -582,7 +582,8 @@ def cloudflare_checks() -> list[Check]:
                 "Basin Catalog REST (pyiceberg)",
                 f"skipped: {', '.join(basin)} not set",
                 "setup:prod writes BASIN_CATALOG_URI and BASIN_WAREHOUSE when it enables the catalog (step 3); "
-                "BASIN_CATALOG_TOKEN is an R2 API token (README Cloudflare step 9)",
+                "BASIN_CATALOG_TOKEN is the bucket-scoped token of docs/basin-catalog-token.md "
+                "(README Cloudflare step 9)",
             )
         )
         return out
@@ -812,7 +813,15 @@ def project_role_violations(policy: dict[str, Any], project: str) -> list[str]:
     return sorted(bad)
 
 
-def gcp_checks() -> list[Check]:
+# Without --adc the doctor never loads application default credentials: the ADC quota project and the
+# governance checks (Data Catalog and data policy clients) need google-auth to read the ADC file in your home
+# directory, which builder sessions must not do (2026-10-11 review). gcloud and bq read their own logins.
+ADC_FLAG_FIX = (
+    "npm run doctor -- --prod --adc (loads your application default credentials through google-auth)"
+)
+
+
+def gcp_checks(adc: bool = False) -> list[Check]:
     out: list[Check] = []
     gcloud, bq = shutil.which("gcloud"), shutil.which("bq")
     if not gcloud or not bq:
@@ -840,8 +849,12 @@ def gcp_checks() -> list[Check]:
         if account and "unset" not in account
         else Check("missing", "gcloud active account", "none", "gcloud auth login")
     )
-    present, quota, detail = adc_quota_project()
-    if not present:
+    present, quota, detail = adc_quota_project() if adc else (None, None, "")
+    if present is None:
+        out.append(
+            Check("warn", "ADC with quota project", "not checked without --adc", ADC_FLAG_FIX, required=False)
+        )
+    elif not present:
         out.append(
             Check(
                 "missing", "application default credentials", detail, "gcloud auth application-default login"
@@ -996,7 +1009,13 @@ def gcp_checks() -> list[Check]:
                 required=False,
             )
         )
-    if "datacatalog.googleapis.com" in enabled and "bigquerydatapolicy.googleapis.com" in enabled:
+    if "datacatalog.googleapis.com" in enabled and "bigquerydatapolicy.googleapis.com" in enabled and not adc:
+        out.append(
+            Check(
+                "warn", "policy tags and masking", "not checked without --adc", ADC_FLAG_FIX, required=False
+            )
+        )
+    elif "datacatalog.googleapis.com" in enabled and "bigquerydatapolicy.googleapis.com" in enabled:
         out.extend(governance_checks(project, os.environ.get("DATATRUST_BQ_LOCATION", "US")))
     else:
         out.append(
@@ -1024,7 +1043,7 @@ def gcp_checks() -> list[Check]:
     return out
 
 
-def main(mode: str = "local") -> int:
+def main(mode: str = "local", adc: bool = False) -> int:
     from datatrust.prod.settings import load_env_prod
 
     groups: list[tuple[str, Callable[[], list[Check]]]] = [("Local", local_checks)]
@@ -1033,7 +1052,7 @@ def main(mode: str = "local") -> int:
         groups = [
             ("Production: .env.prod", env_checks),
             ("Production: Cloudflare", cloudflare_checks),
-            ("Production: Google Cloud", gcp_checks),
+            ("Production: Google Cloud", lambda: gcp_checks(adc)),
         ]
     missing = 0
     for title, fn in groups:

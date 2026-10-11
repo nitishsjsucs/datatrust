@@ -346,4 +346,4 @@ if ((DO_GCP)); then
   run uv run datatrust prod governance verify
 fi
 
-say "Done. Check everything with: npm run doctor -- --prod"
+say "Done. Check everything with: npm run doctor -- --prod --adc"

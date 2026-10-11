@@ -5,11 +5,13 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 MODE=local
+ADC=()
 for arg in "$@"; do
   case "$arg" in
     --local) MODE=local ;;
     --prod) MODE=prod ;;
-    *) echo "usage: npm run doctor [-- --local|--prod]" >&2; exit 2 ;;
+    --adc) ADC=(--adc) ;; # also load application default credentials (ADC quota project, policy tags)
+    *) echo "usage: npm run doctor [-- --local|--prod [--adc]]" >&2; exit 2 ;;
   esac
 done
 missing=0
@@ -33,4 +35,4 @@ if [[ ! -d .venv ]]; then
   echo "== $missing required item(s) missing"
   exit 1
 fi
-exec uv run --locked datatrust doctor "--$MODE"
+exec uv run --locked datatrust doctor "--$MODE" ${ADC[@]+"${ADC[@]}"}

@@ -386,3 +386,27 @@ def test_basin_catalog_token_is_scoped_to_the_lake_bucket():
     doc = (root / "docs" / "basin-catalog-token.md").read_text()
     assert "_default_datatrust-lake" in doc
     assert "d229766a2f7f4d299f20eaa8c9b1fde9" in doc and "2efd5506f9c8494dacb1fa10a3e7d5b6" in doc
+
+
+def test_doctor_loads_application_default_credentials_only_with_adc(monkeypatch):
+    """Builder sessions must not read credential files outside the repo; google-auth reads the ADC file from
+    the home directory, so the doctor does that only when asked with --adc (2026-10-11 review)."""
+    _fake_gcloud(
+        monkeypatch,
+        apis=("bigquery.googleapis.com", "datacatalog.googleapis.com", "bigquerydatapolicy.googleapis.com"),
+    )
+
+    def forbidden(*_a, **_k):
+        raise AssertionError("loaded application default credentials without --adc")
+
+    monkeypatch.setattr(doctor, "adc_quota_project", forbidden)
+    monkeypatch.setattr(doctor, "governance_checks", forbidden)
+    checks = {c.name: c for c in doctor.gcp_checks()}
+    for name in ("ADC with quota project", "policy tags and masking"):
+        assert checks[name].status == "warn" and not checks[name].required and "--adc" in checks[name].fix
+    monkeypatch.setattr(doctor, "adc_quota_project", lambda: (True, "shared-1", "credentials"))
+    monkeypatch.setattr(doctor, "governance_checks", lambda project, location: [doctor.Check("ok", "tags")])
+    checks = {c.name: c for c in doctor.gcp_checks(adc=True)}
+    assert checks["ADC with quota project"].status == "ok" and checks["tags"].status == "ok"
+    for script in ("prod-wizard.sh", "setup-prod.sh"):
+        assert "doctor -- --prod --adc" in (config.REPO_ROOT / "scripts" / script).read_text()

@@ -491,7 +491,7 @@ def _cmd_prod(args: argparse.Namespace) -> int:
 def _cmd_doctor(args: argparse.Namespace) -> int:
     from datatrust.doctor import main as doctor_main
 
-    return doctor_main("prod" if args.prod else "local")
+    return doctor_main("prod" if args.prod else "local", adc=args.adc)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -659,6 +659,13 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--local", action="store_true", help="local and CI prerequisites (default)")
     mode.add_argument(
         "--prod", action="store_true", help="Cloudflare and Google Cloud production prerequisites"
+    )
+    p.add_argument(
+        "--adc",
+        action="store_true",
+        help="with --prod: also check the ADC quota project and the policy tags, which loads your "
+        "application default credentials through google-auth (off by default; builder sessions never "
+        "pass it)",
     )
     p.set_defaults(func=_cmd_doctor)
 
