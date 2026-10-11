@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 18 of 19 (core) done: `feat(ops): idempotent setup:prod and doctor`.
+All 19 core commits done (plus extras 9b and 15b): last is `docs: final benchmark results and README status`. Below the core cut line, the stretch commits 20-23 are not started.
 
 ## Done
 
@@ -28,12 +28,17 @@ Commit 18 of 19 (core) done: `feat(ops): idempotent setup:prod and doctor`.
 - 16. `schemas/lake/audit_event.stream.json` (Basin Pipelines stream schema), Worker `sinks/event-sink.ts` (`PipelinesSink` on the EVENTS binding, `R2NdjsonSink` locally, schema validation before every send because Pipelines drops invalid records silently), `check_result` events from the dt-check-results consumer, `run_completed` from ValidationRunWorkflow finalize, `incident_created` from InvestigationWorkflow persist, `/api/dev/lake-export` (runner, local only), Python `lake/{schema,iceberg_local,iceberg_basin,sync}.py` (SqlCatalog on SQLite with an absolute `file://` warehouse; RestCatalog reader for Basin Catalog), `datatrust lake sync|query`, `event-sink.test.ts`, `test_lake_local.py` (append, read, snapshot time travel, cwd independence). Verified by hand on 2026-10-10: one S03 run through `wrangler dev`, then `datatrust lake sync` appended 42 events (40 check_result, 1 run_completed, 1 incident_created) to the local Iceberg table; stack stopped, ports free.
 - 17. `apps/worker/wrangler.prod.template.jsonc` (AI, Pipelines, `workers_dev: true`, `preview_urls: false`, no cron, production vars, `secrets.required`), `scripts/render-prod-config.mjs` (fail-closed `https://unset.cloudflareaccess.com` default; `--placeholders` for CI), CI dry-run deploy of the rendered template; Python `prod/settings.py` (.env.prod, placeholder refusal), `warehouse/bigquery_wh.py` (impersonated `datatrust-prober`, dry run then capped query, parameterized information schema), `load/bigquery_loader.py` (Parquet loads, type assertions), `prod/governance.py` (taxonomy, three policy tags, SHA256 / DATE_YEAR_MASK / ALWAYS_NULL data policies, Fine-Grained Reader and Masked Reader IAM with read-modify-write, dataset readers, `.prod/dbt_vars.yml`, analyst verification with 10 s doubling retries for 10 minutes), `prod/validate.py` (steps a-f), `prod/smoke.py`, `dbt/dialect_check.py` (shared banned-construct check), runner BigQuery build and diagnostics paths, `datatrust prod governance apply|verify|validate|smoke|reset`, `npm run prod:validate|prod:smoke`, `test_prod_offline.py` (11 tests with fakes). `datatrust prod validate` on this machine stops at step a and names the missing `DATATRUST_GCP_PROJECT`, as designed. Nothing here has run against Google Cloud or Cloudflare.
 - 18. `scripts/setup-prod.sh` (SPEC 18.1 steps P1-P3 and 1-21: idempotent existence checks with JSON parsing, `wr()` wrapper that strips env credentials, `--dry-run`, `--cloudflare-only`, `--gcp-only`, `--use-env-token`, `.prod/state.json`, catalog text parse with a paste fallback, fail-closed first deploy with `--secrets-file`, gcloud/bq steps, governance, validate, real build, verify), `scripts/doctor.sh` + `datatrust doctor` (local, `.env.prod`, Cloudflare and Google Cloud checks with `[ok]`/`[missing]`/`[warn]` and the exact fix), `npm run doctor|setup:prod|deploy:prod`, Makefile targets (setup, test, bench, bench-e2e, doctor, bootstrap, dev-up, dev-down), README production setup (SPEC 21 checklists), `test_ops_scripts.py`. On this machine: `npm run doctor` all ok; `npm run doctor -- --prod` lists the 9 missing `.env.prod` values, wrangler login and the missing gcloud CLI; `setup:prod --cloudflare-only --dry-run` stops at "wrangler is not logged in".
+- 19. Final check of results: the test-seed command rerun at commit 019714f (2026-10-10, 305 s with the machine shared by other builds) reproduced all 105 per-trial rankings and the headline numbers exactly, so `results/bench-2026-10-10-offline.*` stand; the rerun's report is committed as `results/bench-2026-10-10-offline-recheck.md`. README: status line, status table (every row with its execution label), Results (offline, recheck, e2e, honest reading), documented frozen weights.
 
 ## Next
 
-- 19. `docs: final benchmark results and README status` (refresh `results/` only if anything changed since commit 10; README Results and status table with commands and dates).
+Core v1 is complete locally. What remains:
 
-## Check status (at this commit, 2026-10-10, macOS)
+- Production execution, which needs Nitish's accounts (README, production setup): `npm run setup:prod -- --cloudflare-only` (twice, around the Access steps), `npm run setup:prod -- --gcp-only`, `npm run doctor -- --prod`, `npm run prod:smoke`. Only the smoke may move README status labels to "executed in production".
+- First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e); not yet observed.
+- Stretch (SPEC 23, below the cut line): 20 `feat(web): incident dashboard`, 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B`, 22 `ci: nightly full five-seed benchmark`, 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation`.
+
+## Check status (at the final commit, 2026-10-10, macOS; CI not yet run because nothing is pushed)
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 49 passed

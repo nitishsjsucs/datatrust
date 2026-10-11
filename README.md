@@ -14,10 +14,10 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 
 | Component | Status |
 |---|---|
-| Synthetic data generator (exact, seeded counts) | implemented; tests pass locally (`uv run pytest`), CI configured |
-| dbt models, 22 enforced contracts, 40 checks | implemented: 29 models, 22 enforced contracts and 40 checks build and pass on clean seeds on DuckDB (stand-in), tested locally; CI configured to run them under `TZ=UTC` and `TZ=America/Los_Angeles` |
-| OpenLineage capture and column-level lineage graph | implemented: `dbt-ol build` (openlineage-dbt 1.53.0, file transport) on DuckDB (stand-in), TypeScript graph and upstream closure; tested locally |
-| Diagnostic probes, root-cause ranker, baselines | implemented: 14 read-only probe templates (DuckDB executed, BigQuery rendered only), TypeScript trace, planner, ranker, ablations, naive baselines and HMAC sanitizer; tested locally |
+| Synthetic data generator (exact, seeded counts) | executed locally, 2026-10-10 (`uv run pytest`); CI workflow configured, runs once the repo is pushed |
+| dbt models, 22 enforced contracts, 40 checks | executed locally on DuckDB (stand-in), 2026-10-10: 29 models, 22 contracts, 40 checks pass on clean seeds 1-3, 7, 42, 101-105; CI configured to repeat this under `TZ=UTC` and `TZ=America/Los_Angeles` |
+| OpenLineage capture and column-level lineage graph | executed locally on DuckDB (stand-in): `dbt-ol build` (openlineage-dbt 1.53.0) and the TypeScript graph |
+| Diagnostic probes, root-cause ranker, baselines | executed locally on DuckDB (stand-in): 14 read-only probe templates, trace, planner, ranker, ablations, baselines, HMAC sanitizer. BigQuery probe SQL rendered and parsed only |
 | Fault-injection benchmark (20 scenarios) | executed locally on DuckDB (stand-in), 2026-10-10, `uv run datatrust bench --seeds 101-105` (see Results); CI gate on seed 101 configured |
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local` and `@cloudflare/vitest-plugin`) only; 2026-10-10 `npm run bench:e2e` (seed 101, 20 scenarios) |
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
@@ -64,7 +64,7 @@ When checks fail, the TypeScript RCA core (`packages/rca`, the same code in the 
 1. **Trace.** From each failing check's tested columns, walk upstream through OpenLineage column lineage (falling back to dataset edges for columns the SQL parser could not trace). Candidates are the union of the closures.
 2. **Plan.** Pick diagnostic probes from each candidate's dbt meta (grain, unique keys, foreign keys, intervals, time zones, FX, recomputable columns, casts) and probe the candidates' parents too. Planning is metadata-driven and the same for every incident.
 3. **Probe.** The Python runner renders each probe from its own SQL templates (the Worker never sends SQL), checks it with a sqlglot read-only guard, runs it on a read-only connection and returns aggregates plus at most five sample keys, which `rca sanitize` turns into HMAC tokens (pseudonymization) before upload.
-4. **Rank.** `score = 0.40 coverage + 0.35 own_anomaly + 0.15 changed - 0.10 unexplained_pass` (initial weights; ADR-0004 freezes the tuned ones). `own_anomaly` subtracts the same probe's anomaly on the lineage-mapped parent columns, so the first anomalous node along the column path wins; row-multiplicity anomalies are discounted against any dataset parent.
+4. **Rank.** `score = 0.40 coverage + 0.30 own_anomaly + 0.15 changed - 0.10 unexplained_pass`, with weights tuned on dev seeds 1-3 only and frozen before the test seeds ran (ADR-0004, `packages/rca/src/rca/weights.ts`). `own_anomaly` subtracts the same probe's anomaly on the lineage-mapped parent columns, so the first anomalous node along the column path wins; row-multiplicity anomalies are discounted against any dataset parent.
 
 Ablations (`coverage_only`, `dataset_lineage_only`, `no_probes`, `no_change_signal`) and naive baselines (`change_only`, `nearest_upstream_source`, `random_in_closure`) are computed from the same probe results.
 
@@ -276,7 +276,7 @@ Command (test seeds 101-105, weights frozen beforehand from dev seeds 1-3, ADR-0
 uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json
 ```
 
-Full report: [`results/bench-2026-10-10-offline.md`](results/bench-2026-10-10-offline.md) (data in the matching `.json`; gate numbers in `results/baseline.json`).
+Full report: [`results/bench-2026-10-10-offline.md`](results/bench-2026-10-10-offline.md) (data in the matching `.json`; gate numbers in `results/baseline.json`). The same command rerun at commit `019714f` on 2026-10-10 reproduced every one of the 105 per-trial rankings exactly ([`results/bench-2026-10-10-offline-recheck.md`](results/bench-2026-10-10-offline-recheck.md)).
 
 | Metric (100 injected trials: 20 scenarios x 5 seeds) | Measured | Wilson 95% | Scenario-clustered bootstrap 95% |
 |---|---|---|---|
