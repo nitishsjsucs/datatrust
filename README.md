@@ -295,6 +295,8 @@ Full report: [`results/bench-2026-10-10-offline.md`](results/bench-2026-10-10-of
 
 End-to-end check through the local Worker (Miniflare via `wrangler dev --local`, which stands in for Cloudflare Workers, Queues, Workflows, D1 and R2): `npm run bench:e2e` on 2026-10-10 sent all 20 seed-101 scenarios through `POST /api/runs`, ValidationRunWorkflow, the runner, the queues and InvestigationWorkflow. 20/20 detected, ground truth in the incident's top 3 in 20/20, rank 1 in 18/20, 0 clean false positives, and every top-3 list identical to the offline mode ([`results/bench-2026-10-10-e2e.md`](results/bench-2026-10-10-e2e.md)).
 
+A nightly GitHub Actions job (`.github/workflows/nightly.yml`) reruns the five-seed benchmark and fails if clean false positives appear or detection or top-3 drop more than 0.05 below `results/baseline.json`.
+
 How to read this honestly: the scenarios, checks and probes were written by the same author, and the weights were tuned on dev seeds over the same 20 scenarios, so the test seeds hold out values and severities, not defect types. The benchmark is in-distribution; it shows the mechanism works on these defect classes, not that it generalizes to unseen ones.
 
 ## License
