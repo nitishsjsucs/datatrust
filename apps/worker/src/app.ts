@@ -13,6 +13,7 @@ import { runs } from './api/runs';
 import { authenticate } from './auth/access';
 import { misconfiguration } from './env';
 import type { HonoEnv } from './hono';
+import { warmedUp } from './warmup';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -29,7 +30,8 @@ export function createApp(): Hono<HonoEnv> {
     await next();
   });
 
-  app.get('/healthz', (c) => c.json({ ok: true, environment: c.env.ENVIRONMENT, version: c.env.VERSION }));
+  // `warm`: whether the start-up warm-up (warmup.ts) had settled when this request ran; no data.
+  app.get('/healthz', (c) => c.json({ ok: true, environment: c.env.ENVIRONMENT, version: c.env.VERSION, warm: warmedUp() }));
 
   // Every /api route requires a verified Access JWT (fail closed, no detail on failure).
   app.use('/api/*', async (c, next) => {

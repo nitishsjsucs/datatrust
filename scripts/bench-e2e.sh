@@ -10,6 +10,13 @@ trap cleanup EXIT INT TERM
 cd "$ROOT"
 [[ -f packages/rca/dist/cli.mjs ]] || npm run -s build -w @datatrust/rca
 bash scripts/dev-up.sh
+# SPEC risk 23: the start-up warm-up, including its asynchronous Access check, must have settled before the
+# Worker's first request under workerd, or its CPU would land in that request's 10 ms.
+if ! grep -q '"warm":true' .dev/logs/first-healthz.json; then
+  echo "the first /healthz after start-up did not report warm: true (start-up warm-up not settled first)" >&2
+  cat .dev/logs/first-healthz.json >&2 || true
+  exit 1
+fi
 export DATATRUST_API_URL="http://127.0.0.1:8792"
 if [[ "${1:-}" == "--pytest" ]]; then
   uv run pytest -m e2e

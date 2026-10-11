@@ -12,7 +12,17 @@ import { NEURON_RATES, PAID_ONLY_MODELS } from '../src/llm/budget';
 import { QUEUES } from '../src/queues/router';
 import { checkResultsMessage } from '../src/queues/check-results';
 import { CompleteSchema } from '../src/schemas';
-import { warmAccess, warmUp, warmUpCheck, warmUpEvent, warmUpProbe, warmUpRelations, warmUpToken } from '../src/warmup';
+import {
+  warmAccess,
+  warmedUp,
+  warmUp,
+  warmUpCheck,
+  warmUpEvent,
+  warmUpProbe,
+  warmUpRelations,
+  warmUpSettled,
+  warmUpToken,
+} from '../src/warmup';
 import { buildLineageGraph, findUnsanitized, RunEventSchema } from '@datatrust/rca';
 import { makeKeys, testEnv } from './helpers/keys';
 
@@ -161,5 +171,11 @@ describe('start-up warm-up (Free plan CPU per request)', () => {
     const env = testEnv(await makeKeys());
     const req = new Request('http://worker/api/whoami', { headers: { 'Cf-Access-Jwt-Assertion': warmUpToken } });
     expect(await authenticate(req, env)).toEqual({ ok: false, status: 401 });
+  });
+
+  it('reports when the asynchronous warm-up has settled (/healthz `warm`)', async () => {
+    warmUp();
+    expect(await warmUpSettled()).toBe(true);
+    expect(warmedUp()).toBe(true);
   });
 });

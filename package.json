@@ -28,6 +28,7 @@
     "dev:reset": "rm -rf apps/worker/.wrangler/state .data",
     "bench:e2e": "bash scripts/bench-e2e.sh",
     "budget:cpu": "node scripts/cpu-budget.mjs",
+    "budget:cpu:margin": "node scripts/cpu-budget.mjs --gate 5",
     "lake:sync": "uv run datatrust lake sync",
     "prod:validate": "uv run datatrust prod validate",
     "prod:smoke": "uv run datatrust prod smoke",

@@ -89,7 +89,12 @@ export const warmUpToken =
 /** Inside the token's one-hour validity (issued 2026-01-01T00:00:00Z), so the claim checks run too. */
 const WARM_UP_NOW = new Date(1767225600 * 1000 + 60_000);
 
-/** jose verification and the role lookup on the embedded token; resolves true when it verified. */
+/**
+ * jose verification and the role lookup on the embedded token; resolves true when it verified. A local key
+ * set: production's remote set (createRemoteJWKSet) cannot be warmed at start-up, because its fetch timeout
+ * (AbortSignal.timeout) is a timer, which workerd refuses in global scope (seen under `wrangler dev` on
+ * 2026-10-11: the first /healthz then reported warm: false). The CPU harness measures that cold path.
+ */
 export function warmAccess(): Promise<boolean> {
   return jwtVerify(warmUpToken, createLocalJWKSet(warmUpJwks), {
     issuer: 'https://warmup.invalid',
@@ -103,6 +108,23 @@ export function warmAccess(): Promise<boolean> {
     },
     () => false,
   );
+}
+
+/**
+ * The asynchronous part of the warm-up (jose's verification, WebCrypto). `warmedUp()` turns true once it has
+ * resolved; /healthz reports it, so the first health check after start-up shows whether the warm-up settled
+ * before that request's handler ran (scripts/dev-up.sh records it and bench-e2e asserts it under workerd).
+ */
+let accessWarm: Promise<boolean> = Promise.resolve(false);
+let accessWarmDone = false;
+
+export function warmedUp(): boolean {
+  return accessWarmDone;
+}
+
+/** Resolves when the asynchronous warm-up has settled (the CPU harness counts it as start-up). */
+export function warmUpSettled(): Promise<boolean> {
+  return accessWarm;
 }
 
 /** The Hono request pipeline (context, middleware, JSON response) for an unauthenticated health check. */
@@ -133,8 +155,12 @@ export function warmUp(router?: Pick<Hono['router'], 'match'>, app?: Pick<Hono<H
     router?.match('GET', '/healthz');
     router?.match('POST', '/api/v1/lineage');
     if (app) warmRequest(app);
-    // Asynchronous (WebCrypto); in workerd it settles during start-up, before the first request.
-    void warmAccess();
+    // Asynchronous (WebCrypto); in workerd it settles during start-up, before the first request (checked by
+    // the first /healthz of scripts/dev-up.sh, asserted in scripts/bench-e2e.sh).
+    accessWarm = warmAccess().then((ok) => {
+      accessWarmDone = ok;
+      return ok;
+    });
   } catch {
     // A warm-up problem must never stop the Worker from starting.
   }

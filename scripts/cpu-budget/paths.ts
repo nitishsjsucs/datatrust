@@ -23,8 +23,12 @@ import fixture from '../../apps/worker/test/fixtures/investigation.s01.seed101.j
 import { createApp } from '../../apps/worker/src/app';
 import type { AppEnv } from '../../apps/worker/src/env';
 import { queue } from '../../apps/worker/src/queues/router';
+import { ulid } from '../../apps/worker/src/ids';
 import { auditEvent, auditEventId } from '../../apps/worker/src/sinks/event-sink';
-import { warmUp } from '../../apps/worker/src/warmup';
+import { warmUp, warmUpSettled } from '../../apps/worker/src/warmup';
+
+/** The harness awaits this before it reads the start-up CPU, so the asynchronous warm-up counts as start-up. */
+export { warmUpSettled };
 
 // As in apps/worker/src/index.ts: one app per isolate, warmed at start-up (module scope, not measured).
 const app = createApp();
@@ -49,8 +53,15 @@ class FakeR2 {
     const v = this.objects.get(key);
     return v === undefined ? null : { text: async () => v, json: async () => JSON.parse(v), size: v.length };
   }
-  async list() {
-    return { objects: [], truncated: false };
+  async list(opts: { prefix?: string; limit?: number; startAfter?: string } = {}) {
+    const keys = [...this.objects.keys()]
+      .filter((k) => k.startsWith(opts.prefix ?? '') && (!opts.startAfter || k > opts.startAfter))
+      .sort()
+      .slice(0, opts.limit ?? 1000);
+    return { objects: keys.map((key) => ({ key, size: this.objects.get(key)!.length })), truncated: false };
+  }
+  async delete(keys: string | string[]) {
+    for (const k of Array.isArray(keys) ? keys : [keys]) this.objects.delete(k);
   }
 }
 
@@ -72,15 +83,19 @@ const BUILD_JOB = {
 };
 const DIAG_JOB = { ...BUILD_JOB, job_id: `job_inc_${RUN_ID}_diag`, kind: 'diagnostics', event_type: 'diagnostics-complete' };
 
-/** D1 stand-in: the job lookup returns the leased job; every write succeeds; other reads find nothing. */
-function fakeD1() {
+/**
+ * D1 stand-in: the job lookup returns the leased job; every write succeeds; other reads return what `rows`
+ * gives for their SQL (D1 does the SQL work, including json_extract, so rows arrive in their final shape).
+ */
+function fakeD1(rows: (sql: string) => unknown[] = () => []) {
   let job: unknown = BUILD_JOB;
+  const meta = { changes: 1, rows_written: 1 };
   const statement = (sql: string): D1PreparedStatement => {
     const s = {
       bind: () => s,
-      first: async () => (sql.startsWith('SELECT * FROM jobs') ? job : null),
-      run: async () => ({ success: true, meta: { changes: 1 } }),
-      all: async () => ({ results: [] }),
+      first: async () => (sql.startsWith('SELECT * FROM jobs') ? job : (rows(sql)[0] ?? null)),
+      run: async () => ({ success: true, meta }),
+      all: async () => ({ results: rows(sql) }),
       raw: async () => [],
     };
     return s as unknown as D1PreparedStatement;
@@ -89,14 +104,15 @@ function fakeD1() {
     setJob: (j: unknown) => void (job = j),
     db: {
       prepare: statement,
-      batch: async (stmts: unknown[]) => stmts.map(() => ({ success: true, meta: { changes: 1 } })),
+      batch: async (stmts: unknown[]) => stmts.map(() => ({ success: true, meta })),
       exec: async () => ({ count: 0, duration: 0 }),
     } as unknown as D1Database,
   };
 }
 
 const fakeQueue = () => ({ send: async () => {}, sendBatch: async () => {} }) as unknown as Queue;
-const fakeWorkflow = () => ({ get: async () => ({ sendEvent: async () => {} }) }) as unknown as Workflow;
+const fakeWorkflow = () =>
+  ({ get: async () => ({ sendEvent: async () => {} }), create: async (o: { id: string }) => ({ id: o.id }) }) as unknown as Workflow;
 
 /**
  * Node implements WHATWG Request/Response bodies (undici) and WebCrypto in JavaScript that loads lazily on
@@ -122,26 +138,42 @@ async function warmNodePlatform() {
   await crypto.subtle.sign({ name: 'HMAC' }, await crypto.subtle.importKey('raw', data, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']), data);
 }
 
-async function workerEnv() {
+const CPU_TEAM = 'https://cpu.cloudflareaccess.com';
+
+async function workerEnv(opts: { rows?: (sql: string) => unknown[]; cloudflareAccess?: boolean } = {}) {
   const { publicKey, privateKey } = await generateKeyPair('RS256', { extractable: true });
   const jwk = { ...(await exportJWK(publicKey)), kid: 'cpu', alg: 'RS256', use: 'sig' };
-  const token = await new SignJWT({ common_name: 'cpu-runner.access', sub: '' })
-    .setProtectedHeader({ alg: 'RS256', kid: 'cpu' })
-    .setIssuer('http://cpu/dev-access')
-    .setAudience('datatrust-cpu')
-    .setIssuedAt()
-    .setExpirationTime('1h')
-    .sign(privateKey);
-  const d1 = fakeD1();
+  const issuer = opts.cloudflareAccess ? CPU_TEAM : 'http://cpu/dev-access';
+  const mintFor = (cn: string) =>
+    new SignJWT({ common_name: cn, sub: '' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'cpu' })
+      .setIssuer(issuer)
+      .setAudience('datatrust-cpu')
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(privateKey);
+  const token = await mintFor('cpu-runner.access');
+  const operatorToken = await mintFor('cpu-operator.access');
+  if (opts.cloudflareAccess) {
+    // Production verifies against the team's remote JWKS (createRemoteJWKSet): the first request of an isolate
+    // fetches it. The fetch is I/O, not CPU; parsing and importing the keys is measured.
+    const certs = JSON.stringify({ keys: [jwk] });
+    globalThis.fetch = (async () => new Response(certs, { headers: { 'content-type': 'application/json' } })) as typeof fetch;
+  }
+  const d1 = fakeD1(opts.rows);
   const r2 = new FakeR2();
   const env = {
     ENVIRONMENT: 'local',
-    ACCESS_MODE: 'local-jwks',
+    ACCESS_MODE: opts.cloudflareAccess ? 'cloudflare' : 'local-jwks',
+    ACCESS_TEAM_DOMAIN: opts.cloudflareAccess ? CPU_TEAM : '',
     SUMMARIZER: 'template',
     ACCESS_ISSUER: 'http://cpu/dev-access',
     ACCESS_AUD: 'datatrust-cpu',
-    ACCESS_JWKS_JSON: JSON.stringify({ keys: [jwk] }),
-    ROLE_MAP_JSON: JSON.stringify({ emails: {}, serviceTokens: { 'cpu-runner.access': ['runner'] } }),
+    ACCESS_JWKS_JSON: opts.cloudflareAccess ? '' : JSON.stringify({ keys: [jwk] }),
+    ROLE_MAP_JSON: JSON.stringify({
+      emails: {},
+      serviceTokens: { 'cpu-runner.access': ['runner'], 'cpu-operator.access': ['operator', 'viewer'] },
+    }),
     WORKERS_AI_MODEL: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
     AI_DAILY_NEURON_CAP: '2000',
     LAKE_SETTLE_SECONDS: '120',
@@ -157,10 +189,50 @@ async function workerEnv() {
   } as unknown as AppEnv;
   await r2.put(`runs/${RUN_ID}/relations.json`, JSON.stringify(s01.relations));
   await warmNodePlatform();
-  return { env, r2, d1, token };
+  return { env, r2, d1, token, operatorToken };
 }
 
 const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} } as unknown as ExecutionContext;
+
+function getRequest(path: string, token: string) {
+  return new Request(`http://worker${path}`, { headers: { 'Cf-Access-Jwt-Assertion': token } });
+}
+
+async function expectStatus(res: Response, status: number, what: string) {
+  if (res.status !== status) throw new Error(`${what} answered ${res.status}`);
+  await res.arrayBuffer(); // the response body is serialized inside the measured run, as in workerd
+}
+
+/** One incident row as the list query returns it, from the S01 fixture (the list reads no JSON column). */
+function incidentBriefRows(n: number) {
+  return Array.from({ length: n }, (_, i) => ({
+    incident_id: `inc_${RUN_ID}_checks_${String(i).padStart(8, '0')}`,
+    run_id: RUN_ID,
+    trigger: 'checks',
+    status: 'open',
+    created_at: new Date(Date.UTC(2026, 9, 11, 0, i)).toISOString(),
+    top_candidate: 'source.datatrust.raw.hires',
+    summary_provider: 'workers-ai',
+    summary_fallback: 0,
+  }));
+}
+
+/** The rows loadLineageGraph's one statement returns for the S01 graph (nodes, then edges). */
+function lineageRows() {
+  const g = buildLineageGraph(s01.events, s01.relations);
+  return [
+    ...Object.entries(g.nodes).map(([id, n]) => ({
+      t: 'n',
+      a: id,
+      b: n.kind,
+      c: n.relation,
+      d: n.checksum,
+      e: JSON.stringify({ columns: n.columns, classification: n.classification }),
+    })),
+    ...g.columnEdges.map((e) => ({ t: 'x', a: e.from.node, b: e.from.column ?? '*', c: e.to.node, d: e.to.column ?? '*', e: null })),
+    ...g.datasetEdges.map((e) => ({ t: 'x', a: e.from, b: '*', c: e.to, d: '*', e: null })),
+  ];
+}
 
 function request(path: string, token: string, body: unknown, headers: Record<string, string> = {}) {
   const text = JSON.stringify(body);
@@ -282,6 +354,76 @@ export const paths: Record<string, CpuPath> = {
         ),
       }));
       const b = batch('datatrust-audit-events', bodies);
+      return () => queue(b, env);
+    },
+  },
+  'diagnostics completion, Access with remote JWKS (production)': {
+    async prepare() {
+      const { env, token, d1 } = await workerEnv({ cloudflareAccess: true });
+      d1.setJob(DIAG_JOB);
+      const req = request(`/api/runner/jobs/${DIAG_JOB.job_id}/complete`, token, { status: 'completed', probeResults: probes68() }, {
+        'X-DataTrust-Lease-Token': 'lease',
+      });
+      return async () => expectStatus(await app.fetch(req, env, ctx), 200, 'diagnostics completion (remote JWKS)');
+    },
+  },
+  'GET /api/incidents (100 incidents)': {
+    async prepare() {
+      const rows = incidentBriefRows(100);
+      const { env, operatorToken } = await workerEnv({ rows: (sql) => (sql.includes('FROM incidents') ? rows : []) });
+      const req = getRequest('/api/incidents', operatorToken);
+      return async () => expectStatus(await app.fetch(req, env, ctx), 200, 'incident list');
+    },
+  },
+  'GET /api/lineage/:runId/upstream (S01 graph)': {
+    async prepare() {
+      const rows = lineageRows();
+      const { env, operatorToken } = await workerEnv({ rows: (sql) => (sql.includes('FROM lineage_nodes') ? rows : []) });
+      const req = getRequest(`/api/lineage/${RUN_ID}/upstream?node=model.datatrust.metric_payroll_cost_usd_monthly&column=payroll_cost_usd`, operatorToken);
+      return async () => expectStatus(await app.fetch(req, env, ctx), 200, 'lineage upstream');
+    },
+  },
+  'GET /api/lake/export (100 objects, 1 MB)': {
+    async prepare() {
+      const { env, token, r2 } = await workerEnv();
+      // 100 settled lake objects of 9,990 bytes: the export's per-call limits (100 objects, 1 MB).
+      const line = JSON.stringify(
+        auditEvent(env, 'check_result', RUN_ID, { event_id: auditEventId.checkResult(RUN_ID, 'C01'), check_id: 'C01', status: 'pass', payload: { failures: 0 } }),
+      );
+      const body = (line + '\n').repeat(Math.floor(9_990 / (line.length + 1)));
+      const t0 = Date.now() - 3_600_000;
+      for (let i = 0; i < 100; i++) await r2.put(`lake/2026-10-11/${ulid(t0 + i)}.ndjson`, body.padEnd(9_990, ' '));
+      const req = getRequest('/api/lake/export', token);
+      return async () => {
+        const res = await app.fetch(req, env, ctx);
+        if (res.headers.get('x-objects') !== '100') throw new Error(`lake export returned ${res.headers.get('x-objects')} objects`);
+        await expectStatus(res, 200, 'lake export');
+      };
+    },
+  },
+  'POST /api/admin/prune (5 runs)': {
+    async prepare() {
+      const runIds = Array.from({ length: 5 }, (_, i) => `run_01CPUPRUNE${i}000000000000000000`);
+      const { env, operatorToken, r2 } = await workerEnv({
+        rows: (sql) => (sql.includes('FROM runs r') ? runIds.map((run_id) => ({ run_id })) : []),
+      });
+      // About 135 raw OpenLineage objects per seed-101 run.
+      for (const id of runIds) for (let i = 0; i < 135; i++) await r2.put(`lineage/${id}/${String(i).padStart(32, '0')}.json`, '{}');
+      const req = request('/api/admin/prune', operatorToken, { olderThanDays: 30, maxRuns: 5 });
+      return async () => expectStatus(await app.fetch(req, env, ctx), 200, 'prune');
+    },
+  },
+  'investigate consumer (5 messages)': {
+    async prepare() {
+      const { env } = await workerEnv();
+      const b = batch('datatrust-investigate', Array.from({ length: 5 }, (_, i) => ({ runId: `${RUN_ID}${i}`, incidentId: `inc_${i}`, trigger: 'checks' })));
+      return () => queue(b, env);
+    },
+  },
+  'DLQ consumer (10 messages)': {
+    async prepare() {
+      const { env } = await workerEnv();
+      const b = batch('datatrust-dlq', Array.from({ length: 10 }, (_, i) => ({ runId: `${RUN_ID}${i}`, checkResults: s01.checks })));
       return () => queue(b, env);
     },
   },

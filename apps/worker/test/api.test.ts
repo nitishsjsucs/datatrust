@@ -4,7 +4,7 @@ import { buildLineageGraph } from '@datatrust/rca';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import type { AppEnv } from '../src/env';
-import { insertRun, upsertLineageGraph } from '../src/store/repo';
+import { insertRun, upsertIncident, upsertLineageGraph } from '../src/store/repo';
 import { s01, seed101Events, seed101Relations } from './helpers/fixtures';
 import { request } from './helpers/app';
 import { leasedBuildJob, manyEvents, recordingQueue } from './helpers/jobs';
@@ -37,7 +37,8 @@ describe('read API', () => {
     const ctx = createExecutionContext();
     const res = await app.fetch(new Request('http://worker/healthz'), env, ctx);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, environment: 'local', version: '0.1.0' });
+    // `warm` says whether src/index.ts's start-up warm-up had settled (free-plan.test.ts checks it turns true).
+    expect(await res.json()).toEqual({ ok: true, environment: 'local', version: '0.1.0', warm: expect.any(Boolean) });
   });
 
   it('returns 404 for an unknown run and an unknown route', async () => {
@@ -57,6 +58,42 @@ describe('read API', () => {
   it('lists incidents (none yet)', async () => {
     const res = await get('/api/incidents?runId=run_api_1');
     expect(await res.json()).toEqual({ incidents: [] });
+  });
+
+  it('lists incidents with the top candidate read by D1, not by parsing ranked_json', async () => {
+    await upsertIncident(baseEnv.DB, {
+      incidentId: 'inc_api_1',
+      runId: 'run_api_1',
+      trigger: 'checks',
+      status: 'open',
+      failingChecks: [],
+      ranked: [{ node: 'source.datatrust.raw.hires', score: 0.9 }, { node: 'model.datatrust.stg_hires', score: 0.5 }] as never,
+      evidenceR2Key: null,
+      summaryDraft: null,
+      summary: null,
+      summaryProvider: 'template',
+      summaryModel: 'template-v1',
+      summaryAttempts: 1,
+      summaryFallback: false,
+      summaryFallbackReason: null,
+      provenance: {},
+    });
+    const list = (await (await get('/api/incidents?runId=run_api_1')).json()) as { incidents: Array<Record<string, unknown>> };
+    expect(list.incidents).toEqual([
+      {
+        incidentId: 'inc_api_1',
+        runId: 'run_api_1',
+        trigger: 'checks',
+        status: 'open',
+        createdAt: expect.any(String),
+        topCandidate: 'source.datatrust.raw.hires',
+        summaryProvider: 'template',
+        summaryFallback: false,
+      },
+    ]);
+    // The single-incident fallback (no R2 object) still names the top candidate.
+    const one = (await (await get('/api/incidents/inc_api_1')).json()) as Record<string, unknown>;
+    expect(one['topCandidate']).toBe('source.datatrust.raw.hires');
   });
 
   it('serves the upstream column-lineage subgraph of a failed metric from D1', async () => {

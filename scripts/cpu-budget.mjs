@@ -6,6 +6,8 @@
 // from process.cpuUsage(). Cloudflare bindings are in-memory fakes, so this is DataTrust's own CPU.
 //   npm run budget:cpu                    print the table
 //   npm run budget:cpu -- --gate 8        also exit 1 when any median is above 8 ms (CI)
+//   npm run budget:cpu:margin             --gate 5: SPEC 28.1's 2x margin under the 10 ms limit, for a quiet
+//                                         Apple-silicon Mac (load average under 4); the 8 ms CI gate is the hard stop
 //   npm run budget:cpu -- --json out.json write the medians and samples
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -44,7 +46,10 @@ try {
 const ms = (a, b) => (b.user - a.user + b.system - a.system) / 1000;
 const s0 = thread?.();
 // Module scope (zod schemas, the collator, the router and parser warm-up) is Worker start-up (1 s limit).
-const { paths } = await import(${JSON.stringify(bundle)});
+// The warm-up's asynchronous Access check is awaited here, so its CPU counts as start-up (under workerd the
+// first /healthz shows it settled before the first request: scripts/dev-up.sh, scripts/bench-e2e.sh).
+const { paths, warmUpSettled } = await import(${JSON.stringify(bundle)});
+await warmUpSettled();
 const s1 = thread?.();
 const run = await paths[process.argv[2]].prepare();
 // threadMs: the main thread only (Node >= 23.9), like workerd, which charges a request its own thread's CPU.

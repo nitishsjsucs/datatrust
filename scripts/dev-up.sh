@@ -21,9 +21,9 @@ port_busy() { # lsof on macOS, ss on Linux runners
   if command -v lsof >/dev/null 2>&1; then lsof -iTCP:"$1" -sTCP:LISTEN -n -P >/dev/null 2>&1
   else ss -ltn "sport = :$1" | grep -q LISTEN; fi
 }
-wait_http() { # url seconds
-  local url="$1" deadline=$((SECONDS + $2))
-  until curl -fsS -o /dev/null "$url" 2>/dev/null; do
+wait_http() { # url seconds [file for the first successful body]
+  local url="$1" deadline=$((SECONDS + $2)) out="${3:-/dev/null}"
+  until curl -fsS -o "$out" "$url" 2>/dev/null; do
     if ((SECONDS > deadline)); then return 1; fi
     sleep 1
   done
@@ -46,7 +46,10 @@ set -m # background jobs get their own process group, so dev-down can stop wrang
     --show-interactive-dev-session=false ${EXTRA_VARS[@]+"${EXTRA_VARS[@]}"}
 ) >"$LOGS/wrangler.log" 2>&1 &
 echo $! >"$PIDS/wrangler.pid"
-if ! wait_http http://127.0.0.1:8792/healthz 90; then
+# The first successful /healthz is the Worker's first request: its `warm` field says whether the start-up
+# warm-up (apps/worker/src/warmup.ts) had settled before it (SPEC risk 23; scripts/bench-e2e.sh asserts it).
+rm -f "$LOGS/first-healthz.json"
+if ! wait_http http://127.0.0.1:8792/healthz 90 "$LOGS/first-healthz.json"; then
   echo "wrangler dev did not become healthy; see $LOGS/wrangler.log" >&2
   exit 1
 fi

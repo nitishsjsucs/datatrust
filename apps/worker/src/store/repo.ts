@@ -570,11 +570,30 @@ export async function getIncident(db: D1Database, id: string): Promise<IncidentR
   return db.prepare(`SELECT * FROM incidents WHERE incident_id = ?`).bind(id).first<IncidentRow>();
 }
 
-export async function listIncidents(db: D1Database, runId?: string | null): Promise<IncidentRow[]> {
+/** The columns the incident list shows; the top candidate is read by D1, not by parsing ranked_json. */
+export interface IncidentBriefRow {
+  incident_id: string;
+  run_id: string;
+  trigger: string;
+  status: string;
+  created_at: string;
+  top_candidate: string | null;
+  summary_provider: string | null;
+  summary_fallback: number | null;
+}
+
+const BRIEF_COLUMNS = `incident_id, run_id, trigger, status, created_at, json_extract(ranked_json, '$[0].node') AS top_candidate,
+  summary_provider, summary_fallback`;
+
+/**
+ * The 100 latest incidents for the dashboard's list (CPU on the Free plan: an incident row carries about
+ * 4.4 KB of ranked, summary and provenance JSON; the list needs none of it, 2026-10-11 review).
+ */
+export async function listIncidents(db: D1Database, runId?: string | null): Promise<IncidentBriefRow[]> {
   const q = runId
-    ? db.prepare(`SELECT * FROM incidents WHERE run_id = ? ORDER BY created_at DESC LIMIT 100`).bind(runId)
-    : db.prepare(`SELECT * FROM incidents ORDER BY created_at DESC LIMIT 100`);
-  return (await q.all<IncidentRow>()).results;
+    ? db.prepare(`SELECT ${BRIEF_COLUMNS} FROM incidents WHERE run_id = ? ORDER BY created_at DESC LIMIT 100`).bind(runId)
+    : db.prepare(`SELECT ${BRIEF_COLUMNS} FROM incidents ORDER BY created_at DESC LIMIT 100`);
+  return (await q.all<IncidentBriefRow>()).results;
 }
 
 // ------------------------------------------------------------------------------------------- dead letters
