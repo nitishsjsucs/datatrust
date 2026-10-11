@@ -4,16 +4,17 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 2 of 19 (core) done: `chore: scaffold npm workspaces, uv project and CI`.
+Commit 3 of 19 (core) done: `feat(synth): seeded workforce generator with exact counts`.
 
 ## Done
 
 - 1. SPEC.md, README skeleton (status all "planned"), LICENSE (MIT), .gitignore, this file.
 - 2. npm workspaces (`packages/rca`, `apps/worker`), package-lock.json (includes Linux workerd and esbuild binaries), tsconfig.base.json, pyproject.toml + uv.lock (136 packages, dbt-core 1.12.5 / dbt-duckdb 1.11.0 / dbt-bigquery 1.12.1), CI with `node` and `python` jobs, .env.example, Makefile.
+- 3. `pipelines/datatrust/synth/` (spec, rng, wordlists, generator), `datatrust synth` CLI, counts test (6 seeds), golden hash test for seed 101.
 
 ## Next
 
-- 3. `feat(synth): seeded workforce generator with exact counts`.
+- 4. `feat(dbt): sources, staging with enforced contracts, DuckDB profile`.
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
@@ -21,7 +22,7 @@ Commit 2 of 19 (core) done: `chore: scaffold npm workspaces, uv project and CI`.
 - `npm run test:rca`: 1 passed
 - `npm run test:worker`: no tests yet (`--passWithNoTests`, removed when the Worker lands in commit 11)
 - `uv run ruff check`: pass
-- `uv run pytest`: 2 passed
+- `uv run pytest`: 20 passed
 
 ## Deviations from SPEC.md
 

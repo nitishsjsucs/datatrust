@@ -1,0 +1,20 @@
+{
+  "seed": 101,
+  "generator_version": "1",
+  "tzdata_version": "2026e",
+  "tables": {
+    "applications": "772bb3dfd27e4eb9a3fe12635bb96f4cd2318374f0ed68ce488180056593ec62",
+    "candidates": "908960014da1de0709632ec7dc7a641b58e89a739867df439edfa4ca6e16d933",
+    "compensation": "b54c433fd525288fcca54dc6c6caa861587481429efb8839685ecbce567244b5",
+    "departments": "663340dd0b87d7ad7d01296617ce9914c5b9dcd47f3e5453a77d343bf5912e0a",
+    "employees": "5e4ed4ebc54437db182424a603ba88d6e0686c4ae9418b1b84fad20db35a7111",
+    "fx_rates": "d25954679974984ba1edaf5f0e243365d295097f923412e11028bbe4e3dd3ef8",
+    "hires": "d04c10c130aae174fd1a7392d2688c54787827efcf4dd178dc2aadf78cff16d5",
+    "job_assignments": "394a34b0f148acc69d5c3b8be016aec9ec5c75bdf72ff00977e3af90e0b981d4",
+    "locations": "ca1001979e4dedf776eed426f7b4e1b2444696f71a4fee9516bee10b48e694f4",
+    "offers": "ef83762726d13e700b1de74f1b16e22fdd53cf56e01c03ca2bac0fd8f12b8756",
+    "payroll_lines": "376da0595d431946862c005383ec96eca6f1b8a580f64f26a396c16618034df1",
+    "requisitions": "b435e829f42b4e4548f4ae5180d3d0a14521e60be18068bbfaf4c018dffea1d0",
+    "stage_events": "bc5865288a3a3da96f3a224d02c14f1f9e3c685763ebd90795a480c2e989847d"
+  }
+}

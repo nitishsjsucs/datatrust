@@ -14,7 +14,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 
 | Component | Status |
 |---|---|
-| Synthetic data generator (exact, seeded counts) | planned |
+| Synthetic data generator (exact, seeded counts) | implemented; tests pass locally (`uv run pytest`), CI configured |
 | dbt models, 22 enforced contracts, 40 checks | planned |
 | OpenLineage capture and column-level lineage graph | planned |
 | Diagnostic probes, root-cause ranker, baselines | planned |
@@ -25,6 +25,22 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Basin Pipelines, Basin Catalog (Iceberg) | planned |
 | BigQuery path, policy tags, masking, authorized view, time travel | planned |
 | `setup:prod` and `doctor` | planned |
+
+## Synthetic dataset
+
+`uv run datatrust synth --seed <n>` writes 13 Parquet tables and a `manifest.json` (row counts and SHA-256 of a canonical CSV rendering) to `.data/raw/<n>/`. Counts are fixed by construction; the seed changes values only. Seed 101 hashes are pinned in `pipelines/tests/golden/seed101.sha256.json` and checked on ubuntu-latest in CI, so macOS and Linux must agree byte for byte (integer-only arithmetic, `random.Random.random()` only, tz-aware UTC instants, `tzdata` 2026.5 pinned through `zoneinfo.reset_tzpath([])`).
+
+| Table | Rows | Table | Rows |
+|---|---|---|---|
+| departments | 12 | applications | 4,800 |
+| locations | 8 | stage_events | 13,440 |
+| employees | 1,200 | offers | 480 |
+| job_assignments | 2,820 | hires | 360 |
+| requisitions | 240 | compensation | 1,980 |
+| candidates | 3,600 | fx_rates | 2,190 |
+| payroll_lines | 12,060 | **total** | **43,190** |
+
+Employees: 780 tenured, 60 leavers (2025-06-30), 360 hired in 2025 (30 per month). Eight locations in six currencies; FX rates are a bounded daily random walk that never repeats on consecutive days. People are synthetic: names are drawn from fixed word lists and emails use `example.com`.
 
 ## Architecture
 
