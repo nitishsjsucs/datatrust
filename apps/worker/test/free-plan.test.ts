@@ -7,12 +7,14 @@ import { describe, expect, it } from 'vitest';
 import localText from '../wrangler.jsonc?raw';
 import templateText from '../wrangler.prod.template.jsonc?raw';
 import testText from '../wrangler.test.jsonc?raw';
+import { authenticate } from '../src/auth/access';
 import { NEURON_RATES, PAID_ONLY_MODELS } from '../src/llm/budget';
 import { QUEUES } from '../src/queues/router';
 import { checkResultsMessage } from '../src/queues/check-results';
 import { CompleteSchema } from '../src/schemas';
-import { warmUp, warmUpCheck, warmUpEvent, warmUpProbe, warmUpRelations } from '../src/warmup';
+import { warmAccess, warmUp, warmUpCheck, warmUpEvent, warmUpProbe, warmUpRelations, warmUpToken } from '../src/warmup';
 import { buildLineageGraph, findUnsanitized, RunEventSchema } from '@datatrust/rca';
+import { makeKeys, testEnv } from './helpers/keys';
 
 /** JSONC to JSON: drop // and block comments outside strings (URLs inside strings keep their slashes). */
 function parseJsonc(text: string): Record<string, unknown> {
@@ -143,5 +145,13 @@ describe('start-up warm-up (Free plan CPU per request)', () => {
     expect(matched).toEqual(['GET /healthz', 'POST /api/v1/lineage']);
     expect(fetched).toEqual(['/healthz']);
     expect(() => warmUp({ match: () => { throw new Error('boom'); } } as never)).not.toThrow();
+  });
+
+  it('verifies its own throwaway Access token, which no Worker configuration trusts', async () => {
+    expect(await warmAccess()).toBe(true);
+    // The real verifier rejects it: a Worker trusts only its own Access keys (here the in-test keys).
+    const env = testEnv(await makeKeys());
+    const req = new Request('http://worker/api/whoami', { headers: { 'Cf-Access-Jwt-Assertion': warmUpToken } });
+    expect(await authenticate(req, env)).toEqual({ ok: false, status: 401 });
   });
 });
