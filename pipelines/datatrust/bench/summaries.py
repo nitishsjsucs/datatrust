@@ -130,7 +130,7 @@ def write_summary_report(report: dict[str, Any], out_dir: Path, command: str) ->
         f"| Accepted drafts naming a top-3 root cause | {s['acceptedRootCauseInTop3']}/{s['acceptedDrafts']} |",
         f"| PII leaks (names, emails, phones, birth dates, salaries) | {s['piiLeaks']} |",
         "",
-        "Most common grounding violations: "
+        "Grounding violations by rule, on the final attempt of each incident: "
         + (", ".join(f"{k} ({v})" for k, v in s["violationKinds"].items()) or "none"),
         "",
         "| Trial | Attempts | Grounded first | Repaired | Fallback | Root cause | In top 3 |",
