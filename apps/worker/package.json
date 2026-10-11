@@ -6,8 +6,11 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "types": "wrangler types --strict-vars=false",
+    "types:check": "wrangler types --strict-vars=false --check",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run",
+    "dev": "wrangler dev --local --ip 127.0.0.1 --port 8792 --inspector-port 9242 --show-interactive-dev-session=false"
   },
   "dependencies": {
     "@datatrust/rca": "0.1.0",

@@ -1,0 +1,422 @@
+/** D1 repositories (SPEC 13.2). All SQL lives here. */
+import type { CheckResult, LineageGraph, RankedCandidate } from '@datatrust/rca';
+import { randomToken, ulid } from '../ids';
+
+export type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'stale' | 'error';
+export type JobKind = 'dbt_build' | 'diagnostics';
+export type JobStatus = 'queued' | 'leased' | 'completed' | 'failed';
+
+export interface RunRow {
+  run_id: string;
+  workflow_instance_id: string | null;
+  target: string;
+  seed: number | null;
+  scenario: string | null;
+  status: RunStatus;
+  created_at: string;
+  finished_at: string | null;
+  n_pass: number | null;
+  n_fail: number | null;
+  n_error: number | null;
+  n_skip: number | null;
+  incident_id: string | null;
+}
+
+export interface JobRow {
+  job_id: string;
+  run_id: string;
+  kind: JobKind;
+  payload_json: string;
+  status: JobStatus;
+  lease_token: string | null;
+  lease_owner: string | null;
+  lease_expires_at: number | null;
+  attempts: number;
+  workflow_instance_id: string | null;
+  event_type: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const LEASE_TTL_MS = 15 * 60 * 1000;
+export const MAX_ATTEMPTS = 3;
+
+const nowIso = () => new Date().toISOString();
+
+// ------------------------------------------------------------------------------------------- runs
+
+export async function insertRun(
+  db: D1Database,
+  r: { runId: string; target: string; seed: number | null; scenario: string | null },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO runs (run_id, target, seed, scenario, status, created_at) VALUES (?, ?, ?, ?, 'queued', ?)`,
+    )
+    .bind(r.runId, r.target, r.seed, r.scenario, nowIso())
+    .run();
+}
+
+export async function getRun(db: D1Database, runId: string): Promise<RunRow | null> {
+  return db.prepare(`SELECT * FROM runs WHERE run_id = ?`).bind(runId).first<RunRow>();
+}
+
+export async function markRunRunning(db: D1Database, runId: string, instanceId: string): Promise<void> {
+  await db
+    .prepare(`UPDATE runs SET status = 'running', workflow_instance_id = ? WHERE run_id = ? AND status IN ('queued', 'running')`)
+    .bind(instanceId, runId)
+    .run();
+}
+
+export async function finishRun(
+  db: D1Database,
+  runId: string,
+  status: RunStatus,
+  counts?: { pass: number; fail: number; error: number; skip: number },
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE runs SET status = ?, finished_at = ?, n_pass = coalesce(?, n_pass), n_fail = coalesce(?, n_fail),
+       n_error = coalesce(?, n_error), n_skip = coalesce(?, n_skip) WHERE run_id = ?`,
+    )
+    .bind(status, nowIso(), counts?.pass ?? null, counts?.fail ?? null, counts?.error ?? null, counts?.skip ?? null, runId)
+    .run();
+}
+
+export async function setRunIncident(db: D1Database, runId: string, incidentId: string): Promise<void> {
+  await db.prepare(`UPDATE runs SET incident_id = ? WHERE run_id = ?`).bind(incidentId, runId).run();
+}
+
+// ------------------------------------------------------------------------------------------- jobs
+
+export async function insertJob(
+  db: D1Database,
+  j: { runId: string; kind: JobKind; payload: unknown; workflowInstanceId: string; eventType: string; jobId?: string },
+): Promise<string> {
+  const jobId = j.jobId ?? `job_${ulid()}`;
+  const ts = nowIso();
+  await db
+    .prepare(
+      `INSERT INTO jobs (job_id, run_id, kind, payload_json, status, attempts, workflow_instance_id, event_type,
+       created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?) ON CONFLICT (job_id) DO NOTHING`,
+    )
+    .bind(jobId, j.runId, j.kind, JSON.stringify(j.payload), j.workflowInstanceId, j.eventType, ts, ts)
+    .run();
+  return jobId;
+}
+
+/** Lease the oldest eligible job in one statement (UPDATE ... RETURNING, SPEC 13.2). */
+export async function leaseJob(
+  db: D1Database,
+  kinds: JobKind[],
+  owner: string,
+  now = Date.now(),
+): Promise<JobRow | null> {
+  if (kinds.length === 0) return null;
+  const token = randomToken();
+  const placeholders = kinds.map(() => '?').join(', ');
+  return db
+    .prepare(
+      `UPDATE jobs SET status = 'leased', lease_token = ?, lease_owner = ?, lease_expires_at = ?,
+         attempts = attempts + 1, updated_at = ?
+       WHERE job_id = (
+         SELECT job_id FROM jobs
+         WHERE kind IN (${placeholders}) AND attempts < ${MAX_ATTEMPTS}
+           AND (status = 'queued' OR (status = 'leased' AND lease_expires_at < ?))
+         ORDER BY created_at, rowid LIMIT 1
+       )
+       RETURNING *`,
+    )
+    .bind(token, owner, now + LEASE_TTL_MS, nowIso(), ...kinds, now)
+    .first<JobRow>();
+}
+
+/** Jobs whose last lease expired after the final attempt: mark failed and return them (SPEC 13.2 sweep). */
+export async function sweepExhaustedJobs(db: D1Database, now = Date.now()): Promise<JobRow[]> {
+  const { results } = await db
+    .prepare(
+      `UPDATE jobs SET status = 'failed', updated_at = ?
+       WHERE status = 'leased' AND attempts >= ${MAX_ATTEMPTS} AND lease_expires_at < ?
+       RETURNING *`,
+    )
+    .bind(nowIso(), now)
+    .all<JobRow>();
+  return results;
+}
+
+export async function getJob(db: D1Database, jobId: string): Promise<JobRow | null> {
+  return db.prepare(`SELECT * FROM jobs WHERE job_id = ?`).bind(jobId).first<JobRow>();
+}
+
+export async function completeJob(db: D1Database, jobId: string, token: string, status: 'completed' | 'failed'): Promise<boolean> {
+  const res = await db
+    .prepare(
+      `UPDATE jobs SET status = ?, updated_at = ? WHERE job_id = ? AND status = 'leased' AND lease_token = ?`,
+    )
+    .bind(status, nowIso(), jobId, token)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
+}
+
+export function isLeaseValid(job: JobRow | null, token: string | null, now = Date.now()): job is JobRow {
+  return (
+    !!job && !!token && job.status === 'leased' && job.lease_token === token && (job.lease_expires_at ?? 0) >= now
+  );
+}
+
+// ------------------------------------------------------------------------------------------- checks
+
+export async function upsertCheckResults(db: D1Database, runId: string, checks: CheckResult[]): Promise<void> {
+  if (checks.length === 0) return;
+  const stmt = db.prepare(
+    `INSERT INTO check_results (run_id, check_id, test_name, category, status, failures, node, columns_json, message)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (run_id, check_id) DO UPDATE SET status = excluded.status, failures = excluded.failures,
+       message = excluded.message, columns_json = excluded.columns_json`,
+  );
+  await db.batch(
+    checks.map((c) =>
+      stmt.bind(
+        runId,
+        c.checkId,
+        c.testName,
+        c.category,
+        c.status,
+        c.failures,
+        c.node,
+        JSON.stringify({ columns: c.columns, also: c.also ?? [], kind: c.kind }),
+        c.message ?? null,
+      ),
+    ),
+  );
+}
+
+interface CheckRow {
+  check_id: string;
+  test_name: string;
+  category: string;
+  status: CheckResult['status'];
+  failures: number;
+  node: string;
+  columns_json: string;
+  message: string | null;
+}
+
+export async function listCheckResults(db: D1Database, runId: string): Promise<CheckResult[]> {
+  const { results } = await db
+    .prepare(`SELECT * FROM check_results WHERE run_id = ? ORDER BY check_id`)
+    .bind(runId)
+    .all<CheckRow>();
+  return results.map((r) => {
+    const extra = JSON.parse(r.columns_json) as { columns: string[]; also: CheckResult['also']; kind: CheckResult['kind'] };
+    return {
+      checkId: r.check_id,
+      testName: r.test_name,
+      category: r.category,
+      kind: extra.kind ?? 'data_test',
+      status: r.status,
+      failures: r.failures,
+      node: r.node,
+      columns: extra.columns ?? [],
+      also: extra.also ?? [],
+      message: r.message,
+    };
+  });
+}
+
+export async function countCheckResults(db: D1Database, runId: string): Promise<number> {
+  const row = await db.prepare(`SELECT count(*) AS n FROM check_results WHERE run_id = ?`).bind(runId).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+// ------------------------------------------------------------------------------------------- lineage
+
+export async function insertLineageEvent(db: D1Database, runId: string, eventId: string, r2Key: string): Promise<void> {
+  await db
+    .prepare(`INSERT INTO lineage_events (run_id, event_id, r2_key) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`)
+    .bind(runId, eventId, r2Key)
+    .run();
+}
+
+export async function markLineageProcessed(db: D1Database, runId: string, eventId: string): Promise<void> {
+  await db
+    .prepare(`UPDATE lineage_events SET processed_at = ? WHERE run_id = ? AND event_id = ?`)
+    .bind(nowIso(), runId, eventId)
+    .run();
+}
+
+export async function countProcessedLineageEvents(db: D1Database, runId: string): Promise<number> {
+  const row = await db
+    .prepare(`SELECT count(*) AS n FROM lineage_events WHERE run_id = ? AND processed_at IS NOT NULL`)
+    .bind(runId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+export async function upsertLineageGraph(db: D1Database, runId: string, g: LineageGraph, meta: Record<string, unknown> = {}): Promise<void> {
+  const nodeStmt = db.prepare(
+    `INSERT INTO lineage_nodes (run_id, node_id, kind, relation, checksum, columns_json, meta_json) VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (run_id, node_id) DO UPDATE SET kind = excluded.kind, relation = excluded.relation,
+       checksum = excluded.checksum, columns_json = excluded.columns_json, meta_json = excluded.meta_json`,
+  );
+  const edgeStmt = db.prepare(
+    `INSERT INTO lineage_edges (run_id, src_node, src_column, dst_node, dst_column) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+  );
+  const stmts: D1PreparedStatement[] = [];
+  for (const [id, n] of Object.entries(g.nodes)) {
+    stmts.push(
+      nodeStmt.bind(
+        runId,
+        id,
+        n.kind,
+        n.relation,
+        n.checksum,
+        JSON.stringify({ columns: n.columns, classification: n.classification }),
+        JSON.stringify(meta[id] ?? {}),
+      ),
+    );
+  }
+  for (const e of g.columnEdges) stmts.push(edgeStmt.bind(runId, e.from.node, e.from.column ?? '*', e.to.node, e.to.column ?? '*'));
+  for (const e of g.datasetEdges) stmts.push(edgeStmt.bind(runId, e.from, '*', e.to, '*'));
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+}
+
+export async function loadLineageGraph(db: D1Database, runId: string): Promise<LineageGraph> {
+  const nodes = await db
+    .prepare(`SELECT node_id, kind, relation, checksum, columns_json FROM lineage_nodes WHERE run_id = ? ORDER BY node_id`)
+    .bind(runId)
+    .all<{ node_id: string; kind: 'source' | 'model'; relation: string; checksum: string | null; columns_json: string }>();
+  const edges = await db
+    .prepare(`SELECT src_node, src_column, dst_node, dst_column FROM lineage_edges WHERE run_id = ? ORDER BY dst_node, dst_column, src_node, src_column`)
+    .bind(runId)
+    .all<{ src_node: string; src_column: string; dst_node: string; dst_column: string }>();
+  const g: LineageGraph = { nodes: {}, columnEdges: [], datasetEdges: [] };
+  for (const n of nodes.results) {
+    const c = JSON.parse(n.columns_json) as { columns: string[]; classification: LineageGraph['nodes'][string]['classification'] };
+    g.nodes[n.node_id] = { kind: n.kind, relation: n.relation, checksum: n.checksum, columns: c.columns, classification: c.classification };
+  }
+  for (const e of edges.results) {
+    if (e.src_column === '*' && e.dst_column === '*') g.datasetEdges.push({ from: e.src_node, to: e.dst_node });
+    else g.columnEdges.push({ from: { node: e.src_node, column: e.src_column }, to: { node: e.dst_node, column: e.dst_column } });
+  }
+  return g;
+}
+
+export async function loadNodeMeta(db: D1Database, runId: string): Promise<Record<string, unknown>> {
+  const { results } = await db
+    .prepare(`SELECT node_id, meta_json FROM lineage_nodes WHERE run_id = ?`)
+    .bind(runId)
+    .all<{ node_id: string; meta_json: string }>();
+  return Object.fromEntries(results.map((r) => [r.node_id, JSON.parse(r.meta_json)]));
+}
+
+/** Model checksums of the most recent passed run before this one, for the change signal. */
+export async function baselineChecksums(db: D1Database, runId: string): Promise<Record<string, string | null> | null> {
+  const prev = await db
+    .prepare(
+      `SELECT run_id FROM runs WHERE status = 'passed' AND run_id <> ? AND created_at <= (SELECT created_at FROM runs WHERE run_id = ?)
+       ORDER BY created_at DESC LIMIT 1`,
+    )
+    .bind(runId, runId)
+    .first<{ run_id: string }>();
+  if (!prev) return null;
+  const { results } = await db
+    .prepare(`SELECT node_id, checksum FROM lineage_nodes WHERE run_id = ? AND kind = 'model'`)
+    .bind(prev.run_id)
+    .all<{ node_id: string; checksum: string | null }>();
+  return results.length ? Object.fromEntries(results.map((r) => [r.node_id, r.checksum])) : null;
+}
+
+// ------------------------------------------------------------------------------------------- incidents
+
+export interface IncidentInsert {
+  incidentId: string;
+  runId: string;
+  trigger: string;
+  status: string;
+  failingChecks: unknown;
+  ranked: RankedCandidate[];
+  evidenceR2Key: string | null;
+  summaryDraft: unknown;
+  summary: unknown;
+  summaryProvider: string | null;
+  summaryModel: string | null;
+  summaryAttempts: number;
+  summaryFallback: boolean;
+  summaryFallbackReason: string | null;
+  provenance: unknown;
+}
+
+export async function upsertIncident(db: D1Database, i: IncidentInsert): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO incidents (incident_id, run_id, trigger, status, failing_checks_json, ranked_json, evidence_r2_key,
+         summary_draft_json, summary_json, summary_provider, summary_model, summary_attempts, summary_fallback,
+         summary_fallback_reason, provenance_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (incident_id) DO UPDATE SET status = excluded.status, ranked_json = excluded.ranked_json,
+         evidence_r2_key = excluded.evidence_r2_key, summary_draft_json = excluded.summary_draft_json,
+         summary_json = excluded.summary_json, summary_provider = excluded.summary_provider,
+         summary_model = excluded.summary_model, summary_attempts = excluded.summary_attempts,
+         summary_fallback = excluded.summary_fallback, summary_fallback_reason = excluded.summary_fallback_reason,
+         provenance_json = excluded.provenance_json`,
+    )
+    .bind(
+      i.incidentId,
+      i.runId,
+      i.trigger,
+      i.status,
+      JSON.stringify(i.failingChecks),
+      JSON.stringify(i.ranked),
+      i.evidenceR2Key,
+      i.summaryDraft === undefined ? null : JSON.stringify(i.summaryDraft),
+      i.summary === undefined ? null : JSON.stringify(i.summary),
+      i.summaryProvider,
+      i.summaryModel,
+      i.summaryAttempts,
+      i.summaryFallback ? 1 : 0,
+      i.summaryFallbackReason,
+      JSON.stringify(i.provenance),
+      nowIso(),
+    )
+    .run();
+}
+
+export interface IncidentRow {
+  incident_id: string;
+  run_id: string;
+  trigger: string;
+  status: string;
+  failing_checks_json: string;
+  ranked_json: string;
+  evidence_r2_key: string | null;
+  summary_draft_json: string | null;
+  summary_json: string | null;
+  summary_provider: string | null;
+  summary_model: string | null;
+  summary_attempts: number | null;
+  summary_fallback: number | null;
+  summary_fallback_reason: string | null;
+  provenance_json: string;
+  created_at: string;
+}
+
+export async function getIncident(db: D1Database, id: string): Promise<IncidentRow | null> {
+  return db.prepare(`SELECT * FROM incidents WHERE incident_id = ?`).bind(id).first<IncidentRow>();
+}
+
+export async function listIncidents(db: D1Database, runId?: string | null): Promise<IncidentRow[]> {
+  const q = runId
+    ? db.prepare(`SELECT * FROM incidents WHERE run_id = ? ORDER BY created_at DESC LIMIT 100`).bind(runId)
+    : db.prepare(`SELECT * FROM incidents ORDER BY created_at DESC LIMIT 100`);
+  return (await q.all<IncidentRow>()).results;
+}
+
+// ------------------------------------------------------------------------------------------- dead letters
+
+export async function insertDeadLetter(db: D1Database, queue: string, body: unknown, error: string | null): Promise<void> {
+  await db
+    .prepare(`INSERT INTO dead_letters (queue, body_json, error, created_at) VALUES (?, ?, ?, ?)`)
+    .bind(queue, JSON.stringify(body), error, nowIso())
+    .run();
+}

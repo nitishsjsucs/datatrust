@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 10 of 19 (core) done: `docs: offline benchmark results on test seeds`.
+Commit 11 of 19 (core) done: `feat(worker): Hono API, D1 schema and Access JWT verification`.
 
 ## Done
 
@@ -19,16 +19,17 @@ Commit 10 of 19 (core) done: `docs: offline benchmark results on test seeds`.
 - 9. `bench/scenarios.py` (20 scenarios, injections, severities, decoy draw with `random.Random(seed * 1000 + index)`), 7 scenario patches and 12 decoy patches, `dbt/overlay.py` (strict unified-diff applier), `bench/harness.py` (offline trials in a process pool), `bench/metrics.py` (Wilson, scenario-clustered bootstrap, ablations, baselines, candidate-set size), `bench/report.py`, `datatrust bench` and `datatrust tune` CLI, `npm run bench`, `make bench`. Tests: `test_scenarios.py`, `test_patch_combinations.py` (every drawn combination for seeds 1-3 and 101-105; all 12 decoys together build clean), `test_injection_detected_smoke.py` (S01, T14, S04 and a clean trial through dbt), `test_metrics.py`. First look with initial weights on dev seed 1 only: 20/20 detected, 0 clean false positives (not a reported result).
 - 9b (extra). Dev tuning: `uv run datatrust bench --seeds 1-3 --workers 6 --tag dev` (results/bench-2026-10-10-offline-dev.*), `uv run datatrust tune --from results/bench-2026-10-10-offline-dev.json` gave coverage 0.40, anomaly 0.30, changed 0.15, unexplained_pass 0.10; frozen in `weights.ts`; ADRs 0001-0007 written; `datatrust bench --gate` for the CI seed-101 gate.
 - 10. Test seeds 101-105 with frozen weights (`uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json`, 2026-10-10, 136 s): detection 100/100, top-3 100/100, top-1 90/100, 0 clean false positives, LOSO top-3 100%, median candidate set 4. `results/bench-2026-10-10-offline.{json,md}`, `results/baseline.json`, `results/baseline-seed101.json` (from a separate seed-101 run, the command CI repeats), `datatrust baseline`, CI `bench-offline` job, README Results section.
+- 11. `apps/worker`: `wrangler.jsonc` / `wrangler.test.jsonc` (D1, R2, vars, `secrets.required`), generated `worker-configuration.d.ts` (`wrangler types --strict-vars=false`), `src/env.ts` (AppEnv + production guard), `src/auth/{access,roles}.ts` (jose RS256, remote JWKS in production, local JWKS in dev, service-token `common_name`), `src/store/repo.ts` (all D1 SQL incl. single-statement lease), read routes (`/healthz`, `/api/whoami`, `/api/runs/:id`, `/api/incidents`, `/api/lineage/:runId/upstream`), `migrations/0001_init.sql`, vitest with `@cloudflare/vitest-plugin` and D1 migrations; `test/access.test.ts` (14 cases: the 12 from SPEC 15 plus `ACCESS_AUD=unset` and the full production guard), `test/api.test.ts`; `scripts/dev-keys.mjs`, `scripts/dev-token.mjs`. CI runs `wrangler types --check` and `wrangler deploy --dry-run`. Verified by hand: `wrangler dev --local` on 8792/9242 answered `/healthz` and `/api/whoami` with a dev token, 401 without; process killed, ports free.
 
 ## Next
 
-- 11. `feat(worker): Hono API, D1 schema and Access JWT verification`.
+- 12. `feat(worker): queues and validation and investigation workflows`.
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 37 passed
-- `npm run test:worker`: no tests yet (`--passWithNoTests`, removed when the Worker lands in commit 11)
+- `npm run test:worker`: 19 passed
 - `uv run ruff check`: pass
 - `uv run pytest`: 113 passed
 
@@ -42,5 +43,6 @@ Commit 10 of 19 (core) done: `docs: offline benchmark results on test seeds`.
 - Probe planning details beyond SPEC 10/11 (all metadata-driven): models use `fanout_ratio` on their grain and sources use `dup_key_rate`; row-multiplicity probes (`fanout_ratio`, `rowcount_ratio`) are judged inherited when any dataset parent shows a multiplicity anomaly (duplicates, fan-out, row count or overlapping intervals), because join fan-out does not follow column lineage. `recompute_delta` also has an `exact` mode (share of rows that differ) for dates and integer formulas. The S04 time-zone probe on `raw.stage_events` reaches the zone through a `tz_path` join chain in source meta.
 - `dbt build` skips models downstream of a failing test, so their checks report `skip`; the ranker treats skipped checks as neither passing nor failing.
 - An extra commit between plan commits 9 and 10 freezes the weights and adds the ADRs, so the history shows the weights fixed before the test seeds ran.
+- Worker secrets are declared with `secrets.required` in the wrangler config, so `wrangler types` output does not depend on a machine's `.dev.vars` (otherwise `wrangler types --check` would differ between the Mac and CI). `/api/whoami` (any role) was added for the smoke and doctor checks.
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.

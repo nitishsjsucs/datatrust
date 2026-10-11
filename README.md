@@ -19,8 +19,8 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | OpenLineage capture and column-level lineage graph | implemented: `dbt-ol build` (openlineage-dbt 1.53.0, file transport) on DuckDB (stand-in), TypeScript graph and upstream closure; tested locally |
 | Diagnostic probes, root-cause ranker, baselines | implemented: 14 read-only probe templates (DuckDB executed, BigQuery rendered only), TypeScript trace, planner, ranker, ablations, naive baselines and HMAC sanitizer; tested locally |
 | Fault-injection benchmark (20 scenarios) | executed locally on DuckDB (stand-in), 2026-10-10, `uv run datatrust bench --seeds 101-105` (see Results); CI gate on seed 101 configured |
-| Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | planned |
-| Access JWT verification | planned |
+| Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | in progress: Hono read API and D1 schema executed in Miniflare (`wrangler dev --local`) only; queues and workflows planned |
+| Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | planned |
 | Basin Pipelines, Basin Catalog (Iceberg) | planned |
 | BigQuery path, policy tags, masking, authorized view, time travel | in progress: dialect macros, BigQuery profiles, policy-tag and authorized-view config implemented, not executed (CI renders the BigQuery macro branches and runs `dbt parse --target bigquery` only) |
@@ -182,6 +182,14 @@ Run the offline fault-injection benchmark (DuckDB stand-in; about 30 seconds per
 ```sh
 npm run build -w @datatrust/rca                          # bundle the TypeScript RCA CLI the runner calls
 uv run datatrust bench --seeds 1 --workers 6 --out /tmp/dt # 20 injected trials + 1 clean trial
+```
+
+Worker (Miniflare, local Access stand-in):
+
+```sh
+npm run dev:keys                                     # RS256 keypair in .dev/keys, local secrets in apps/worker/.dev.vars
+npm run dev -w @datatrust/worker                     # wrangler dev --local on 127.0.0.1:8792 (inspector 9242)
+curl -H "Cf-Access-Jwt-Assertion: $(npm run -s dev:token -- --role operator)" http://127.0.0.1:8792/api/whoami
 ```
 
 More commands are added here as the components land.

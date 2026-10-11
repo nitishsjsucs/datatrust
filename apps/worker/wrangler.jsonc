@@ -1,0 +1,34 @@
+// Local configuration (committed). No AI, no Pipelines binding and no account ids: those are production
+// only (wrangler.prod.template.jsonc). Runs under `wrangler dev --local` (Miniflare, workerd).
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "datatrust",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "datatrust",
+      "database_id": "00000000-0000-4000-8000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "datatrust-artifacts" }],
+  // Secrets: ACCESS_JWKS_JSON is local only (written by `npm run dev:keys` to .dev.vars). Declaring them here
+  // keeps `wrangler types` independent of whatever .dev.vars holds on a given machine.
+  "secrets": { "required": ["ACCESS_AUD", "ROLE_MAP_JSON", "EVIDENCE_HMAC_KEY", "ACCESS_JWKS_JSON"] },
+  "vars": {
+    "ENVIRONMENT": "local",
+    "ACCESS_MODE": "local-jwks",
+    "SUMMARIZER": "template",
+    "LOCAL_LLM_URL": "http://127.0.0.1:8160",
+    "WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "AI_GATEWAY_ID": "datatrust",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_ISSUER": "http://127.0.0.1:8792/dev-access",
+    "VERSION": "0.1.0"
+  }
+}

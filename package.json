@@ -19,10 +19,15 @@
     "test": "npm run test:rca && npm run test:worker && uv run pytest",
     "test:rca": "npm run test -w @datatrust/rca",
     "test:worker": "npm run test -w @datatrust/worker",
-    "bench": "uv run datatrust bench --mode offline --seeds 101-105 --dev-results results/bench-2026-10-10-offline-dev.json"
+    "bench": "uv run datatrust bench --mode offline --seeds 101-105 --dev-results results/bench-2026-10-10-offline-dev.json",
+    "dev:keys": "node scripts/dev-keys.mjs",
+    "dev:token": "node scripts/dev-token.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3",
     "vitest": "4.1.11"
+  },
+  "dependencies": {
+    "jose": "6.2.12"
   }
 }

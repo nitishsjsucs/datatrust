@@ -23,10 +23,16 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: generated Worker types are current
+        run: npx wrangler types --strict-vars=false --check
+        working-directory: apps/worker
       - run: npm run typecheck
       - run: npm run build
       - run: npm run test:rca
       - run: npm run test:worker
+      - name: Worker bundles (local config)
+        run: npx wrangler deploy --dry-run --outdir dist
+        working-directory: apps/worker
 
   python:
     runs-on: ubuntu-latest
