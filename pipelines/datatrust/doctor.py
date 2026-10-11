@@ -30,6 +30,15 @@ QUEUES = (
     "datatrust-dlq",
 )
 BUCKETS = ("datatrust-artifacts", "datatrust-lake")
+# Known on 2026-10-10 (SPEC 28.1) and pre-filled by the wizard: the shared Cloudflare account and Zero Trust
+# team, and the Google Cloud project shared by four repos. Doctor offers them in its fixes and uses them for
+# the read-only checks that need a value .env.prod does not hold yet.
+KNOWN = {
+    "CLOUDFLARE_ACCOUNT_ID": "dc93c3bc8aa4f9e09a0d7e7354a80873",
+    "ACCESS_TEAM_DOMAIN": "https://old-truth-a7dc.cloudflareaccess.com",
+    "DATATRUST_GCP_PROJECT": "master-magnet-444903-u4",
+    "DATATRUST_BQ_LOCATION": "US",
+}
 GCP_APIS = (
     "bigquery.googleapis.com",
     "datacatalog.googleapis.com",
@@ -265,10 +274,12 @@ def env_checks() -> list[Check]:
     for key, where in ENV_KEYS:
         value = os.environ.get(key, "")
         good = bool(value) and value != "unset" and value != "datatrust-ci-placeholder"
+        known = f"add {key}={KNOWN[key]} to .env.prod; {where}" if key in KNOWN else where
+        detail = "unset: every API call answers 401" if key == "ACCESS_AUD" and value == "unset" else ""
         out.append(
             Check("ok", f"{key}", "set")
             if good
-            else Check("missing", f"{key}", "not set in .env.prod", where)
+            else Check("missing", f"{key}", detail or "not set in .env.prod", known)
         )
     out.append(
         Check("ok", "DATATRUST_CF_API_TOKEN (optional)", "set", required=False)
@@ -315,14 +326,24 @@ def cloudflare_checks() -> list[Check]:
     )
     who = wrangler("whoami")
     logged_in = who.returncode == 0 and "not authenticated" not in (who.stdout + who.stderr).lower()
+    accounts = whoami_accounts(who.stdout) if logged_in else []
     out.append(
-        Check("ok", "wrangler logged in")
+        Check("ok", "wrangler logged in", f"account {', '.join(accounts) or 'unknown'}")
         if logged_in
         else Check(
             "missing", "wrangler logged in", "not authenticated", "cd apps/worker && npx wrangler login"
         )
     )
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    if logged_in and account and accounts and account not in accounts:
+        out.append(
+            Check(
+                "missing",
+                "CLOUDFLARE_ACCOUNT_ID is an account of this login",
+                f"{account} not in {', '.join(accounts)}",
+                "fix CLOUDFLARE_ACCOUNT_ID in .env.prod, or `npx wrangler login` to the right account",
+            )
+        )
     paid = paid_only_keys((WORKER / "wrangler.prod.template.jsonc").read_text())
     out.append(
         Check("ok", "Workers Free plan only", "production config has no Paid-only binding")
@@ -460,47 +481,38 @@ def cloudflare_checks() -> list[Check]:
                 "npm run setup:prod -- --cloudflare-only",
             )
         )
-    aud = os.environ.get("ACCESS_AUD", "")
+    # ACCESS_AUD, the service tokens and BASIN_CATALOG_TOKEN are reported once, under .env.prod.
+    # EVIDENCE_HMAC_KEY is not asked for: setup:prod generates it on its first run.
     out.append(
-        Check("ok", "ACCESS_AUD", "set")
-        if aud and aud != "unset"
+        Check("ok", ".env.prod EVIDENCE_HMAC_KEY")
+        if os.environ.get("EVIDENCE_HMAC_KEY")
         else Check(
             "missing",
-            "ACCESS_AUD",
-            "unset: every API call answers 401",
-            "copy the Application Audience tag into .env.prod (README Cloudflare step 13)",
+            ".env.prod EVIDENCE_HMAC_KEY",
+            "not generated yet",
+            "npm run setup:prod -- --cloudflare-only (step 10 generates it and saves it to .env.prod)",
         )
     )
-    for key in ("CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET", "BASIN_CATALOG_TOKEN", "EVIDENCE_HMAC_KEY"):
-        out.append(
-            Check("ok", f".env.prod {key}")
-            if os.environ.get(key)
-            else Check("missing", f".env.prod {key}", "not set", "see README, production setup")
-        )
-    team = os.environ.get("ACCESS_TEAM_DOMAIN", "")
+    team = os.environ.get("ACCESS_TEAM_DOMAIN", "") or KNOWN["ACCESS_TEAM_DOMAIN"]
+    team_label = (
+        team if os.environ.get("ACCESS_TEAM_DOMAIN") else f"{team} (known team, not yet in .env.prod)"
+    )
     url = os.environ.get("DATATRUST_API_URL") or state().get("worker_url")
     try:
         import requests
 
-        if team:
-            certs = requests.get(f"{team.rstrip('/')}/cdn-cgi/access/certs", timeout=30)
-            ok = certs.ok and bool(certs.json().get("keys"))
-            out.append(
-                Check("ok", "Access team JWKS", team)
-                if ok
-                else Check(
-                    "missing", "Access team JWKS", f"HTTP {certs.status_code}", "check ACCESS_TEAM_DOMAIN"
-                )
+        certs = requests.get(f"{team.rstrip('/')}/cdn-cgi/access/certs", timeout=30)
+        ok = certs.ok and bool(certs.json().get("keys"))
+        out.append(
+            Check("ok", "Access team JWKS", f"{team_label}: {len(certs.json().get('keys', []))} keys")
+            if ok
+            else Check(
+                "missing",
+                "Access team JWKS",
+                f"{team_label}: HTTP {certs.status_code}",
+                "check ACCESS_TEAM_DOMAIN",
             )
-        else:
-            out.append(
-                Check(
-                    "missing",
-                    "Access team JWKS",
-                    "ACCESS_TEAM_DOMAIN not set",
-                    "set it in .env.prod (README Cloudflare step 8)",
-                )
-            )
+        )
         if url:
             anon = requests.get(f"{url}/api/whoami", allow_redirects=False, timeout=30)
             out.append(
@@ -530,6 +542,20 @@ def cloudflare_checks() -> list[Check]:
                 "missing", "Worker and Access reachability", str(err), "check network and DATATRUST_API_URL"
             )
         )
+    basin = [
+        k for k in ("BASIN_CATALOG_URI", "BASIN_WAREHOUSE", "BASIN_CATALOG_TOKEN") if not os.environ.get(k)
+    ]
+    if basin:
+        out.append(
+            Check(
+                "missing",
+                "Basin Catalog REST (pyiceberg)",
+                f"skipped: {', '.join(basin)} not set",
+                "setup:prod writes BASIN_CATALOG_URI and BASIN_WAREHOUSE when it enables the catalog (step 3); "
+                "BASIN_CATALOG_TOKEN is an R2 API token (README Cloudflare step 9)",
+            )
+        )
+        return out
     try:
         from datatrust.lake.iceberg_basin import list_namespaces
 
@@ -541,10 +567,15 @@ def cloudflare_checks() -> list[Check]:
                 "missing",
                 "Basin Catalog REST (pyiceberg)",
                 str(err)[:200],
-                "set BASIN_CATALOG_URI, BASIN_WAREHOUSE, BASIN_CATALOG_TOKEN",
+                "check BASIN_CATALOG_URI, BASIN_WAREHOUSE and BASIN_CATALOG_TOKEN (Admin Read & Write)",
             )
         )
     return out
+
+
+def whoami_accounts(text: str) -> list[str]:
+    """Account ids in the table `wrangler whoami` prints (32 hex characters each)."""
+    return sorted(set(re.findall(r"\b[0-9a-f]{32}\b", re.sub(r"\x1b\[[0-9;]*m", "", text))))
 
 
 def jwt_claims(token: str | None) -> dict[str, Any]:
@@ -717,6 +748,40 @@ def governance_checks(project: str, location: str) -> list[Check]:
 # ------------------------------------------------------------------------------------------------ Google Cloud
 
 
+def adc_quota_project() -> tuple[bool, str | None, str]:
+    """Application default credentials through google-auth, the way the Python clients load them (the file
+    itself is never parsed here): (present, quota project, detail)."""
+    try:
+        import google.auth
+        from google.auth.exceptions import DefaultCredentialsError
+
+        try:
+            creds, _ = google.auth.default()
+        except DefaultCredentialsError as err:
+            return False, None, str(err).splitlines()[0][:160]
+        return True, getattr(creds, "quota_project_id", None), type(creds).__module__.rsplit(".", 1)[-1]
+    except Exception as err:  # noqa: BLE001
+        return False, None, f"{type(err).__name__}: {str(err)[:160]}"
+
+
+# A DataTrust identity may hold only these roles on the shared project (SPEC 28.5.10): BigQuery Job User
+# lets it run jobs and reads no data. Everything else is dataset- or resource-scoped.
+PROJECT_ROLES_ALLOWED = {"roles/bigquery.jobUser"}
+
+
+def project_role_violations(policy: dict[str, Any], project: str) -> list[str]:
+    """Project-level bindings of datatrust-* service accounts other than BigQuery Job User."""
+    bad = []
+    prefix = "serviceAccount:datatrust-"
+    suffix = f"@{project}.iam.gserviceaccount.com"
+    for binding in policy.get("bindings") or []:
+        role = binding.get("role", "")
+        for member in binding.get("members") or []:
+            if member.startswith(prefix) and member.endswith(suffix) and role not in PROJECT_ROLES_ALLOWED:
+                bad.append(f"{member.split(':', 1)[1].split('@')[0]} {role}")
+    return sorted(bad)
+
+
 def gcp_checks() -> list[Check]:
     out: list[Check] = []
     gcloud, bq = shutil.which("gcloud"), shutil.which("bq")
@@ -745,43 +810,57 @@ def gcp_checks() -> list[Check]:
         if account and "unset" not in account
         else Check("missing", "gcloud active account", "none", "gcloud auth login")
     )
-    adc = Path(
-        os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-        or Path.home() / ".config/gcloud/application_default_credentials.json"
-    )
-    if adc.exists():
-        quota = json.loads(adc.read_text()).get("quota_project_id")
+    present, quota, detail = adc_quota_project()
+    if not present:
+        out.append(
+            Check(
+                "missing", "application default credentials", detail, "gcloud auth application-default login"
+            )
+        )
+    else:
         out.append(
             Check("ok", "ADC with quota project", quota)
             if quota
             else Check(
                 "missing",
                 "ADC with quota project",
-                "no quota_project_id",
-                "gcloud auth application-default set-quota-project $DATATRUST_GCP_PROJECT",
+                f"{detail} credentials without a quota_project_id",
+                f"gcloud auth application-default set-quota-project "
+                f"{os.environ.get('DATATRUST_GCP_PROJECT') or KNOWN['DATATRUST_GCP_PROJECT']}",
+            )
+        )
+    configured = run(["gcloud", "config", "get-value", "project"]).stdout.strip()
+    project = os.environ.get("DATATRUST_GCP_PROJECT", "")
+    if not project or project == "datatrust-ci-placeholder":
+        # .env.prod checks already list DATATRUST_GCP_PROJECT; keep checking read-only against the gcloud
+        # project so the rest of what is missing shows up now, not one rerun at a time.
+        if not configured:
+            out.append(
+                Check(
+                    "missing",
+                    "Google Cloud project",
+                    "neither DATATRUST_GCP_PROJECT nor `gcloud config get-value project` is set",
+                    f"gcloud config set project {KNOWN['DATATRUST_GCP_PROJECT']}",
+                )
+            )
+            return out
+        project = configured
+        out.append(
+            Check(
+                "ok", "Google Cloud project", f"{project} (gcloud default; .env.prod does not name one yet)"
+            )
+        )
+    elif configured != project:
+        out.append(
+            Check(
+                "missing",
+                "gcloud project matches DATATRUST_GCP_PROJECT",
+                f"gcloud {configured or 'unset'}, .env.prod {project} (setup:prod stops on this)",
+                f"gcloud config set project {project}",
             )
         )
     else:
-        out.append(
-            Check(
-                "missing",
-                "application default credentials",
-                str(adc),
-                "gcloud auth application-default login",
-            )
-        )
-    project = os.environ.get("DATATRUST_GCP_PROJECT", "")
-    if not project or project == "datatrust-ci-placeholder":
-        out.append(
-            Check(
-                "missing",
-                "DATATRUST_GCP_PROJECT",
-                "not set",
-                "set it in .env.prod (README, Google Cloud step 4)",
-            )
-        )
-        return out
-    out.append(Check("ok", "DATATRUST_GCP_PROJECT", project))
+        out.append(Check("ok", "DATATRUST_GCP_PROJECT", project))
     billing = run(
         ["gcloud", "billing", "projects", "describe", project, "--format=value(billingEnabled)"]
     ).stdout.strip()
@@ -791,25 +870,32 @@ def gcp_checks() -> list[Check]:
         else Check(
             "missing",
             "billing enabled",
-            billing or "unknown",
+            f"billingEnabled {billing or 'unknown'}: policy tags, masking and DML need it",
             f"enable billing: https://console.cloud.google.com/billing?project={project} (README Google Cloud step 2)",
         )
     )
     enabled = run(
         ["gcloud", "services", "list", "--enabled", f"--project={project}", "--format=value(config.name)"]
-    ).stdout
+    ).stdout.split()
+    off = [api for api in GCP_APIS if api not in enabled]
     for api in GCP_APIS:
+        if api in enabled:
+            out.append(Check("ok", f"API {api}"))
+    if off:
         out.append(
-            Check("ok", f"API {api}")
-            if api in enabled
-            else Check(
-                "missing", f"API {api}", "not enabled", f"gcloud services enable {api} --project={project}"
+            Check(
+                "missing",
+                f"APIs {', '.join(a.split('.')[0] for a in off)}",
+                "not enabled",
+                f"npm run setup:prod -- --gcp-only (or gcloud services enable {' '.join(off)} --project={project})",
             )
         )
-    for ds in ("datatrust_raw", "datatrust_staging", "datatrust_marts", "datatrust_restricted"):
+    datasets = ("datatrust_raw", "datatrust_staging", "datatrust_marts", "datatrust_restricted")
+    absent = []
+    for ds in datasets:
         show = run(["bq", "show", "--format=prettyjson", f"{project}:{ds}"])
         if show.returncode != 0:
-            out.append(Check("missing", f"dataset {ds}", "not found", "npm run setup:prod -- --gcp-only"))
+            absent.append(ds)
             continue
         hours = str(json.loads(show.stdout or "{}").get("maxTimeTravelHours", ""))
         out.append(
@@ -822,6 +908,11 @@ def gcp_checks() -> list[Check]:
                 f"bq update --dataset=true --max_time_travel_hours=168 {project}:{ds}",
             )
         )
+    if absent:
+        out.append(
+            Check("missing", f"datasets {', '.join(absent)}", "not found", "npm run setup:prod -- --gcp-only")
+        )
+    accounts_missing = []
     for sa in ("datatrust-analyst", "datatrust-prober"):
         email = f"{sa}@{project}.iam.gserviceaccount.com"
         exists = (
@@ -829,10 +920,9 @@ def gcp_checks() -> list[Check]:
             == 0
         )
         if not exists:
-            out.append(
-                Check("missing", f"service account {sa}", "not found", "npm run setup:prod -- --gcp-only")
-            )
+            accounts_missing.append(sa)
             continue
+        # The minted token is captured and dropped; only the exit code matters.
         token = run(["gcloud", "auth", "print-access-token", f"--impersonate-service-account={email}"])
         out.append(
             Check("ok", f"impersonate {sa}")
@@ -844,7 +934,49 @@ def gcp_checks() -> list[Check]:
                 "npm run setup:prod -- --gcp-only (grants Service Account Token Creator)",
             )
         )
-    out.extend(governance_checks(project, os.environ.get("DATATRUST_BQ_LOCATION", "US")))
+    if accounts_missing:
+        out.append(
+            Check(
+                "missing",
+                f"service accounts {', '.join(accounts_missing)}",
+                "not found",
+                "npm run setup:prod -- --gcp-only",
+            )
+        )
+    policy = run(["gcloud", "projects", "get-iam-policy", project, "--format=json"])
+    if policy.returncode == 0:
+        bad = project_role_violations(json.loads(policy.stdout or "{}"), project)
+        out.append(
+            Check("ok", "project-level roles of datatrust-* identities", "BigQuery Job User at most")
+            if not bad
+            else Check(
+                "missing",
+                "project-level roles of datatrust-* identities",
+                "; ".join(bad),
+                "remove them: grants on the shared project are dataset- or resource-scoped (SPEC 28.5.10)",
+            )
+        )
+    else:
+        out.append(
+            Check(
+                "warn",
+                "project-level roles of datatrust-* identities",
+                "cannot read the project IAM policy",
+                "needs resourcemanager.projects.getIamPolicy (Owner has it)",
+                required=False,
+            )
+        )
+    if "datacatalog.googleapis.com" in enabled and "bigquerydatapolicy.googleapis.com" in enabled:
+        out.extend(governance_checks(project, os.environ.get("DATATRUST_BQ_LOCATION", "US")))
+    else:
+        out.append(
+            Check(
+                "missing",
+                "policy tags and masking policies",
+                "skipped until the Data Catalog and data policy APIs are enabled",
+                "npm run setup:prod -- --gcp-only (step 18, governance apply)",
+            )
+        )
     try:
         from datatrust.prod.settings import dbt_vars
 
@@ -855,8 +987,8 @@ def gcp_checks() -> list[Check]:
             Check(
                 "missing",
                 ".prod/dbt_vars.yml policy tags",
-                str(err),
-                "uv run datatrust prod governance apply",
+                "not written yet" if "is missing" in str(err) else str(err),
+                "uv run datatrust prod governance apply (setup:prod step 18)",
             )
         )
     return out
