@@ -19,7 +19,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | OpenLineage capture and column-level lineage graph | implemented: `dbt-ol build` (openlineage-dbt 1.53.0, file transport) on DuckDB (stand-in), TypeScript graph and upstream closure; tested locally |
 | Diagnostic probes, root-cause ranker, baselines | implemented: 14 read-only probe templates (DuckDB executed, BigQuery rendered only), TypeScript trace, planner, ranker, ablations, naive baselines and HMAC sanitizer; tested locally |
 | Fault-injection benchmark (20 scenarios) | executed locally on DuckDB (stand-in), 2026-10-10, `uv run datatrust bench --seeds 101-105` (see Results); CI gate on seed 101 configured |
-| Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | in progress: Hono read API and D1 schema executed in Miniflare (`wrangler dev --local`) only; queues and workflows planned |
+| Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local` and `@cloudflare/vitest-plugin`) only |
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | planned |
 | Basin Pipelines, Basin Catalog (Iceberg) | planned |

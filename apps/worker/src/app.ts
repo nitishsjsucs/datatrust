@@ -1,7 +1,10 @@
 /** Hono app: health, Access-verified API routes and role guards (SPEC 13.1, 15). */
 import { Hono } from 'hono';
+import { alerts } from './api/alerts';
 import { incidents } from './api/incidents';
 import { lineageRead } from './api/lineage';
+import { lineageIngest } from './api/lineage-ingest';
+import { runner } from './api/runner';
 import { runs } from './api/runs';
 import { authenticate } from './auth/access';
 import { misconfiguration } from './env';
@@ -34,6 +37,9 @@ export function createApp(): Hono<HonoEnv> {
   app.route('/api/runs', runs);
   app.route('/api/incidents', incidents);
   app.route('/api/lineage', lineageRead);
+  app.route('/api/runner', runner);
+  app.route('/api/v1/lineage', lineageIngest);
+  app.route('/api/alerts', alerts);
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((err, c) => {

@@ -94,9 +94,60 @@ def record_lineage() -> list[Path]:
         return [ev_path, rel_path]
 
 
+def record_worker_investigation() -> Path:
+    """apps/worker/test/fixtures/investigation.s01.seed101.json for the Workflow tests: checks, relations,
+    model-run OpenLineage events and sanitized probe results of a real S01 (duplicate hires) trial,
+    seed 101."""
+    from datatrust.bench.harness import BENCH_KEY
+    from datatrust.bench.scenarios import BY_ID, inject, patches_for
+    from datatrust.checks.results import classify
+    from datatrust.dbt.overlay import make_overlay
+    from datatrust.diagnostics.probes import ProbeRequest, run_probes
+    from datatrust.rca_cli import rca
+    from datatrust.warehouse.duckdb_wh import DuckDBWarehouse
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        scenario = BY_ID["S01"]
+        ds = generate(101)
+        inject(ds, 101, scenario)
+        write_dataset(ds, root / "raw")
+        project = make_overlay(root / "dbt", patches_for(101, scenario)[0])
+        load_raw(root / "raw", root / "warehouse.duckdb")
+        res = build_with_lineage(
+            project_dir=project, target_path=root / "target", duckdb_path=root / "warehouse.duckdb"
+        )
+        checks = [c.to_json() for c in classify(res.run_results(), res.manifest())]
+        rel = json.loads((root / "target" / "relations.json").read_text())
+        events = [scrub_namespaces(e) for e in res.openlineage_events()]
+        events = [
+            e for e in events if e["eventType"] == "COMPLETE" and e["job"]["name"].endswith(".build.run")
+        ]
+        plan = rca("plan", {"checks": checks, "events": events, "relations": rel})
+        with DuckDBWarehouse(root / "warehouse.duckdb") as wh:
+            raw = [
+                r.to_json() for r in run_probes([ProbeRequest.from_json(p) for p in plan["probes"]], wh, rel)
+            ]
+        sanitized = rca(
+            "sanitize", {"probeResults": raw, "relations": rel}, env_extra={"EVIDENCE_HMAC_KEY": BENCH_KEY}
+        )["probeResults"]
+        out = Path(__file__).resolve().parents[2] / "apps" / "worker" / "test" / "fixtures"
+        path = out / "investigation.s01.seed101.json"
+        doc = {
+            "checks": checks,
+            "relations": scrub(rel, str(root)),
+            "events": events,
+            "probeResults": sanitized,
+        }
+        path.write_text(json.dumps(doc, sort_keys=True) + "\n")
+        return path
+
+
 if __name__ == "__main__":
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
     if which in ("all", "contract"):
         print(record_contract_failure(), file=sys.stderr)
     if which in ("all", "lineage"):
         print(record_lineage(), file=sys.stderr)
+    if which in ("all", "worker"):
+        print(record_worker_investigation(), file=sys.stderr)

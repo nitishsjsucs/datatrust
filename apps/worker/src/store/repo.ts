@@ -110,6 +110,7 @@ export async function leaseJob(
   db: D1Database,
   kinds: JobKind[],
   owner: string,
+  target: string,
   now = Date.now(),
 ): Promise<JobRow | null> {
   if (kinds.length === 0) return null;
@@ -122,12 +123,13 @@ export async function leaseJob(
        WHERE job_id = (
          SELECT job_id FROM jobs
          WHERE kind IN (${placeholders}) AND attempts < ${MAX_ATTEMPTS}
+           AND json_extract(payload_json, '$.target') = ?
            AND (status = 'queued' OR (status = 'leased' AND lease_expires_at < ?))
          ORDER BY created_at, rowid LIMIT 1
        )
        RETURNING *`,
     )
-    .bind(token, owner, now + LEASE_TTL_MS, nowIso(), ...kinds, now)
+    .bind(token, owner, now + LEASE_TTL_MS, nowIso(), ...kinds, target, now)
     .first<JobRow>();
 }
 

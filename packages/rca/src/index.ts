@@ -8,3 +8,4 @@ export * from './rca/baselines';
 export * from './rca/weights';
 export * from './rca/tune';
 export * from './evidence/sanitize';
+export * from './evidence/evidence';

@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 11 of 19 (core) done: `feat(worker): Hono API, D1 schema and Access JWT verification`.
+Commit 12 of 19 (core) done: `feat(worker): queues and validation and investigation workflows`.
 
 ## Done
 
@@ -20,16 +20,17 @@ Commit 11 of 19 (core) done: `feat(worker): Hono API, D1 schema and Access JWT v
 - 9b (extra). Dev tuning: `uv run datatrust bench --seeds 1-3 --workers 6 --tag dev` (results/bench-2026-10-10-offline-dev.*), `uv run datatrust tune --from results/bench-2026-10-10-offline-dev.json` gave coverage 0.40, anomaly 0.30, changed 0.15, unexplained_pass 0.10; frozen in `weights.ts`; ADRs 0001-0007 written; `datatrust bench --gate` for the CI seed-101 gate.
 - 10. Test seeds 101-105 with frozen weights (`uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json`, 2026-10-10, 136 s): detection 100/100, top-3 100/100, top-1 90/100, 0 clean false positives, LOSO top-3 100%, median candidate set 4. `results/bench-2026-10-10-offline.{json,md}`, `results/baseline.json`, `results/baseline-seed101.json` (from a separate seed-101 run, the command CI repeats), `datatrust baseline`, CI `bench-offline` job, README Results section.
 - 11. `apps/worker`: `wrangler.jsonc` / `wrangler.test.jsonc` (D1, R2, vars, `secrets.required`), generated `worker-configuration.d.ts` (`wrangler types --strict-vars=false`), `src/env.ts` (AppEnv + production guard), `src/auth/{access,roles}.ts` (jose RS256, remote JWKS in production, local JWKS in dev, service-token `common_name`), `src/store/repo.ts` (all D1 SQL incl. single-statement lease), read routes (`/healthz`, `/api/whoami`, `/api/runs/:id`, `/api/incidents`, `/api/lineage/:runId/upstream`), `migrations/0001_init.sql`, vitest with `@cloudflare/vitest-plugin` and D1 migrations; `test/access.test.ts` (14 cases: the 12 from SPEC 15 plus `ACCESS_AUD=unset` and the full production guard), `test/api.test.ts`; `scripts/dev-keys.mjs`, `scripts/dev-token.mjs`. CI runs `wrangler types --check` and `wrangler deploy --dry-run`. Verified by hand: `wrangler dev --local` on 8792/9242 answered `/healthz` and `/api/whoami` with a dev token, 401 without; process killed, ports free.
+- 12. Queues (`dt-check-results`, `dt-lineage-events`, `dt-investigate`, `dt-dlq` with retries and DLQ) and consumers, `ValidationRunWorkflow` (register, enqueue build, wait for `build-complete` with 6 h timeout, `await-ingested` with 10 exponential retries, summarize, dispatch, finalize) and `InvestigationWorkflow` (load context, trace, plan, diagnostics job, wait 1 h, rank with frozen weights, sanitized evidence, template summary, persist to D1 and R2 with provenance), write routes (`POST /api/runs`, runner lease/artifacts/complete with lease tokens, `POST /api/v1/lineage`, `POST /api/alerts`), deterministic investigation ids, `rca` evidence builder. Tests: `queues.test.ts`, `validation-run.test.ts`, `investigation.test.ts` (real S01 trial fixture: raw.hires ranked first), `runner.test.ts` (lease, attempts sweep, stale tokens, 422 on unsanitized probe results, alerts). Verified by hand under `wrangler dev --local`: `POST /api/runs` created a workflow and the runner token leased its `dbt_build` job; processes killed, ports free.
 
 ## Next
 
-- 12. `feat(worker): queues and validation and investigation workflows`.
+- 13. `feat(runner): lease protocol for dbt builds and diagnostics` (Python runner client and loop, runner-side sanitize, `scripts/dev-up.sh` / `dev-down.sh`).
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 37 passed
-- `npm run test:worker`: 19 passed
+- `npm run test:worker`: 40 passed
 - `uv run ruff check`: pass
 - `uv run pytest`: 113 passed
 
@@ -44,5 +45,7 @@ Commit 11 of 19 (core) done: `feat(worker): Hono API, D1 schema and Access JWT v
 - `dbt build` skips models downstream of a failing test, so their checks report `skip`; the ranker treats skipped checks as neither passing nor failing.
 - An extra commit between plan commits 9 and 10 freezes the weights and adds the ADRs, so the history shows the weights fixed before the test seeds ran.
 - Worker secrets are declared with `secrets.required` in the wrangler config, so `wrangler types` output does not depend on a machine's `.dev.vars` (otherwise `wrangler types --check` would differ between the Mac and CI). `/api/whoami` (any role) was added for the smoke and doctor checks.
+- Workflow step results are serialized to JSON strings explicitly (`workflows/steps.ts`), which keeps step outputs visibly serializable and avoids TypeScript's deep `Serializable<T>` instantiation on lineage types. Tests that inspect step results parse the JSON.
+- The incident summary in this commit comes from a minimal template summarizer; placeholder drafts, grounding validation, Workers AI and the local LLM land in commit 14.
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.
