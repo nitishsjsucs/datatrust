@@ -1,0 +1,24 @@
+{
+  "a": {
+    "report": "bench-2026-10-10-offline.json",
+    "gitCommit": "86ef4f1658f7ac5bff239a79aca1fe3100dc152e"
+  },
+  "b": {
+    "report": "bench-2026-10-11-offline-recheck.json",
+    "gitCommit": "e00de5caf168921888d25de9153eeb67972b0c8f"
+  },
+  "trials": 105,
+  "fields": [
+    "ranked",
+    "rankedColumns",
+    "features",
+    "ablations",
+    "baselines",
+    "detected",
+    "failing",
+    "candidateCount",
+    "probeCount"
+  ],
+  "differences": [],
+  "summaryEqualExceptLoso": true
+}

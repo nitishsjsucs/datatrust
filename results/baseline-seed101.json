@@ -1,12 +1,12 @@
 {
   "cleanFalsePositives": 0,
   "cleanTrials": 1,
-  "command": "uv run datatrust bench --mode offline --seeds 101 --workers 4 --out .data/seed101 --tag seed101",
-  "date": "2026-10-10",
+  "command": "uv run datatrust bench --mode offline --seeds 101 --workers 4 --out results --tag seed101",
+  "date": "2026-10-11",
   "detectionRecall": 1.0,
-  "gitCommit": "86ef4f1658f7ac5bff239a79aca1fe3100dc152e-dirty",
+  "gitCommit": "0957b86dd510536de0f5df8b6c84e15a2a52382e",
   "injectedTrials": 20,
-  "report": "bench-2026-10-10-offline-seed101.json",
+  "report": "bench-2026-10-11-offline-seed101.json",
   "seeds": [
     101
   ],

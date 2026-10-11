@@ -1,0 +1,4029 @@
+{
+ "meta": {
+  "command": "uv run datatrust bench --mode offline --seeds 101 --workers 4 --out results --tag seed101",
+  "date": "2026-10-11",
+  "gitCommit": "0957b86dd510536de0f5df8b6c84e15a2a52382e",
+  "mode": "offline",
+  "seeds": [
+   101
+  ],
+  "versions": {
+   "dbt-core": "1.12.5",
+   "dbt-duckdb": "1.11.0",
+   "duckdb": "1.5.6",
+   "node": "v25.9.0",
+   "openlineage-dbt": "1.53.0",
+   "pyarrow": "26.0.0",
+   "python": "3.12.13",
+   "sqlglot": "30.22.0"
+  },
+  "wallSeconds": 39.8,
+  "warehouse": "DuckDB 1.5.6 via dbt-duckdb 1.11.0, local stand-in for BigQuery",
+  "weights": {
+   "anomaly": 0.3,
+   "changed": 0.15,
+   "coverage": 0.4,
+   "unexplainedPass": 0.1
+  }
+ },
+ "records": [
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.fct_hires",
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.hires",
+     "model.datatrust.stg_applications",
+     "model.datatrust.stg_hires",
+     "model.datatrust.fct_hires",
+     "model.datatrust.int_application_stage_path",
+     "model.datatrust.stg_requisitions",
+     "model.datatrust.stg_offers",
+     "source.datatrust.raw.offers",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.requisitions",
+     "source.datatrust.raw.stage_events",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.applications"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.hires",
+     "model.datatrust.fct_hires",
+     "model.datatrust.stg_hires"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_hires",
+     "model.datatrust.fct_hires",
+     "source.datatrust.raw.hires"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_hires",
+     "model.datatrust.fct_hires",
+     "source.datatrust.raw.hires"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.hires"
+    ]
+   },
+   "candidateCount": 3,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 38,
+    "skip": 1
+   },
+   "decoys": [
+    "D01",
+    "D02",
+    "D07"
+   ],
+   "detected": true,
+   "failing": [
+    "U05"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "application_id"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.fct_hires",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "application_id"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_hires",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8333333333333334
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "application_id"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.hires",
+      "ownAnomaly": 1,
+      "probes": [
+       "dup_key_rate:source.datatrust.raw.hires:application_id",
+       "dup_key_rate:source.datatrust.raw.hires:employee_id"
+      ],
+      "unexplainedPass": 0.8333333333333334
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.hires",
+   "groundTruthColumn": "application_id",
+   "injection": {
+    "duplicated_hires": 6,
+    "severity": 6
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 202,
+    "share": 0.9439252336448598,
+    "total": 214
+   },
+   "probeCount": 46,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 46
+   },
+   "ranked": [
+    "source.datatrust.raw.hires",
+    "model.datatrust.stg_hires",
+    "model.datatrust.fct_hires"
+   ],
+   "rankedColumns": {
+    "model.datatrust.fct_hires": [
+     "application_id"
+    ],
+    "model.datatrust.stg_hires": [
+     "application_id"
+    ],
+    "source.datatrust.raw.hires": [
+     "application_id"
+    ]
+   },
+   "scenario": "S01",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.294,
+    "plan": 0.208,
+    "prepare": 1.186,
+    "probes": 0.155,
+    "rank": 0.588
+   },
+   "trial": "s101-S01",
+   "wallSeconds": 7.445
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_applications",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.applications",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.stage_events"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.applications",
+     "model.datatrust.stg_applications",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.requisitions",
+     "source.datatrust.raw.stage_events",
+     "source.datatrust.raw.locations"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.applications",
+     "model.datatrust.stg_applications",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_applications",
+     "source.datatrust.raw.applications",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_applications",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.applications",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.stage_events"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.applications",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "candidateCount": 5,
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 36,
+    "skip": 2
+   },
+   "decoys": [],
+   "detected": true,
+   "failing": [
+    "R04",
+    "S05"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "requisition_id"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_applications",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "entered_at",
+       "location_tz",
+       "source_system"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_stage_events",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "requisition_id"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.applications",
+      "ownAnomaly": 1,
+      "probes": [
+       "orphan_rate:source.datatrust.raw.applications:requisition_id:source.datatrust.raw.requisitions"
+      ],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "timezone"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.locations",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "entered_at",
+       "source_system"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.stage_events",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.applications",
+   "groundTruthColumn": "requisition_id",
+   "injection": {
+    "orphaned_applications": 7,
+    "severity": 7
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 164,
+    "share": 0.7663551401869159,
+    "total": 214
+   },
+   "probeCount": 27,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 27
+   },
+   "ranked": [
+    "source.datatrust.raw.applications",
+    "model.datatrust.stg_applications",
+    "source.datatrust.raw.locations",
+    "model.datatrust.stg_stage_events",
+    "source.datatrust.raw.stage_events"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_applications": [
+     "requisition_id"
+    ],
+    "source.datatrust.raw.applications": [
+     "requisition_id"
+    ],
+    "source.datatrust.raw.locations": [
+     "timezone"
+    ]
+   },
+   "scenario": "S02",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.187,
+    "plan": 0.2,
+    "prepare": 1.193,
+    "probes": 0.197,
+    "rank": 0.575
+   },
+   "trial": "s101-S02",
+   "wallSeconds": 7.369
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_fx_rates"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_fx_rates"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.fx_rates"
+    ]
+   },
+   "candidateCount": 2,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 32,
+    "skip": 7
+   },
+   "decoys": [],
+   "detected": true,
+   "failing": [
+    "C03"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "currency",
+       "rate_date",
+       "rate_to_usd"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_fx_rates",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency",
+       "rate_date",
+       "rate_to_usd"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.fx_rates",
+      "ownAnomaly": 1,
+      "probes": [
+       "fx_stale_run:source.datatrust.raw.fx_rates:rate_to_usd"
+      ],
+      "unexplainedPass": 0.75
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.fx_rates",
+   "groundTruthColumn": "rate_to_usd",
+   "injection": {
+    "currency": "INR",
+    "severity": 34,
+    "stale_days": 34
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 161,
+    "share": 0.7523364485981309,
+    "total": 214
+   },
+   "probeCount": 8,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 8
+   },
+   "ranked": [
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_fx_rates"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_fx_rates": [
+     "currency",
+     "rate_date",
+     "rate_to_usd"
+    ],
+    "source.datatrust.raw.fx_rates": [
+     "currency",
+     "rate_date",
+     "rate_to_usd"
+    ]
+   },
+   "scenario": "S03",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.083,
+    "plan": 0.206,
+    "prepare": 1.186,
+    "probes": 0.084,
+    "rank": 0.578
+   },
+   "trial": "s101-S03",
+   "wallSeconds": 7.153
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.stage_events"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.stage_events",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.requisitions",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.applications"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.stage_events",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_stage_events"
+    ],
+    "no_probes": [
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.stage_events"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "candidateCount": 3,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 37,
+    "skip": 2
+   },
+   "decoys": [
+    "D02",
+    "D03"
+   ],
+   "detected": true,
+   "failing": [
+    "S05"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "entered_at",
+       "location_tz",
+       "source_system"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_stage_events",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "timezone"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.locations",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "entered_at",
+       "source_system"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.stage_events",
+      "ownAnomaly": 1,
+      "probes": [
+       "tz_hour_profile:source.datatrust.raw.stage_events:entered_at"
+      ],
+      "unexplainedPass": 0.8571428571428571
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.stage_events",
+   "groundTruthColumn": "entered_at",
+   "injection": {
+    "events": 812,
+    "location_id": 7,
+    "severity": 1
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 164,
+    "share": 0.7663551401869159,
+    "total": 214
+   },
+   "probeCount": 22,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 22
+   },
+   "ranked": [
+    "source.datatrust.raw.stage_events",
+    "source.datatrust.raw.locations",
+    "model.datatrust.stg_stage_events"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_stage_events": [
+     "entered_at",
+     "location_tz",
+     "source_system"
+    ],
+    "source.datatrust.raw.locations": [
+     "timezone"
+    ],
+    "source.datatrust.raw.stage_events": [
+     "entered_at",
+     "source_system"
+    ]
+   },
+   "scenario": "S04",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.188,
+    "plan": 0.193,
+    "prepare": 1.181,
+    "probes": 0.185,
+    "rank": 0.555
+   },
+   "trial": "s101-S04",
+   "wallSeconds": 7.321
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ]
+   },
+   "candidateCount": 4,
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 32,
+    "skip": 6
+   },
+   "decoys": [
+    "D04",
+    "D06",
+    "D11",
+    "D12"
+   ],
+   "detected": true,
+   "failing": [
+    "H01",
+    "H02"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "termination_date"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8333333333333334
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "employee_id",
+       "valid_from",
+       "valid_to"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_job_assignments",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.7142857142857143
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "termination_date"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8333333333333334
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id",
+       "valid_from",
+       "valid_to"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.job_assignments",
+      "ownAnomaly": 1,
+      "probes": [
+       "interval_overlap:source.datatrust.raw.job_assignments:employee_id,valid_from,valid_to"
+      ],
+      "unexplainedPass": 0.7142857142857143
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.job_assignments",
+   "groundTruthColumn": "valid_to",
+   "injection": {
+    "employees": 12,
+    "severity": 12
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 142,
+    "share": 0.6635514018691588,
+    "total": 214
+   },
+   "probeCount": 18,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 18
+   },
+   "ranked": [
+    "source.datatrust.raw.job_assignments",
+    "model.datatrust.stg_job_assignments",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_employees": [
+     "termination_date"
+    ],
+    "model.datatrust.stg_job_assignments": [
+     "employee_id",
+     "valid_from",
+     "valid_to"
+    ],
+    "source.datatrust.raw.job_assignments": [
+     "employee_id",
+     "valid_from",
+     "valid_to"
+    ]
+   },
+   "scenario": "S05",
+   "seed": 101,
+   "timings": {
+    "dbt": 4.919,
+    "plan": 0.189,
+    "prepare": 0.268,
+    "probes": 0.04,
+    "rank": 0.502
+   },
+   "trial": "s101-S05",
+   "wallSeconds": 5.922
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_fx_rates"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_fx_rates"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.fx_rates"
+    ]
+   },
+   "candidateCount": 2,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "decoys": [
+    "D01",
+    "D03",
+    "D08",
+    "D12"
+   ],
+   "detected": true,
+   "failing": [
+    "C04"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 1,
+      "columns": [
+       "currency",
+       "rate_date"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_fx_rates",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency",
+       "rate_date"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.fx_rates",
+      "ownAnomaly": 1,
+      "probes": [
+       "date_gaps:source.datatrust.raw.fx_rates:rate_date"
+      ],
+      "unexplainedPass": 0.8571428571428571
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.fx_rates",
+   "groundTruthColumn": "rate_date",
+   "injection": {
+    "currency": "GBP",
+    "missing_days": 9,
+    "severity": 9
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 207,
+    "share": 0.9672897196261683,
+    "total": 214
+   },
+   "probeCount": 8,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 8
+   },
+   "ranked": [
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_fx_rates"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_fx_rates": [
+     "currency",
+     "rate_date"
+    ],
+    "source.datatrust.raw.fx_rates": [
+     "currency",
+     "rate_date"
+    ]
+   },
+   "scenario": "S06",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.072,
+    "plan": 0.188,
+    "prepare": 0.271,
+    "probes": 0.039,
+    "rank": 0.497
+   },
+   "trial": "s101-S06",
+   "wallSeconds": 6.07
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_fx_rates"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_fx_rates"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.fx_rates"
+    ]
+   },
+   "candidateCount": 2,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 32,
+    "skip": 7
+   },
+   "decoys": [
+    "D02",
+    "D04",
+    "D05",
+    "D08"
+   ],
+   "detected": true,
+   "failing": [
+    "C05"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "currency",
+       "rate_date",
+       "rate_to_usd"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_fx_rates",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency",
+       "rate_date",
+       "rate_to_usd"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.fx_rates",
+      "ownAnomaly": 1,
+      "probes": [
+       "fx_band_violation:source.datatrust.raw.fx_rates:rate_to_usd"
+      ],
+      "unexplainedPass": 0.75
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.fx_rates",
+   "groundTruthColumn": "rate_to_usd",
+   "injection": {
+    "currency": "INR",
+    "inverted_days": 3,
+    "severity": 3
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 161,
+    "share": 0.7523364485981309,
+    "total": 214
+   },
+   "probeCount": 8,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 8
+   },
+   "ranked": [
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_fx_rates"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_fx_rates": [
+     "currency",
+     "rate_date",
+     "rate_to_usd"
+    ],
+    "source.datatrust.raw.fx_rates": [
+     "currency",
+     "rate_date",
+     "rate_to_usd"
+    ]
+   },
+   "scenario": "S07",
+   "seed": 101,
+   "timings": {
+    "dbt": 4.889,
+    "plan": 0.19,
+    "prepare": 0.259,
+    "probes": 0.03,
+    "rank": 0.496
+   },
+   "trial": "s101-S07",
+   "wallSeconds": 5.869
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.stage_events",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.requisitions",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.applications"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.stage_events",
+     "model.datatrust.stg_stage_events"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "candidateCount": 2,
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 36,
+    "skip": 2
+   },
+   "decoys": [
+    "D03",
+    "D04"
+   ],
+   "detected": true,
+   "failing": [
+    "S02",
+    "S03"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 1,
+      "columns": [
+       "application_id",
+       "entered_at",
+       "stage",
+       "stage_order"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_stage_events",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.7142857142857143
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "application_id",
+       "entered_at",
+       "stage"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.stage_events",
+      "ownAnomaly": 1,
+      "probes": [
+       "transition_violation:source.datatrust.raw.stage_events:stage"
+      ],
+      "unexplainedPass": 0.7142857142857143
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.stage_events",
+   "groundTruthColumn": "stage",
+   "injection": {
+    "applications": 21,
+    "severity": 21
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 164,
+    "share": 0.7663551401869159,
+    "total": 214
+   },
+   "probeCount": 22,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 22
+   },
+   "ranked": [
+    "source.datatrust.raw.stage_events",
+    "model.datatrust.stg_stage_events"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_stage_events": [
+     "application_id",
+     "entered_at",
+     "stage",
+     "stage_order"
+    ],
+    "source.datatrust.raw.stage_events": [
+     "application_id",
+     "entered_at",
+     "stage"
+    ]
+   },
+   "scenario": "S08",
+   "seed": 101,
+   "timings": {
+    "dbt": 4.937,
+    "plan": 0.181,
+    "prepare": 0.269,
+    "probes": 0.114,
+    "rank": 0.515
+   },
+   "trial": "s101-S08",
+   "wallSeconds": 6.019
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation"
+    ],
+    "no_probes": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation"
+    ]
+   },
+   "candidateCount": 6,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 38,
+    "skip": 1
+   },
+   "decoys": [
+    "D01",
+    "D02"
+   ],
+   "detected": true,
+   "failing": [
+    "X01"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "actual_gross_local_minor",
+       "expected_gross_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.fct_payroll_reconciliation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.5
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.int_employee_month",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "model",
+      "node": "model.datatrust.stg_compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "gross_pay_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 3,
+      "kind": "source",
+      "node": "source.datatrust.raw.compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "gross_pay_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.payroll_lines",
+      "ownAnomaly": 1,
+      "probes": [
+       "dup_key_rate:source.datatrust.raw.payroll_lines:employee_id,pay_month"
+      ],
+      "unexplainedPass": 0.6666666666666666
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.payroll_lines",
+   "groundTruthColumn": null,
+   "injection": {
+    "department_id": 4,
+    "lines": 94,
+    "month": "2025-12-01",
+    "severity": 1
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 204,
+    "share": 0.9532710280373832,
+    "total": 214
+   },
+   "probeCount": 49,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 49
+   },
+   "ranked": [
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.stg_payroll_lines",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation"
+   ],
+   "rankedColumns": {
+    "model.datatrust.fct_payroll_reconciliation": [
+     "actual_gross_local_minor",
+     "expected_gross_local_minor"
+    ],
+    "model.datatrust.int_employee_month": [
+     "base_salary_local_minor"
+    ],
+    "source.datatrust.raw.payroll_lines": [
+     "gross_pay_local_minor"
+    ]
+   },
+   "scenario": "S09",
+   "seed": 101,
+   "timings": {
+    "dbt": 4.926,
+    "plan": 0.216,
+    "prepare": 0.229,
+    "probes": 0.105,
+    "rank": 0.518
+   },
+   "trial": "s101-S09",
+   "wallSeconds": 5.998
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.int_assignment_current",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.metric_payroll_cost_usd_monthly",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.stg_fx_rates",
+     "model.datatrust.stg_locations",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.int_employee_month",
+     "source.datatrust.raw.fx_rates",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.metric_payroll_cost_usd_monthly",
+     "model.datatrust.int_assignment_current",
+     "model.datatrust.stg_locations",
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.locations"
+    ],
+    "no_change_signal": [
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.int_assignment_current",
+     "model.datatrust.metric_payroll_cost_usd_monthly",
+     "model.datatrust.stg_locations",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.int_employee_month",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.int_assignment_current",
+     "model.datatrust.metric_payroll_cost_usd_monthly",
+     "model.datatrust.stg_locations",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.int_assignment_current",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.metric_payroll_cost_usd_monthly",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_fx_rates",
+     "model.datatrust.stg_locations",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.fx_rates",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.fx_rates",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ]
+   },
+   "candidateCount": 19,
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 38,
+    "skip": 0
+   },
+   "decoys": [
+    "D01",
+    "D10",
+    "D11"
+   ],
+   "detected": true,
+   "failing": [
+    "C06",
+    "X03"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "currency"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.fct_compensation_usd",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "actual_gross_usd",
+       "pay_month"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.fct_payroll_reconciliation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "location_currency"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.int_assignment_current",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "currency"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.int_compensation_usd",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "month_start"
+      ],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "model",
+      "node": "model.datatrust.int_employee_month",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "rate_to_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.int_fx_daily",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "pay_month",
+       "payroll_cost_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.metric_payroll_cost_usd_monthly",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "model",
+      "node": "model.datatrust.stg_compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 0.5,
+      "distance": 3,
+      "kind": "model",
+      "node": "model.datatrust.stg_employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "rate_to_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_fx_rates",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 0.5,
+      "distance": 3,
+      "kind": "model",
+      "node": "model.datatrust.stg_job_assignments",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_locations",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency",
+       "gross_pay_local_minor",
+       "pay_month"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency"
+      ],
+      "coverage": 1,
+      "distance": 3,
+      "kind": "source",
+      "node": "source.datatrust.raw.compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 0.5,
+      "distance": 4,
+      "kind": "source",
+      "node": "source.datatrust.raw.employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "rate_to_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.fx_rates",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 0.5,
+      "distance": 4,
+      "kind": "source",
+      "node": "source.datatrust.raw.job_assignments",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency"
+      ],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.locations",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "currency",
+       "gross_pay_local_minor",
+       "pay_month"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.compensation",
+   "groundTruthColumn": "currency",
+   "injection": {
+    "employees": 16,
+    "severity": 16
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 207,
+    "share": 0.9672897196261683,
+    "total": 214
+   },
+   "probeCount": 68,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 68
+   },
+   "ranked": [
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.int_compensation_usd",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.int_assignment_current",
+    "model.datatrust.metric_payroll_cost_usd_monthly",
+    "model.datatrust.stg_locations",
+    "model.datatrust.int_fx_daily",
+    "model.datatrust.fct_compensation_usd",
+    "model.datatrust.stg_payroll_lines",
+    "source.datatrust.raw.payroll_lines",
+    "source.datatrust.raw.locations",
+    "model.datatrust.stg_fx_rates",
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_employees",
+    "model.datatrust.stg_job_assignments",
+    "source.datatrust.raw.employees",
+    "source.datatrust.raw.job_assignments"
+   ],
+   "rankedColumns": {
+    "model.datatrust.fct_payroll_reconciliation": [
+     "actual_gross_usd",
+     "pay_month"
+    ],
+    "model.datatrust.stg_compensation": [
+     "currency"
+    ],
+    "source.datatrust.raw.compensation": [
+     "currency"
+    ]
+   },
+   "scenario": "S10",
+   "seed": 101,
+   "timings": {
+    "dbt": 4.957,
+    "plan": 0.223,
+    "prepare": 0.226,
+    "probes": 0.116,
+    "rank": 0.507
+   },
+   "trial": "s101-S10",
+   "wallSeconds": 6.034
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.payroll_lines"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.payroll_lines"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.payroll_lines"
+    ]
+   },
+   "candidateCount": 4,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 36,
+    "skip": 3
+   },
+   "decoys": [
+    "D05"
+   ],
+   "detected": true,
+   "failing": [
+    "H07"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "termination_date"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.875
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id",
+       "pay_month"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.5
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "termination_date"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.875
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id",
+       "pay_month"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.5
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.payroll_lines",
+   "groundTruthColumn": "pay_month",
+   "injection": {
+    "employees": 9,
+    "severity": 9
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 192,
+    "share": 0.897196261682243,
+    "total": 214
+   },
+   "probeCount": 12,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 12
+   },
+   "ranked": [
+    "model.datatrust.stg_payroll_lines",
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_employees": [
+     "termination_date"
+    ],
+    "model.datatrust.stg_payroll_lines": [
+     "employee_id",
+     "pay_month"
+    ],
+    "source.datatrust.raw.payroll_lines": [
+     "employee_id",
+     "pay_month"
+    ]
+   },
+   "scenario": "S11",
+   "seed": 101,
+   "timings": {
+    "dbt": 4.919,
+    "plan": 0.207,
+    "prepare": 0.243,
+    "probes": 0.032,
+    "rank": 0.507
+   },
+   "trial": "s101-S11",
+   "wallSeconds": 5.912
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.hires",
+     "model.datatrust.stg_hires"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.hires",
+     "model.datatrust.stg_hires"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.hires"
+    ]
+   },
+   "candidateCount": 2,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "decoys": [
+    "D10"
+   ],
+   "detected": true,
+   "failing": [
+    "R05"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_hires",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.hires",
+      "ownAnomaly": 1,
+      "probes": [
+       "orphan_rate:source.datatrust.raw.hires:employee_id:source.datatrust.raw.employees"
+      ],
+      "unexplainedPass": 0.8571428571428571
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.hires",
+   "groundTruthColumn": "employee_id",
+   "injection": {
+    "hires": 1,
+    "severity": 1
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 207,
+    "share": 0.9672897196261683,
+    "total": 214
+   },
+   "probeCount": 14,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 14
+   },
+   "ranked": [
+    "source.datatrust.raw.hires",
+    "model.datatrust.stg_hires"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_hires": [
+     "employee_id"
+    ],
+    "source.datatrust.raw.hires": [
+     "employee_id"
+    ]
+   },
+   "scenario": "S12",
+   "seed": 101,
+   "timings": {
+    "dbt": 4.922,
+    "plan": 0.188,
+    "prepare": 0.251,
+    "probes": 0.032,
+    "rank": 0.515
+   },
+   "trial": "s101-S12",
+   "wallSeconds": 5.913
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation"
+    ],
+    "dataset_lineage_only": [
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_compensation"
+    ],
+    "no_change_signal": [
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_compensation"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.compensation"
+    ]
+   },
+   "candidateCount": 2,
+   "checkCounts": {
+    "error": 1,
+    "fail": 0,
+    "pass": 31,
+    "skip": 9
+   },
+   "decoys": [
+    "D02",
+    "D03",
+    "D04",
+    "D10"
+   ],
+   "detected": true,
+   "failing": [
+    "schema_contract:stg_compensation"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.compensation",
+      "ownAnomaly": 1,
+      "probes": [
+       "cast_failure:source.datatrust.raw.compensation:base_salary_local_minor"
+      ],
+      "unexplainedPass": 0
+     }
+    ]
+   },
+   "groundTruth": "source.datatrust.raw.compensation",
+   "groundTruthColumn": "base_salary_local_minor",
+   "injection": {
+    "column": "base_salary_local_minor",
+    "delivered_as": "text with thousands separators",
+    "severity": 1
+   },
+   "kind": "source",
+   "lineageCoverage": {
+    "covered": 152,
+    "share": 0.7102803738317757,
+    "total": 214
+   },
+   "probeCount": 10,
+   "probeStatus": {
+    "error": 0,
+    "missing": 5,
+    "ok": 5
+   },
+   "ranked": [
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_compensation"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_compensation": [
+     "base_salary_local_minor"
+    ],
+    "source.datatrust.raw.compensation": [
+     "base_salary_local_minor"
+    ]
+   },
+   "scenario": "S13",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.65,
+    "plan": 0.237,
+    "prepare": 0.237,
+    "probes": 0.032,
+    "rank": 0.586
+   },
+   "trial": "s101-S13",
+   "wallSeconds": 6.747
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_compensation",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.stg_fx_rates",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_probes": [
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.stg_fx_rates",
+     "model.datatrust.int_fx_daily",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.fct_compensation_usd",
+     "model.datatrust.int_compensation_usd",
+     "model.datatrust.stg_fx_rates",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_compensation",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.fx_rates"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.fx_rates"
+    ]
+   },
+   "candidateCount": 9,
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 38,
+    "skip": 0
+   },
+   "decoys": [
+    "D03",
+    "D09"
+   ],
+   "detected": true,
+   "failing": [
+    "C02",
+    "U02"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 1,
+      "columns": [
+       "base_salary_usd",
+       "employee_id"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.fct_compensation_usd",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.5
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "base_salary_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.int_compensation_usd",
+      "ownAnomaly": 1,
+      "probes": [
+       "fanout_ratio:model.datatrust.int_compensation_usd:compensation_id",
+       "rowcount_ratio:model.datatrust.int_compensation_usd:"
+      ],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "rate_to_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.int_fx_daily",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local",
+       "base_salary_local_minor",
+       "currency",
+       "valid_from"
+      ],
+      "coverage": 0.5,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.875
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "rate_to_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_fx_rates",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor",
+       "currency",
+       "valid_from"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.875
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "rate_to_usd"
+      ],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.fx_rates",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     }
+    ]
+   },
+   "groundTruth": "model.datatrust.int_compensation_usd",
+   "groundTruthColumn": null,
+   "injection": {},
+   "kind": "transformation",
+   "lineageCoverage": {
+    "covered": 207,
+    "share": 0.9672897196261683,
+    "total": 214
+   },
+   "probeCount": 32,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 32
+   },
+   "ranked": [
+    "model.datatrust.int_compensation_usd",
+    "model.datatrust.fct_compensation_usd",
+    "model.datatrust.stg_fx_rates",
+    "model.datatrust.int_fx_daily",
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "rankedColumns": {
+    "model.datatrust.fct_compensation_usd": [
+     "base_salary_usd",
+     "employee_id"
+    ],
+    "model.datatrust.int_compensation_usd": [
+     "base_salary_usd"
+    ],
+    "model.datatrust.stg_fx_rates": [
+     "rate_to_usd"
+    ]
+   },
+   "scenario": "T14",
+   "seed": 101,
+   "timings": {
+    "dbt": 6.324,
+    "plan": 0.248,
+    "prepare": 0.247,
+    "probes": 0.562,
+    "rank": 0.6
+   },
+   "trial": "s101-T14",
+   "wallSeconds": 7.986
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.dim_employee",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.dim_employee",
+     "model.datatrust.stg_departments",
+     "source.datatrust.raw.departments",
+     "model.datatrust.stg_locations",
+     "source.datatrust.raw.locations",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "model.datatrust.dim_employee",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_probes": [
+     "model.datatrust.dim_employee",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.dim_employee",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.employees"
+    ]
+   },
+   "candidateCount": 3,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "decoys": [],
+   "detected": true,
+   "failing": [
+    "U06"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 1,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.dim_employee",
+      "ownAnomaly": 1,
+      "probes": [
+       "fanout_ratio:model.datatrust.dim_employee:employee_id",
+       "rowcount_ratio:model.datatrust.dim_employee:"
+      ],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     }
+    ]
+   },
+   "groundTruth": "model.datatrust.dim_employee",
+   "groundTruthColumn": null,
+   "injection": {},
+   "kind": "transformation",
+   "lineageCoverage": {
+    "covered": 207,
+    "share": 0.9672897196261683,
+    "total": 214
+   },
+   "probeCount": 25,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 25
+   },
+   "ranked": [
+    "model.datatrust.dim_employee",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "rankedColumns": {
+    "model.datatrust.dim_employee": [
+     "employee_id"
+    ],
+    "model.datatrust.stg_employees": [
+     "employee_id"
+    ],
+    "source.datatrust.raw.employees": [
+     "employee_id"
+    ]
+   },
+   "scenario": "T15",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.956,
+    "plan": 0.202,
+    "prepare": 0.252,
+    "probes": 0.07,
+    "rank": 0.679
+   },
+   "trial": "s101-T15",
+   "wallSeconds": 7.164
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_hires",
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.hires",
+     "source.datatrust.raw.stage_events"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.stg_stage_events",
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires",
+     "source.datatrust.raw.requisitions",
+     "source.datatrust.raw.stage_events",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.applications"
+    ],
+    "no_change_signal": [
+     "model.datatrust.stg_stage_events",
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires",
+     "source.datatrust.raw.stage_events"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_stage_events",
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_stage_events",
+     "model.datatrust.stg_hires",
+     "source.datatrust.raw.hires",
+     "source.datatrust.raw.stage_events"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.hires",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "candidateCount": 4,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 37,
+    "skip": 2
+   },
+   "decoys": [
+    "D03",
+    "D09"
+   ],
+   "detected": true,
+   "failing": [
+    "S07"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "application_id",
+       "hire_date"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_hires",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "event_local_date",
+       "stage"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_stage_events",
+      "ownAnomaly": 1,
+      "probes": [
+       "recompute_delta:model.datatrust.stg_stage_events:event_local_date"
+      ],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "application_id",
+       "hire_date"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.hires",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "entered_at",
+       "stage"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.stage_events",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     }
+    ]
+   },
+   "groundTruth": "model.datatrust.stg_stage_events",
+   "groundTruthColumn": "event_local_date",
+   "injection": {},
+   "kind": "transformation",
+   "lineageCoverage": {
+    "covered": 188,
+    "share": 0.8785046728971962,
+    "total": 214
+   },
+   "probeCount": 36,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 36
+   },
+   "ranked": [
+    "model.datatrust.stg_stage_events",
+    "model.datatrust.stg_hires",
+    "source.datatrust.raw.hires",
+    "source.datatrust.raw.stage_events"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_hires": [
+     "application_id",
+     "hire_date"
+    ],
+    "model.datatrust.stg_stage_events": [
+     "event_local_date",
+     "stage"
+    ],
+    "source.datatrust.raw.hires": [
+     "application_id",
+     "hire_date"
+    ]
+   },
+   "scenario": "T16",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.868,
+    "plan": 0.219,
+    "prepare": 0.264,
+    "probes": 0.119,
+    "rank": 0.69
+   },
+   "trial": "s101-T16",
+   "wallSeconds": 7.165
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.int_employee_month",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "model.datatrust.int_employee_month",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "no_probes": [
+     "model.datatrust.int_employee_month",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.int_employee_month",
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_compensation",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ]
+   },
+   "candidateCount": 10,
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 37,
+    "skip": 1
+   },
+   "decoys": [],
+   "detected": true,
+   "failing": [
+    "U08",
+    "X01"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 0,
+      "columns": [
+       "actual_gross_local_minor",
+       "employee_id",
+       "expected_gross_local_minor",
+       "pay_month"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.fct_payroll_reconciliation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "base_salary_local_minor",
+       "employee_id",
+       "month_start"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.int_employee_month",
+      "ownAnomaly": 1,
+      "probes": [
+       "fanout_ratio:model.datatrust.int_employee_month:employee_id,month_start",
+       "rowcount_ratio:model.datatrust.int_employee_month:"
+      ],
+      "unexplainedPass": 0.3333333333333333
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "model",
+      "node": "model.datatrust.stg_compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.7142857142857143
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "model",
+      "node": "model.datatrust.stg_employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8888888888888888
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "model",
+      "node": "model.datatrust.stg_job_assignments",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8888888888888888
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "gross_pay_local_minor"
+      ],
+      "coverage": 0.5,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 3,
+      "kind": "source",
+      "node": "source.datatrust.raw.compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.7142857142857143
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "employee_id"
+      ],
+      "coverage": 0.5,
+      "distance": 3,
+      "kind": "source",
+      "node": "source.datatrust.raw.employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8888888888888888
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 0.5,
+      "distance": 3,
+      "kind": "source",
+      "node": "source.datatrust.raw.job_assignments",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8888888888888888
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "gross_pay_local_minor"
+      ],
+      "coverage": 0.5,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     }
+    ]
+   },
+   "groundTruth": "model.datatrust.int_employee_month",
+   "groundTruthColumn": null,
+   "injection": {},
+   "kind": "transformation",
+   "lineageCoverage": {
+    "covered": 204,
+    "share": 0.9532710280373832,
+    "total": 214
+   },
+   "probeCount": 51,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 51
+   },
+   "ranked": [
+    "model.datatrust.int_employee_month",
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_payroll_lines",
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.stg_employees",
+    "model.datatrust.stg_job_assignments",
+    "source.datatrust.raw.employees",
+    "source.datatrust.raw.job_assignments"
+   ],
+   "rankedColumns": {
+    "model.datatrust.fct_payroll_reconciliation": [
+     "actual_gross_local_minor",
+     "employee_id",
+     "expected_gross_local_minor",
+     "pay_month"
+    ],
+    "model.datatrust.int_employee_month": [
+     "base_salary_local_minor",
+     "employee_id",
+     "month_start"
+    ],
+    "model.datatrust.stg_compensation": [
+     "base_salary_local_minor"
+    ]
+   },
+   "scenario": "T17",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.268,
+    "plan": 0.206,
+    "prepare": 0.264,
+    "probes": 0.093,
+    "rank": 0.554
+   },
+   "trial": "s101-T17",
+   "wallSeconds": 6.389
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.int_fx_daily",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_fx_rates",
+     "source.datatrust.raw.fx_rates",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation"
+    ],
+    "no_probes": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "source.datatrust.raw.payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.fct_payroll_reconciliation",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_payroll_lines",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.payroll_lines",
+     "source.datatrust.raw.compensation"
+    ]
+   },
+   "candidateCount": 6,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 38,
+    "skip": 1
+   },
+   "decoys": [
+    "D01"
+   ],
+   "detected": true,
+   "failing": [
+    "X01"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 1,
+      "columns": [
+       "actual_gross_local_minor",
+       "expected_gross_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.fct_payroll_reconciliation",
+      "ownAnomaly": 1,
+      "probes": [
+       "recompute_delta:model.datatrust.fct_payroll_reconciliation:expected_gross_local_minor"
+      ],
+      "unexplainedPass": 0.5
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.int_employee_month",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "model",
+      "node": "model.datatrust.stg_compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "gross_pay_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "base_salary_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 3,
+      "kind": "source",
+      "node": "source.datatrust.raw.compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.8571428571428571
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "gross_pay_local_minor"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.payroll_lines",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.6666666666666666
+     }
+    ]
+   },
+   "groundTruth": "model.datatrust.fct_payroll_reconciliation",
+   "groundTruthColumn": "expected_gross_local_minor",
+   "injection": {},
+   "kind": "transformation",
+   "lineageCoverage": {
+    "covered": 204,
+    "share": 0.9532710280373832,
+    "total": 214
+   },
+   "probeCount": 49,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 49
+   },
+   "ranked": [
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.stg_payroll_lines",
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation"
+   ],
+   "rankedColumns": {
+    "model.datatrust.fct_payroll_reconciliation": [
+     "actual_gross_local_minor",
+     "expected_gross_local_minor"
+    ],
+    "model.datatrust.int_employee_month": [
+     "base_salary_local_minor"
+    ],
+    "model.datatrust.stg_payroll_lines": [
+     "gross_pay_local_minor"
+    ]
+   },
+   "scenario": "T18",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.248,
+    "plan": 0.195,
+    "prepare": 0.265,
+    "probes": 0.084,
+    "rank": 0.522
+   },
+   "trial": "s101-T18",
+   "wallSeconds": 6.318
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.requisitions",
+     "source.datatrust.raw.stage_events",
+     "source.datatrust.raw.locations",
+     "source.datatrust.raw.applications"
+    ],
+    "no_change_signal": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ],
+    "no_probes": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.stg_stage_events",
+     "source.datatrust.raw.stage_events"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.stage_events"
+    ]
+   },
+   "candidateCount": 2,
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 36,
+    "skip": 2
+   },
+   "decoys": [
+    "D11"
+   ],
+   "detected": true,
+   "failing": [
+    "S02",
+    "S03"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 1,
+      "columns": [
+       "application_id",
+       "entered_at",
+       "stage",
+       "stage_order"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.stg_stage_events",
+      "ownAnomaly": 1,
+      "probes": [
+       "transition_violation:model.datatrust.stg_stage_events:stage_order"
+      ],
+      "unexplainedPass": 0.7142857142857143
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "application_id",
+       "entered_at",
+       "stage"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "source",
+      "node": "source.datatrust.raw.stage_events",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.7142857142857143
+     }
+    ]
+   },
+   "groundTruth": "model.datatrust.stg_stage_events",
+   "groundTruthColumn": "stage",
+   "injection": {},
+   "kind": "transformation",
+   "lineageCoverage": {
+    "covered": 164,
+    "share": 0.7663551401869159,
+    "total": 214
+   },
+   "probeCount": 22,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 22
+   },
+   "ranked": [
+    "model.datatrust.stg_stage_events",
+    "source.datatrust.raw.stage_events"
+   ],
+   "rankedColumns": {
+    "model.datatrust.stg_stage_events": [
+     "application_id",
+     "entered_at",
+     "stage",
+     "stage_order"
+    ],
+    "source.datatrust.raw.stage_events": [
+     "application_id",
+     "entered_at",
+     "stage"
+    ]
+   },
+   "scenario": "T19",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.074,
+    "plan": 0.198,
+    "prepare": 0.267,
+    "probes": 0.107,
+    "rank": 0.531
+   },
+   "trial": "s101-T19",
+   "wallSeconds": 6.18
+  },
+  {
+   "ablations": {
+    "coverage_only": [
+     "model.datatrust.int_employee_month",
+     "model.datatrust.metric_headcount_monthly",
+     "model.datatrust.stg_compensation",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "dataset_lineage_only": [
+     "model.datatrust.metric_headcount_monthly",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.job_assignments",
+     "model.datatrust.stg_employees",
+     "source.datatrust.raw.employees"
+    ],
+    "no_change_signal": [
+     "model.datatrust.metric_headcount_monthly",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "no_probes": [
+     "model.datatrust.metric_headcount_monthly",
+     "model.datatrust.int_employee_month",
+     "model.datatrust.stg_compensation",
+     "source.datatrust.raw.compensation",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ]
+   },
+   "baselines": {
+    "change_only": [
+     "model.datatrust.int_employee_month",
+     "model.datatrust.metric_headcount_monthly",
+     "model.datatrust.stg_compensation",
+     "model.datatrust.stg_employees",
+     "model.datatrust.stg_job_assignments",
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ],
+    "nearest_upstream_source": [
+     "source.datatrust.raw.compensation",
+     "source.datatrust.raw.employees",
+     "source.datatrust.raw.job_assignments"
+    ]
+   },
+   "candidateCount": 8,
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "decoys": [
+    "D01",
+    "D09",
+    "D10"
+   ],
+   "detected": true,
+   "failing": [
+    "X02"
+   ],
+   "features": {
+    "column": [
+     {
+      "changed": 1,
+      "columns": [
+       "is_active",
+       "month_start"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.int_employee_month",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.75
+     },
+     {
+      "changed": 1,
+      "columns": [
+       "headcount",
+       "month_start"
+      ],
+      "coverage": 1,
+      "distance": 0,
+      "kind": "model",
+      "node": "model.datatrust.metric_headcount_monthly",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.875
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "hire_date",
+       "termination_date"
+      ],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 1,
+      "distance": 1,
+      "kind": "model",
+      "node": "model.datatrust.stg_job_assignments",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.compensation",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.875
+     },
+     {
+      "changed": 0,
+      "columns": [
+       "hire_date",
+       "termination_date"
+      ],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.employees",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     },
+     {
+      "changed": 0,
+      "columns": [],
+      "coverage": 1,
+      "distance": 2,
+      "kind": "source",
+      "node": "source.datatrust.raw.job_assignments",
+      "ownAnomaly": 0,
+      "probes": [],
+      "unexplainedPass": 0.9
+     }
+    ]
+   },
+   "groundTruth": "model.datatrust.metric_headcount_monthly",
+   "groundTruthColumn": null,
+   "injection": {},
+   "kind": "transformation",
+   "lineageCoverage": {
+    "covered": 207,
+    "share": 0.9672897196261683,
+    "total": 214
+   },
+   "probeCount": 31,
+   "probeStatus": {
+    "error": 0,
+    "missing": 0,
+    "ok": 31
+   },
+   "ranked": [
+    "model.datatrust.metric_headcount_monthly",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_employees",
+    "model.datatrust.stg_job_assignments",
+    "source.datatrust.raw.employees",
+    "source.datatrust.raw.job_assignments"
+   ],
+   "rankedColumns": {
+    "model.datatrust.int_employee_month": [
+     "is_active",
+     "month_start"
+    ],
+    "model.datatrust.metric_headcount_monthly": [
+     "headcount",
+     "month_start"
+    ],
+    "model.datatrust.stg_compensation": []
+   },
+   "scenario": "T20",
+   "seed": 101,
+   "timings": {
+    "dbt": 5.118,
+    "plan": 0.2,
+    "prepare": 0.261,
+    "probes": 0.048,
+    "rank": 0.477
+   },
+   "trial": "s101-T20",
+   "wallSeconds": 6.109
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 0,
+    "pass": 40,
+    "skip": 0
+   },
+   "decoys": [],
+   "detected": false,
+   "failing": [],
+   "groundTruth": null,
+   "groundTruthColumn": null,
+   "injection": {},
+   "kind": "clean",
+   "scenario": null,
+   "seed": 101,
+   "timings": {
+    "dbt": 4.06,
+    "prepare": 0.245
+   },
+   "trial": "s101-clean",
+   "wallSeconds": 4.309
+  }
+ ],
+ "scenarioTitles": {
+  "S01": "duplicate hires (new hire_id, same application)",
+  "S02": "orphan applications (unknown requisition)",
+  "S03": "stale exchange rates (one currency frozen)",
+  "S04": "timezone mismatch: recruiter events in local time labelled UTC",
+  "S05": "overlapping assignment intervals",
+  "S06": "missing FX days",
+  "S07": "inverted FX rate (units per USD stored as USD per unit)",
+  "S08": "out-of-order stage transitions",
+  "S09": "payroll double posting for one department-month",
+  "S10": "compensation currency mismatched to location",
+  "S11": "payroll after termination",
+  "S12": "hires linked to unknown employees",
+  "S13": "schema drift: salary delivered as text with separators",
+  "T14": "join fan-out: FX joined on currency only in int_compensation_usd",
+  "T15": "join fan-out: dim_employee joins all assignments, not current",
+  "T16": "timezone bug: stg_stage_events local date computed in UTC",
+  "T17": "interval predicate inclusive at both ends in the comp as-of join",
+  "T18": "annualization bug: expected gross divides by 26",
+  "T19": "stage code mapping swaps screen and onsite",
+  "T20": "headcount metric drops the termination filter"
+ },
+ "summary": {
+  "ablations": {
+   "coverage_only": {
+    "mrr": 0.51,
+    "n": 20,
+    "top1": 0.15,
+    "top3": 0.85
+   },
+   "dataset_lineage_only": {
+    "mrr": 0.9416666666666667,
+    "n": 20,
+    "top1": 0.9,
+    "top3": 1.0
+   },
+   "no_change_signal": {
+    "mrr": 0.95,
+    "n": 20,
+    "top1": 0.9,
+    "top3": 1.0
+   },
+   "no_probes": {
+    "mrr": 0.6208333333333333,
+    "n": 20,
+    "top1": 0.3,
+    "top3": 0.95
+   }
+  },
+  "baselines": {
+   "change_only": {
+    "mrr": 0.5379411764705881,
+    "n": 20,
+    "top1": 0.25,
+    "top3": 0.8
+   },
+   "nearest_upstream_source": {
+    "mrr": 0.5375,
+    "n": 20,
+    "top1": 0.45,
+    "top3": 0.6
+   },
+   "random_in_closure": {
+    "n": 20,
+    "top3": 0.750811403508772
+   }
+  },
+  "bestBaseline": {
+   "name": "change_only",
+   "top3": 0.8
+  },
+  "candidateSetSize": {
+   "median": 3.5,
+   "q1": 2.0,
+   "q3": 6.0
+  },
+  "cleanFalsePositives": 0,
+  "detectionRecall": {
+   "k": 20,
+   "n": 20,
+   "scenarioBootstrap95": [
+    1.0,
+    1.0
+   ],
+   "value": 1.0,
+   "wilson95": [
+    0.8388748419471806,
+    1.0
+   ]
+  },
+  "lineageCoverage": {
+   "meanShare": 0.8663551401869158
+  },
+  "loso": null,
+  "perKind": {
+   "source": {
+    "detection": 1.0,
+    "mrr": 0.9230769230769231,
+    "n": 13,
+    "top1": 0.8461538461538461,
+    "top3": 1.0
+   },
+   "transformation": {
+    "detection": 1.0,
+    "mrr": 1.0,
+    "n": 7,
+    "top1": 1.0,
+    "top3": 1.0
+   }
+  },
+  "perScenario": {
+   "S01": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S02": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S03": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S04": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S05": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S06": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S07": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S08": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S09": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S10": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     2
+    ],
+    "top1": 0,
+    "top3": 1
+   },
+   "S11": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     2
+    ],
+    "top1": 0,
+    "top3": 1
+   },
+   "S12": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "S13": {
+    "detected": 1,
+    "kind": "source",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "T14": {
+    "detected": 1,
+    "kind": "transformation",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "T15": {
+    "detected": 1,
+    "kind": "transformation",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "T16": {
+    "detected": 1,
+    "kind": "transformation",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "T17": {
+    "detected": 1,
+    "kind": "transformation",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "T18": {
+    "detected": 1,
+    "kind": "transformation",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "T19": {
+    "detected": 1,
+    "kind": "transformation",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   },
+   "T20": {
+    "detected": 1,
+    "kind": "transformation",
+    "n": 1,
+    "ranks": [
+     1
+    ],
+    "top1": 1,
+    "top3": 1
+   }
+  },
+  "rootCause": {
+   "columnTop3": {
+    "n": 15,
+    "value": 1.0
+   },
+   "overAllInjected": {
+    "mrr": 0.95,
+    "n": 20,
+    "top1": 0.9,
+    "top1Interval": {
+     "k": 18,
+     "n": 20,
+     "scenarioBootstrap95": [
+      0.75,
+      1.0
+     ],
+     "value": 0.9,
+     "wilson95": [
+      0.6989663547715128,
+      0.9721335187862319
+     ]
+    },
+    "top3": 1.0,
+    "top3Interval": {
+     "k": 20,
+     "n": 20,
+     "scenarioBootstrap95": [
+      1.0,
+      1.0
+     ],
+     "value": 1.0,
+     "wilson95": [
+      0.8388748419471806,
+      1.0
+     ]
+    }
+   },
+   "overDetected": {
+    "mrr": 0.95,
+    "n": 20,
+    "top1": 0.9,
+    "top3": 1.0
+   }
+  },
+  "top3GainOverBestBaselinePp": 20.0,
+  "trials": {
+   "clean": 1,
+   "injected": 20,
+   "scenarios": 20
+  }
+ }
+}
