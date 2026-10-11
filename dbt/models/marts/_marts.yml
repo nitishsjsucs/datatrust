@@ -1,0 +1,277 @@
+version: 2
+
+# 5 enforced contracts. Every column carries meta.classification (SPEC 6.7). Policy tags apply to per-person
+# PII and compensation columns on BigQuery only (persist_docs is enabled only there); on DuckDB they are inert.
+# Policy tag ids come from vars written by setup:prod into .prod/dbt_vars.yml; dbt_project.yml has placeholders.
+
+models:
+  - name: dim_employee
+    description: "One row per employee with the assignment current on the as-of date."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [employee_id]
+        rowcount: {parent: stg_employees, ratio: 1.0}
+        foreign_keys:
+          - {column: department_id, parent: stg_departments, parent_column: department_id}
+          - {column: location_id, parent: stg_locations, parent_column: location_id}
+    columns:
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+        constraints: [{type: not_null}]
+      - name: first_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+        policy_tags: ["{{ var('pt_pii_string') }}"]
+      - name: last_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+        policy_tags: ["{{ var('pt_pii_string') }}"]
+      - name: work_email
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: pii}}
+        policy_tags: ["{{ var('pt_pii_string') }}"]
+      - name: birth_date
+        data_type: "date"
+        config: {meta: {classification: pii}}
+        policy_tags: ["{{ var('pt_pii_date') }}"]
+      - name: hire_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: termination_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: is_active
+        data_type: "{{ 'bool' if target.type == 'bigquery' else 'boolean' }}"
+        config: {meta: {classification: internal}}
+      - name: as_of_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: department_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: location_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: location_name
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: location_tz
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: location_currency
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: public}}
+      - name: job_title
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: job_level
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+
+  - name: fct_hires
+    description: "One row per hire; hire_month buckets by the local hire date."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [hire_id]
+        unique_keys: [[application_id]]
+        rowcount: {parent: stg_hires, ratio: 1.0}
+        foreign_keys:
+          - {column: application_id, parent: stg_applications, parent_column: application_id}
+          - {column: employee_id, parent: stg_employees, parent_column: employee_id}
+    columns:
+      - name: hire_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: hire}}
+        constraints: [{type: not_null}]
+      - name: application_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: app}}
+        constraints: [{type: not_null}]
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: candidate_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: cand}}
+      - name: requisition_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: location_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: hire_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+        constraints: [{type: not_null}]
+      - name: hire_month
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: applied_local_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: offer_local_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: offered_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+      - name: offer_accepted_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+      - name: days_to_hire
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+
+  - name: fct_recruiting_funnel
+    description: "One row per application with funnel flags and outcome."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [application_id]
+        rowcount: {parent: stg_applications, ratio: 1.0}
+    columns:
+      - name: application_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: app}}
+        constraints: [{type: not_null}]
+      - name: candidate_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: cand}}
+      - name: requisition_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: location_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: source_channel
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: stage_path
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: applied_at
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamptz' }}"
+        config: {meta: {classification: internal}}
+      - name: reached_screen
+        data_type: "{{ 'bool' if target.type == 'bigquery' else 'boolean' }}"
+        config: {meta: {classification: internal}}
+      - name: reached_onsite
+        data_type: "{{ 'bool' if target.type == 'bigquery' else 'boolean' }}"
+        config: {meta: {classification: internal}}
+      - name: reached_offer
+        data_type: "{{ 'bool' if target.type == 'bigquery' else 'boolean' }}"
+        config: {meta: {classification: internal}}
+      - name: was_hired
+        data_type: "{{ 'bool' if target.type == 'bigquery' else 'boolean' }}"
+        config: {meta: {classification: internal}}
+      - name: outcome
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+
+  - name: fct_compensation_usd
+    description: "One row per employee: the compensation interval active on the as-of date, in USD."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [employee_id]
+        rowcount: {parent: stg_employees, ratio: 1.0}
+        recompute: [{column: base_salary_usd, expr: "base_salary_local * rate_to_usd"}]
+    columns:
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+        constraints: [{type: not_null}]
+      - name: as_of_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: compensation_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: currency
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: base_salary_local
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
+      - name: fx_date
+        data_type: "date"
+        config: {meta: {classification: internal}}
+      - name: rate_to_usd
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: public}}
+      - name: base_salary_usd
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
+
+  - name: fct_payroll_reconciliation
+    description: "Employee x active month: actual vs expected gross pay, USD at the rate on the 1st."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [employee_id, pay_month]
+        rowcount: {parent: stg_payroll_lines, ratio: 1.0}
+        recompute:
+          - {column: expected_gross_local_minor, expr: "base_salary_local_minor / 12.0"}
+          - {column: actual_gross_local_minor, expr: "expected_gross_local_minor"}
+    columns:
+      - name: employee_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: identifier, entity: emp}}
+        constraints: [{type: not_null}]
+      - name: pay_month
+        data_type: "date"
+        config: {meta: {classification: internal}}
+        constraints: [{type: not_null}]
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: currency
+        data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        config: {meta: {classification: internal}}
+      - name: base_salary_local_minor
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
+      - name: expected_gross_local_minor
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
+      - name: actual_gross_local_minor
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
+      - name: n_lines
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: expected_gross_local
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
+      - name: actual_gross_local
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]
+      - name: delta_pct
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: internal}}
+      - name: rate_to_usd
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: public}}
+      - name: actual_gross_usd
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: compensation}}
+        policy_tags: ["{{ var('pt_compensation') }}"]

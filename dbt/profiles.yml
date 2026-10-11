@@ -10,3 +10,23 @@ datatrust:
       settings:
         # ADR-0006: without this the session inherits the machine zone and local dates differ by OS.
         TimeZone: UTC
+    bigquery:
+      # Production warehouse. OAuth via `gcloud auth application-default login` (SPEC 7.4, 21.2).
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('DATATRUST_GCP_PROJECT', 'datatrust-ci-placeholder') }}"
+      dataset: datatrust_staging
+      location: "{{ env_var('DATATRUST_BQ_LOCATION', 'US') }}"
+      threads: 4
+      job_execution_timeout_seconds: 300
+      maximum_bytes_billed: 1000000000
+    bigquery_sa:
+      type: bigquery
+      method: service-account
+      keyfile: "{{ env_var('DATATRUST_BQ_KEYFILE', '/nonexistent/keyfile.json') }}"
+      project: "{{ env_var('DATATRUST_GCP_PROJECT', 'datatrust-ci-placeholder') }}"
+      dataset: datatrust_staging
+      location: "{{ env_var('DATATRUST_BQ_LOCATION', 'US') }}"
+      threads: 4
+      job_execution_timeout_seconds: 300
+      maximum_bytes_billed: 1000000000

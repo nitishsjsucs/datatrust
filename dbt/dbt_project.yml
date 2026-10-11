@@ -18,6 +18,13 @@ vars:
   # Calendar covered by payroll, FX and metrics (SPEC 6.2).
   calendar_start: "2025-01-01"
   calendar_end: "2025-12-31"
+  # Absolute directory of per-run Parquet snapshots of marts (DuckDB time-travel stand-in, SPEC 7.3).
+  snapshot_dir: "{{ env_var('DATATRUST_SNAPSHOT_DIR', '/tmp/datatrust-snapshots') }}"
+  # BigQuery policy tag resource names. setup:prod writes the real ones to .prod/dbt_vars.yml;
+  # `datatrust prod validate` refuses to build while any placeholder is in effect (SPEC 7.4).
+  pt_pii_string: "projects/placeholder/locations/us/taxonomies/0/policyTags/0"
+  pt_pii_date: "projects/placeholder/locations/us/taxonomies/0/policyTags/1"
+  pt_compensation: "projects/placeholder/locations/us/taxonomies/0/policyTags/2"
 
 models:
   datatrust:

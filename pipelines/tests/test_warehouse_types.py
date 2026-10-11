@@ -11,10 +11,22 @@ MONEY_COLUMNS = {
     ("staging", "stg_compensation", "base_salary_local"),
     ("staging", "stg_payroll_lines", "gross_pay_local"),
     ("staging", "stg_fx_rates", "rate_to_usd"),
+    ("staging", "int_compensation_usd", "base_salary_usd"),
+    ("marts", "fct_compensation_usd", "base_salary_local"),
+    ("marts", "fct_compensation_usd", "base_salary_usd"),
+    ("marts", "fct_compensation_usd", "rate_to_usd"),
+    ("marts", "fct_payroll_reconciliation", "expected_gross_local"),
+    ("marts", "fct_payroll_reconciliation", "actual_gross_local"),
+    ("marts", "fct_payroll_reconciliation", "actual_gross_usd"),
+    ("marts", "fct_payroll_reconciliation", "delta_pct"),
+    ("marts", "metric_payroll_cost_usd_monthly", "payroll_cost_usd"),
+    ("restricted", "rpt_compensation_by_dept", "total_base_salary_usd"),
 }
 MINOR_COLUMNS = {
     ("staging", "stg_compensation", "base_salary_local_minor"),
     ("staging", "stg_payroll_lines", "gross_pay_local_minor"),
+    ("marts", "fct_payroll_reconciliation", "expected_gross_local_minor"),
+    ("marts", "fct_payroll_reconciliation", "actual_gross_local_minor"),
 }
 
 DBT_DIR = Path(__file__).resolve().parents[2] / "dbt"
@@ -48,8 +60,10 @@ def test_build_succeeded(built_101):
 
 def test_money_rate_and_instant_types(built_101):
     with built_101.connect() as con:
-        cols = _columns(con, "staging")
-    assert cols, "no staging columns"
+        cols = {}
+        for schema in ("staging", "marts", "restricted"):
+            cols.update(_columns(con, schema))
+    assert {s for s, _, _ in cols} == {"staging", "marts", "restricted"}
     for key in MONEY_COLUMNS:
         assert cols[key] == "DECIMAL(38,9)", key
     for key in MINOR_COLUMNS:

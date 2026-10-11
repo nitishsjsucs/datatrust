@@ -15,7 +15,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Component | Status |
 |---|---|
 | Synthetic data generator (exact, seeded counts) | implemented; tests pass locally (`uv run pytest`), CI configured |
-| dbt models, 22 enforced contracts, 40 checks | in progress: 13 staging models with enforced contracts build on DuckDB (stand-in); intermediate, marts, metrics and checks planned |
+| dbt models, 22 enforced contracts, 40 checks | in progress: 29 models (13 staging views, 6 intermediate, 5 marts, 4 metrics, 1 restricted view) with 22 enforced contracts build on DuckDB (stand-in), tested locally; the 40 checks are planned |
 | OpenLineage capture and column-level lineage graph | planned |
 | Diagnostic probes, root-cause ranker, baselines | planned |
 | Fault-injection benchmark (20 scenarios) | planned |
@@ -23,7 +23,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Access JWT verification | planned |
 | Workers AI summaries, AI Gateway | planned |
 | Basin Pipelines, Basin Catalog (Iceberg) | planned |
-| BigQuery path, policy tags, masking, authorized view, time travel | planned |
+| BigQuery path, policy tags, masking, authorized view, time travel | in progress: dialect macros, BigQuery profiles, policy-tag and authorized-view config implemented, not executed (CI renders the BigQuery macro branches and runs `dbt parse --target bigquery` only) |
 | `setup:prod` and `doctor` | planned |
 
 ## Synthetic dataset

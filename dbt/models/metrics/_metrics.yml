@@ -1,0 +1,86 @@
+version: 2
+
+# 4 enforced contracts. "Failed metrics" are checks on these models (X02-X04) or alerts naming one of them.
+
+models:
+  - name: metric_headcount_monthly
+    description: "Active headcount by department x month."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [department_id, month_start]
+        metric: headcount
+    columns:
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: month_start
+        data_type: "date"
+        config: {meta: {classification: internal}}
+        constraints: [{type: not_null}]
+      - name: headcount
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+
+  - name: metric_hires_monthly
+    description: "Hires by department x month, bucketed by local hire date."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [department_id, hire_month]
+        metric: hires
+    columns:
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: hire_month
+        data_type: "date"
+        config: {meta: {classification: internal}}
+        constraints: [{type: not_null}]
+      - name: hires
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+
+  - name: metric_time_to_hire
+    description: "Mean days from application to hire by department x hire month."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [department_id, hire_month]
+        metric: avg_days_to_hire
+    columns:
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: hire_month
+        data_type: "date"
+        config: {meta: {classification: internal}}
+        constraints: [{type: not_null}]
+      - name: hires
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: avg_days_to_hire
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: internal}}
+
+  - name: metric_payroll_cost_usd_monthly
+    description: "Payroll cost in USD by department x pay month."
+    config:
+      contract: {enforced: true}
+      meta:
+        grain: [department_id, pay_month]
+        metric: payroll_cost_usd
+    columns:
+      - name: department_id
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: pay_month
+        data_type: "date"
+        config: {meta: {classification: internal}}
+        constraints: [{type: not_null}]
+      - name: employees_paid
+        data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
+        config: {meta: {classification: internal}}
+      - name: payroll_cost_usd
+        data_type: "{{ 'numeric' if target.type == 'bigquery' else 'decimal(38,9)' }}"
+        config: {meta: {classification: internal}}

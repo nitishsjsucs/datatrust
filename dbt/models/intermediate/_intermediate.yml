@@ -1,0 +1,88 @@
+version: 2
+
+# Intermediate tables (no contracts). Meta drives probe planning; classification drives the sanitizer.
+
+models:
+  - name: int_fx_daily
+    description: Daily rate per currency on the 2025 calendar.
+    config:
+      meta:
+        grain: [currency, rate_date]
+        rowcount: {parent: stg_fx_rates, ratio: 1.0}
+        fx: {currency: currency, date: rate_date, rate: rate_to_usd}
+    columns:
+      - name: currency
+        config: {meta: {classification: public}}
+      - name: rate_date
+        config: {meta: {classification: public}}
+      - name: rate_to_usd
+        config: {meta: {classification: public}}
+
+  - name: int_assignment_current
+    description: The assignment active on each employee's as-of date.
+    config:
+      meta:
+        grain: [employee_id]
+        rowcount: {parent: stg_employees, ratio: 1.0}
+    columns:
+      - name: employee_id
+        config: {meta: {classification: identifier, entity: emp}}
+
+  - name: int_compensation_usd
+    description: One row per compensation interval with its USD value on the conversion date fx_date.
+    config:
+      meta:
+        grain: [compensation_id]
+        rowcount: {parent: stg_compensation, ratio: 1.0}
+        interval: {key: [employee_id], from: valid_from, to: valid_to}
+        recompute: [{column: base_salary_usd, expr: "base_salary_local * rate_to_usd"}]
+    columns:
+      - name: employee_id
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: base_salary_local_minor
+        config: {meta: {classification: compensation}}
+      - name: base_salary_local
+        config: {meta: {classification: compensation}}
+      - name: base_salary_usd
+        config: {meta: {classification: compensation}}
+
+  - name: int_application_stage_path
+    description: One row per application with its ordered stage path.
+    config:
+      meta:
+        grain: [application_id]
+        rowcount: {parent: stg_applications, ratio: 1.0}
+    columns:
+      - name: application_id
+        config: {meta: {classification: identifier, entity: app}}
+
+  - name: int_employee_month
+    description: Employee x month of 2025 with an active flag and the intervals in effect on the 1st.
+    config:
+      meta:
+        grain: [employee_id, month_start]
+        rowcount: {parent: stg_employees, ratio: 12.0}
+    columns:
+      - name: employee_id
+        config: {meta: {classification: identifier, entity: emp}}
+      - name: base_salary_local_minor
+        config: {meta: {classification: compensation}}
+      - name: base_salary_local
+        config: {meta: {classification: compensation}}
+
+  - name: int_comp_by_dept_month
+    description: Department x month compensation aggregates, groups under 5 employees suppressed, untagged.
+    config:
+      meta:
+        grain: [department_id, month_start]
+    columns:
+      - name: department_id
+        config: {meta: {classification: internal}}
+      - name: month_start
+        config: {meta: {classification: internal}}
+      - name: headcount
+        config: {meta: {classification: internal}}
+      - name: total_base_salary_usd
+        config: {meta: {classification: internal}}
+      - name: avg_base_salary_usd
+        config: {meta: {classification: internal}}

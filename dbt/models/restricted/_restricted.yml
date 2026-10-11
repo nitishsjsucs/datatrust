@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: rpt_compensation_by_dept
+    description: >
+      Restricted department x month compensation report. Reads only the untagged aggregate
+      int_comp_by_dept_month. BigQuery: authorized view in datatrust_restricted (grant_access_to the
+      staging dataset). DuckDB: plain view in schema restricted (stand-in).
+    config:
+      meta:
+        grain: [department_id, month_start]
+    columns:
+      - name: department_id
+        config: {meta: {classification: internal}}
+      - name: month_start
+        config: {meta: {classification: internal}}
+      - name: headcount
+        config: {meta: {classification: internal}}
+      - name: total_base_salary_usd
+        config: {meta: {classification: internal}}
+      - name: avg_base_salary_usd
+        config: {meta: {classification: internal}}
