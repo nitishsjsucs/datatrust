@@ -9,7 +9,8 @@ import templateText from '../wrangler.prod.template.jsonc?raw';
 import testText from '../wrangler.test.jsonc?raw';
 import { NEURON_RATES, PAID_ONLY_MODELS } from '../src/llm/budget';
 import { QUEUES } from '../src/queues/router';
-import { CheckResultsMessage, CompleteSchema } from '../src/schemas';
+import { checkResultsMessage } from '../src/queues/check-results';
+import { CompleteSchema } from '../src/schemas';
 import { warmUp, warmUpCheck, warmUpEvent, warmUpProbe, warmUpRelations } from '../src/warmup';
 import { buildLineageGraph, findUnsanitized, RunEventSchema } from '@datatrust/rca';
 
@@ -131,11 +132,16 @@ describe('start-up warm-up (Free plan CPU per request)', () => {
     expect(
       CompleteSchema.safeParse({ status: 'completed', checkResults: [warmUpCheck], probeResults: [warmUpProbe], expectedLineageEvents: 1 }).success,
     ).toBe(true);
-    expect(CheckResultsMessage.safeParse({ runId: 'w', checkResults: [warmUpCheck] }).success).toBe(true);
+    expect(checkResultsMessage({ runId: 'w', checkResults: [warmUpCheck] })).not.toBeNull();
     expect(findUnsanitized([warmUpProbe] as never, warmUpRelations)).toEqual([]);
     const matched: string[] = [];
-    warmUp({ match: (method: string, path: string) => void matched.push(`${method} ${path}`) } as never);
+    const fetched: string[] = [];
+    warmUp(
+      { match: (method: string, path: string) => void matched.push(`${method} ${path}`) } as never,
+      { fetch: (req: Request) => (fetched.push(new URL(req.url).pathname), new Response('{}')) } as never,
+    );
     expect(matched).toEqual(['GET /healthz', 'POST /api/v1/lineage']);
+    expect(fetched).toEqual(['/healthz']);
     expect(() => warmUp({ match: () => { throw new Error('boom'); } } as never)).not.toThrow();
   });
 });

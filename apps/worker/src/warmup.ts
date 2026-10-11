@@ -7,7 +7,10 @@
  */
 import { buildLineageGraph, edgesFromEvent, findUnsanitized, makeResolver, RunEventSchema, type RelationsMap } from '@datatrust/rca';
 import type { Hono } from 'hono';
-import { ArtifactSchema, CheckResultsMessage, CompleteSchema, InvestigateMessage, LineageBundleSchema } from './schemas';
+import type { HonoEnv } from './hono';
+import type { AppEnv } from './env';
+import { checkResultsMessage } from './queues/check-results';
+import { ArtifactSchema, CompleteSchema, InvestigateMessage, LineageBundleSchema } from './schemas';
 import { schemaProblems } from './sinks/event-sink';
 
 export const warmUpRelations: RelationsMap = {
@@ -59,7 +62,15 @@ export const warmUpProbe = {
   details: { n: 1 },
 };
 
-export function warmUp(router?: Pick<Hono['router'], 'match'>): void {
+/** The Hono request pipeline (context, middleware, JSON response) for an unauthenticated health check. */
+function warmRequest(app: Pick<Hono<HonoEnv>, 'fetch'>): void {
+  const env = { ENVIRONMENT: 'local', VERSION: 'warmup' } as unknown as AppEnv;
+  const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} } as unknown as ExecutionContext;
+  const out = app.fetch(new Request('http://warmup.invalid/healthz'), env, ctx);
+  if (out instanceof Promise) out.catch(() => {});
+}
+
+export function warmUp(router?: Pick<Hono['router'], 'match'>, app?: Pick<Hono<HonoEnv>, 'fetch'>): void {
   try {
     const parsed = RunEventSchema.parse(warmUpEvent);
     edgesFromEvent(parsed, makeResolver(warmUpRelations));
@@ -70,7 +81,7 @@ export function warmUp(router?: Pick<Hono['router'], 'match'>): void {
       probeResults: [warmUpProbe],
       expectedLineageEvents: 1,
     });
-    CheckResultsMessage.safeParse({ runId: 'w', checkResults: [warmUpCheck] });
+    checkResultsMessage({ runId: 'w', checkResults: [warmUpCheck] });
     LineageBundleSchema.safeParse({ runId: 'w', events: [{ eventId: 'e', r2Key: 'k' }] });
     InvestigateMessage.safeParse({ runId: 'w', incidentId: 'i', trigger: 'checks' });
     ArtifactSchema.safeParse({ kind: 'relations', data: {} });
@@ -78,6 +89,7 @@ export function warmUp(router?: Pick<Hono['router'], 'match'>): void {
     schemaProblems({ event_id: 'e' });
     router?.match('GET', '/healthz');
     router?.match('POST', '/api/v1/lineage');
+    if (app) warmRequest(app);
   } catch {
     // A warm-up problem must never stop the Worker from starting.
   }

@@ -28,7 +28,7 @@ import { warmUp } from '../../apps/worker/src/warmup';
 
 // As in apps/worker/src/index.ts: one app per isolate, warmed at start-up (module scope, not measured).
 const app = createApp();
-warmUp(app.router);
+warmUp(app.router, app);
 
 const s01 = fixture as unknown as {
   checks: CheckResult[];

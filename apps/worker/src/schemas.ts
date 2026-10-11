@@ -69,7 +69,6 @@ export const AlertSchema = z.object({
   expected: z.number(),
 });
 
-export const CheckResultsMessage = z.object({ runId: z.string(), checkResults: z.array(CheckResultSchema) });
 /** One message per lineage POST: up to 10 events already stored in R2 (SPEC 28.5.2). */
 export const LineageBundleSchema = z.object({
   runId: z.string().min(1),

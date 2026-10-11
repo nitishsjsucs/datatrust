@@ -47,9 +47,20 @@ describe('datatrust-check-results', () => {
   });
 
   it('acks malformed messages without retrying', async () => {
-    const result = await deliver('datatrust-check-results', [{ nope: true }]);
-    expect(result.explicitAcks).toEqual(['m0']);
+    const good = s01.checks[0]!;
+    const bad = [
+      { nope: true },
+      { runId: '', checkResults: [good] },
+      { runId: 'r', checkResults: 'x' },
+      { runId: 'r', checkResults: [{ ...good, status: 'maybe' }] },
+      { runId: 'r', checkResults: [{ ...good, failures: '3' }] },
+      { runId: 'r', checkResults: [{ ...good, columns: null }] },
+      { runId: 'r', checkResults: Array.from({ length: 101 }, () => good) },
+    ];
+    const result = await deliver('datatrust-check-results', bad);
+    expect(result.explicitAcks).toEqual(bad.map((_, i) => `m${i}`));
     expect(result.retryMessages).toEqual([]);
+    expect(await countCheckResults(env.DB, 'r')).toBe(0);
   });
 });
 

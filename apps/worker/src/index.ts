@@ -9,7 +9,7 @@ export { ValidationRunWorkflow } from './workflows/validation-run';
 
 const app = createApp();
 // Compile the hot parsers and the router during start-up instead of the first request (see warmup.ts).
-warmUp(app.router);
+warmUp(app.router, app);
 
 export default {
   fetch(request: Request, env: AppEnv, ctx: ExecutionContext) {
