@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from datatrust.bench.metrics import cluster_bootstrap, gt_rank, summarize, wilson
+from datatrust.bench.metrics import baseline_from, cluster_bootstrap, gate, gt_rank, summarize, wilson
 
 
 def test_wilson_known_values():
@@ -74,3 +74,25 @@ def test_summarize_counts_undetected_as_misses():
     assert rc["overAllInjected"]["mrr"] == pytest.approx((1 + 0.25) / 3)
     assert s["baselines"]["random_in_closure"]["top3"] == pytest.approx((1 + 0.75 + 0) / 3)
     assert s["perScenario"]["S02"]["ranks"] == [4]
+
+
+def test_gate():
+    recs = [_rec("S01", True, ["g"]), _rec("S02", True, ["a", "b", "c", "g"])]
+    s = summarize(recs)
+    base = baseline_from(s)
+    assert gate(s, base) == []
+    assert gate(s, {**base, "top3": base["top3"] + 0.2})
+    clean_fp = summarize(
+        recs
+        + [
+            {
+                "trial": "c",
+                "scenario": None,
+                "kind": "clean",
+                "groundTruth": None,
+                "detected": True,
+                "failing": ["U01"],
+            }
+        ]
+    )
+    assert any("clean false positives" in p for p in gate(clean_fp, base))

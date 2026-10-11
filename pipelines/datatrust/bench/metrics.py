@@ -185,3 +185,30 @@ def summarize(records: list[dict[str, Any]], loso: dict[str, Any] | None = None)
         "perKind": per_kind,
         "loso": loso,
     }
+
+
+def baseline_from(summary: dict[str, Any]) -> dict[str, Any]:
+    """The few numbers a CI gate compares against."""
+    rc = summary["rootCause"]["overAllInjected"]
+    return {
+        "detectionRecall": summary["detectionRecall"]["value"],
+        "top1": rc["top1"],
+        "top3": rc["top3"],
+        "cleanFalsePositives": summary["cleanFalsePositives"],
+        "injectedTrials": summary["trials"]["injected"],
+        "cleanTrials": summary["trials"]["clean"],
+    }
+
+
+def gate(summary: dict[str, Any], baseline: dict[str, Any], tolerance: float = 0.05) -> list[str]:
+    """CI gate (SPEC 20): no clean false positives; detection and top-3 within `tolerance` of the baseline."""
+    now = baseline_from(summary)
+    problems = []
+    if now["cleanFalsePositives"] != 0:
+        problems.append(f"clean false positives: {now['cleanFalsePositives']}")
+    for key in ("detectionRecall", "top3"):
+        if now[key] < baseline[key] - tolerance:
+            problems.append(
+                f"{key} {now[key]:.3f} is more than {tolerance} below the baseline {baseline[key]:.3f}"
+            )
+    return problems

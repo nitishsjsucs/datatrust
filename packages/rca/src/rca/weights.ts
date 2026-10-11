@@ -6,7 +6,11 @@ import type { Weights } from '../types';
 
 export const INITIAL_WEIGHTS: Weights = { coverage: 0.4, anomaly: 0.35, changed: 0.15, unexplainedPass: 0.1 };
 
-export const FROZEN_WEIGHTS: Weights = { coverage: 0.4, anomaly: 0.35, changed: 0.15, unexplainedPass: 0.1 };
+/**
+ * Frozen on 2026-10-10 from `uv run datatrust tune --from results/bench-2026-10-10-offline-dev.json`
+ * (dev seeds 1-3, 60 injected trials: top-3 100%, top-1 90%, MRR 0.950). See docs/adr/0004.
+ */
+export const FROZEN_WEIGHTS: Weights = { coverage: 0.4, anomaly: 0.3, changed: 0.15, unexplainedPass: 0.1 };
 
 /** The grid searched on dev seeds (SPEC 12.3); LOSO re-tunes over the same grid. */
 export function weightGrid(): Weights[] {

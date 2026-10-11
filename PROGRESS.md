@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 9 of 19 (core) done: `feat(bench): 20 fault scenarios, decoys and offline harness`.
+Commit 9 of 19 (core) done, plus an extra commit freezing the dev-tuned weights (ADR-0004) before the test-seed run.
 
 ## Done
 
@@ -17,6 +17,7 @@ Commit 9 of 19 (core) done: `feat(bench): 20 fault scenarios, decoys and offline
 - 7. `datatrust.dbt.build.build_with_lineage` (`dbt-ol build`, file transport to `<target>/openlineage.jsonl`, `relations.json` from the manifest), `datatrust build` prints check counts; `packages/rca` types, OpenLineage zod schemas, (schema, table) resolver, `buildLineageGraph`, `upstreamClosure` (column mode with dataset fallback, dataset mode), `columnLineageCoverage`; recorded seed-101 fixtures with namespaces scrubbed; `lineage.test.ts` (incl. `/home/runner` path rewrite), `test_lineage_capture.py`. `stg_stage_events` CTE now lists columns explicitly (the OpenLineage SQL parser cannot see through `select *` in a CTE).
 - 8. Python: `warehouse/{base,readonly,duckdb_wh}.py` (sqlglot guard, read-only DuckDB connection, information-schema column lookup), `diagnostics/probes.py` + 14 Jinja templates with DuckDB/BigQuery branches, probe expression language (`tz_local_date`, `int_div`), `rca_cli.py` (calls `packages/rca/dist/cli.mjs`); probe meta added to sources and staging. TypeScript: `rca/{trace,plan,rank,baselines,weights,tune}.ts`, `evidence/sanitize.ts` (WebCrypto HMAC tokens + Worker-side re-check), `cli.ts` bundled with esbuild (`npm run build`). Tests: `trace.test.ts`, `rank.test.ts`, `baselines.test.ts`, `sanitize.test.ts`, `test_probes_render.py`, `test_readonly_guard.py`, `test_probes_clean.py` (every planned probe on clean seed 101: status ok, anomaly 0). CI python job now sets up Node and builds the RCA CLI first.
 - 9. `bench/scenarios.py` (20 scenarios, injections, severities, decoy draw with `random.Random(seed * 1000 + index)`), 7 scenario patches and 12 decoy patches, `dbt/overlay.py` (strict unified-diff applier), `bench/harness.py` (offline trials in a process pool), `bench/metrics.py` (Wilson, scenario-clustered bootstrap, ablations, baselines, candidate-set size), `bench/report.py`, `datatrust bench` and `datatrust tune` CLI, `npm run bench`, `make bench`. Tests: `test_scenarios.py`, `test_patch_combinations.py` (every drawn combination for seeds 1-3 and 101-105; all 12 decoys together build clean), `test_injection_detected_smoke.py` (S01, T14, S04 and a clean trial through dbt), `test_metrics.py`. First look with initial weights on dev seed 1 only: 20/20 detected, 0 clean false positives (not a reported result).
+- 9b (extra). Dev tuning: `uv run datatrust bench --seeds 1-3 --workers 6 --tag dev` (results/bench-2026-10-10-offline-dev.*), `uv run datatrust tune --from results/bench-2026-10-10-offline-dev.json` gave coverage 0.40, anomaly 0.30, changed 0.15, unexplained_pass 0.10; frozen in `weights.ts`; ADRs 0001-0007 written; `datatrust bench --gate` for the CI seed-101 gate.
 
 ## Next
 
@@ -28,7 +29,7 @@ Commit 9 of 19 (core) done: `feat(bench): 20 fault scenarios, decoys and offline
 - `npm run test:rca`: 37 passed
 - `npm run test:worker`: no tests yet (`--passWithNoTests`, removed when the Worker lands in commit 11)
 - `uv run ruff check`: pass
-- `uv run pytest`: 112 passed
+- `uv run pytest`: 113 passed
 
 ## Deviations from SPEC.md
 
@@ -39,5 +40,6 @@ Commit 9 of 19 (core) done: `feat(bench): 20 fault scenarios, decoys and offline
 - `trailing_median` is split into two macros, `trailing_median` (window step in a CTE) and `trailing_median_finish` (exact median from the BigQuery array; identity on DuckDB), because BigQuery cannot take a median over a window frame in one expression.
 - Probe planning details beyond SPEC 10/11 (all metadata-driven): models use `fanout_ratio` on their grain and sources use `dup_key_rate`; row-multiplicity probes (`fanout_ratio`, `rowcount_ratio`) are judged inherited when any dataset parent shows a multiplicity anomaly (duplicates, fan-out, row count or overlapping intervals), because join fan-out does not follow column lineage. `recompute_delta` also has an `exact` mode (share of rows that differ) for dates and integer formulas. The S04 time-zone probe on `raw.stage_events` reaches the zone through a `tz_path` join chain in source meta.
 - `dbt build` skips models downstream of a failing test, so their checks report `skip`; the ranker treats skipped checks as neither passing nor failing.
+- An extra commit between plan commits 9 and 10 freezes the weights and adds the ADRs, so the history shows the weights fixed before the test seeds ran.
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.

@@ -136,6 +136,15 @@ def _cmd_bench(args: argparse.Namespace) -> int:
     )
     print(mpath.read_text())
     print(json.dumps({"json": str(jpath), "md": str(mpath)}))
+    if args.gate:
+        from datatrust.bench.metrics import gate
+
+        problems = gate(summary, json.loads(Path(args.gate).read_text()))
+        for problem in problems:
+            print(f"GATE FAILED: {problem}", file=sys.stderr)
+        if problems:
+            return 1
+        print("gate passed", file=sys.stderr)
     return 0
 
 
@@ -186,6 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dev-results", help="dev-seed report JSON; enables the leave-one-scenario-out figure")
     p.add_argument("--work-dir", help="scratch directory for trials (default .data/bench)")
     p.add_argument("--keep", action="store_true", help="keep each trial's warehouse and dbt target")
+    p.add_argument("--gate", help="baseline JSON; fail on clean false positives or a drop of more than 0.05")
     p.add_argument("--command-label", help=argparse.SUPPRESS)
     p.set_defaults(func=_cmd_bench)
 
