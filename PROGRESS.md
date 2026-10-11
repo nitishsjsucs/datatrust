@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 12 of 19 (core) done: `feat(worker): queues and validation and investigation workflows`.
+Commit 13 of 19 (core) done: `feat(runner): lease protocol for dbt builds and diagnostics`.
 
 ## Done
 
@@ -21,10 +21,11 @@ Commit 12 of 19 (core) done: `feat(worker): queues and validation and investigat
 - 10. Test seeds 101-105 with frozen weights (`uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json`, 2026-10-10, 136 s): detection 100/100, top-3 100/100, top-1 90/100, 0 clean false positives, LOSO top-3 100%, median candidate set 4. `results/bench-2026-10-10-offline.{json,md}`, `results/baseline.json`, `results/baseline-seed101.json` (from a separate seed-101 run, the command CI repeats), `datatrust baseline`, CI `bench-offline` job, README Results section.
 - 11. `apps/worker`: `wrangler.jsonc` / `wrangler.test.jsonc` (D1, R2, vars, `secrets.required`), generated `worker-configuration.d.ts` (`wrangler types --strict-vars=false`), `src/env.ts` (AppEnv + production guard), `src/auth/{access,roles}.ts` (jose RS256, remote JWKS in production, local JWKS in dev, service-token `common_name`), `src/store/repo.ts` (all D1 SQL incl. single-statement lease), read routes (`/healthz`, `/api/whoami`, `/api/runs/:id`, `/api/incidents`, `/api/lineage/:runId/upstream`), `migrations/0001_init.sql`, vitest with `@cloudflare/vitest-plugin` and D1 migrations; `test/access.test.ts` (14 cases: the 12 from SPEC 15 plus `ACCESS_AUD=unset` and the full production guard), `test/api.test.ts`; `scripts/dev-keys.mjs`, `scripts/dev-token.mjs`. CI runs `wrangler types --check` and `wrangler deploy --dry-run`. Verified by hand: `wrangler dev --local` on 8792/9242 answered `/healthz` and `/api/whoami` with a dev token, 401 without; process killed, ports free.
 - 12. Queues (`dt-check-results`, `dt-lineage-events`, `dt-investigate`, `dt-dlq` with retries and DLQ) and consumers, `ValidationRunWorkflow` (register, enqueue build, wait for `build-complete` with 6 h timeout, `await-ingested` with 10 exponential retries, summarize, dispatch, finalize) and `InvestigationWorkflow` (load context, trace, plan, diagnostics job, wait 1 h, rank with frozen weights, sanitized evidence, template summary, persist to D1 and R2 with provenance), write routes (`POST /api/runs`, runner lease/artifacts/complete with lease tokens, `POST /api/v1/lineage`, `POST /api/alerts`), deterministic investigation ids, `rca` evidence builder. Tests: `queues.test.ts`, `validation-run.test.ts`, `investigation.test.ts` (real S01 trial fixture: raw.hires ranked first), `runner.test.ts` (lease, attempts sweep, stale tokens, 422 on unsanitized probe results, alerts). Verified by hand under `wrangler dev --local`: `POST /api/runs` created a workflow and the runner token leased its `dbt_build` job; processes killed, ports free.
+- 13. `runner/client.py` (dev JWT or Access service-token headers, retries with exponential backoff on 5xx and network errors, 4xx fatal), `runner/loop.py` (dbt_build: synth, scenario + decoys when a scenario is given, load, dbt-ol build, mart snapshots on green runs, relations and slim run_results artifacts, OpenLineage in batches of 50, complete; diagnostics: probes on the runner's own warehouse and relations, read-only, `rca sanitize`, complete), `datatrust runner --once|--watch`, `scripts/dev-up.sh` / `dev-down.sh` (process groups in `.dev/pids`, port checks for 8792/9242/8160), `npm run dev:up|dev:down|dev:reset`, `test_runner_client.py`. Verified by hand on 2026-10-10: `npm run dev:up`, `POST /api/runs {seed 101, scenario S01}`, two `datatrust runner --once` calls (build: 40 checks, U05 failing, 136 OpenLineage events; diagnostics: 46 probes) produced incident `inc_<run>_checks_00000000` ranking `source.datatrust.raw.hires` first with diagnostic SQL and local-stand-in provenance; `npm run dev:down` stopped everything and confirmed 8792, 9242 and 8160 free.
 
 ## Next
 
-- 13. `feat(runner): lease protocol for dbt builds and diagnostics` (Python runner client and loop, runner-side sanitize, `scripts/dev-up.sh` / `dev-down.sh`).
+- 14. `feat(llm): sanitizer, grounding validator and summarizers` (placeholder drafts and renderer, Workers AI, OpenAI-compatible local, template; PII prompt test).
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
@@ -32,7 +33,7 @@ Commit 12 of 19 (core) done: `feat(worker): queues and validation and investigat
 - `npm run test:rca`: 37 passed
 - `npm run test:worker`: 40 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 113 passed
+- `uv run pytest`: 120 passed
 
 ## Deviations from SPEC.md
 

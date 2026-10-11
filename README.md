@@ -184,13 +184,20 @@ npm run build -w @datatrust/rca                          # bundle the TypeScript
 uv run datatrust bench --seeds 1 --workers 6 --out /tmp/dt # 20 injected trials + 1 clean trial
 ```
 
-Worker (Miniflare, local Access stand-in):
+Full local loop through Queues and Workflows (Miniflare, local Access stand-in, DuckDB stand-in):
 
 ```sh
-npm run dev:keys                                     # RS256 keypair in .dev/keys, local secrets in apps/worker/.dev.vars
-npm run dev -w @datatrust/worker                     # wrangler dev --local on 127.0.0.1:8792 (inspector 9242)
-curl -H "Cf-Access-Jwt-Assertion: $(npm run -s dev:token -- --role operator)" http://127.0.0.1:8792/api/whoami
+npm run dev:up                                       # dev keys if missing, D1 migrations, wrangler dev on 127.0.0.1:8792 (inspector 9242)
+OP=$(npm run -s dev:token -- --role operator)
+curl -s -X POST -H "Cf-Access-Jwt-Assertion: $OP" -H 'content-type: application/json' \
+  -d '{"target":"duckdb","seed":101,"scenario":"S01"}' http://127.0.0.1:8792/api/runs
+uv run datatrust runner --watch --idle-exit 30       # leases the dbt_build job, then the diagnostics job
+curl -s -H "Cf-Access-Jwt-Assertion: $OP" http://127.0.0.1:8792/api/runs/<runId>          # status, failing checks, incidentId
+curl -s -H "Cf-Access-Jwt-Assertion: $OP" http://127.0.0.1:8792/api/incidents/<incidentId>
+npm run dev:down                                     # stops everything dev:up started and confirms the ports are free
 ```
+
+`npm run dev:up -- --llm` also starts llama-server (Qwen3-1.7B) on 127.0.0.1:8160; set `DATATRUST_LLM_MODEL_PATH` if the GGUF lives elsewhere.
 
 More commands are added here as the components land.
 

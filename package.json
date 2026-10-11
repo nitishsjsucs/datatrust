@@ -21,7 +21,10 @@
     "test:worker": "npm run test -w @datatrust/worker",
     "bench": "uv run datatrust bench --mode offline --seeds 101-105 --dev-results results/bench-2026-10-10-offline-dev.json",
     "dev:keys": "node scripts/dev-keys.mjs",
-    "dev:token": "node scripts/dev-token.mjs"
+    "dev:token": "node scripts/dev-token.mjs",
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:down": "bash scripts/dev-down.sh",
+    "dev:reset": "rm -rf apps/worker/.wrangler/state .data"
   },
   "devDependencies": {
     "typescript": "5.9.3",

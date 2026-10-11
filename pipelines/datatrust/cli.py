@@ -181,6 +181,23 @@ def _cmd_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_runner(args: argparse.Namespace) -> int:
+    import logging
+
+    from datatrust.runner.client import WorkerClient
+    from datatrust.runner.loop import run_once, watch
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    client = WorkerClient.from_env("runner", args.env)
+    kinds = args.kinds.split(",")
+    if args.once:
+        report = run_once(client, target=args.target, kinds=kinds)
+        print(json.dumps(report))
+        return 0
+    watch(client, target=args.target, kinds=kinds, max_jobs=args.max_jobs, idle_exit=args.idle_exit)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="datatrust", description=__doc__)
     parser.add_argument("--version", action="version", version=f"datatrust {__version__}")
@@ -222,6 +239,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("tune", help="grid-search ranking weights on a dev-seed report (ADR-0004)")
     p.add_argument("--from", dest="from_path", required=True)
     p.set_defaults(func=_cmd_tune)
+
+    p = sub.add_parser("runner", help="lease and run jobs from the Worker (SPEC 14)")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--once", action="store_true", help="run at most one job")
+    mode.add_argument("--watch", action="store_true", help="keep leasing (default)")
+    p.add_argument("--env", choices=["local", "prod"], default="local")
+    p.add_argument("--target", choices=["duckdb", "bigquery"], default="duckdb")
+    p.add_argument("--kinds", default="dbt_build,diagnostics")
+    p.add_argument("--max-jobs", type=int)
+    p.add_argument("--idle-exit", type=float, help="stop after this many seconds without a job")
+    p.set_defaults(func=_cmd_runner)
 
     p = sub.add_parser("baseline", help="extract the gate numbers from a benchmark report")
     p.add_argument("--from", dest="from_path", required=True)
