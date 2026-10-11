@@ -6,7 +6,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` and 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B` done; 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
-Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F5.
+Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F6.
 
 ## Done
 
@@ -65,20 +65,22 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 3, F5 `fix(worker): set-based D1 writes and request caps`: one `json_each` statement each for the `check_results` upsert (`checkResultsStatement`), the `lineage_nodes` upsert (plus one for edges when a graph has them), `lineage_events` and edges (F4) and the DLQ batch (`insertDeadLetters`); the lineage graph loads with one `UNION ALL` statement in the same order as before; `baselineChecksums` is one statement; check results go in one message per run (at most 50, `CHECK_RESULTS_PER_MESSAGE`; 40 or 41 occur); `checkResults` and `probeResults` are capped at 100 per completion (400 above). The D1-touching workflow step bodies are exported (`loadContext`, `persistIncidentRows`, `awaitIngested`, `summarizeRun`) so a test can count them. `d1-statements.test.ts` (counting proxy over `prepare`, `batch` and `exec`): relations upload of 42 nodes 2, lineage POST of the 10 largest seed-101 events 1 and its bundle 2, check-results batch of 10 messages at most 10, DLQ batch of 10 1, lease at most 2, build completion 2, workflow steps register-run 1, enqueue-build 1, await-ingested 2, summarize-run 1, finalize 1, load-context 5, persist-incident 2 (load-context still returns the full graph, the baseline and the last green run). `api.test.ts`: 101 check or probe results answer 400. `npm run bench:e2e -- --pytest`: 2 passed (rankings identical to offline), ports free.
 
+- Builder 3, F6 `perf(rca): module-scope collator for id ordering`: `packages/rca/src/order.ts` (`compareIds` over one `Intl.Collator` built at module scope, exported from `@datatrust/rca`) replaces the 10 `localeCompare` calls in `packages/rca/src` (graph, trace, plan, rank, baselines) and `apps/worker/src` (lineage upstream route); the dashboard (`apps/web`) keeps its own, it is not a Worker path. `order.test.ts`: no `localeCompare(` left in either tree, and `compareIds` orders 191 node, column and probe ids from the fixtures (plus mixed-case and accented ids) exactly as `localeCompare`, pairwise. Rankings unchanged, checked on 2026-10-11: `uv run datatrust bench --mode offline --seeds 101 --workers 2 --out <tmp> --gate results/baseline-seed101.json` passed, and its 21 records equal the seed-101 records of `results/bench-2026-10-10-offline.json` in `ranked`, `rankedColumns`, `features`, `ablations`, `baselines`, `detected`, `failing`, `candidateCount` and `probeCount`; `npm run bench:e2e -- --pytest` 2 passed, ports free.
+
 ## Next
 
-- SPEC 23.1, Free plan migration, in order (F1 to F5 done): F6 module-scope collator; F7 daily Workers AI neuron ledger and split summary steps; F8 runner idle backoff; F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
+- SPEC 23.1, Free plan migration, in order (F1 to F6 done): F7 daily Workers AI neuron ledger and split summary steps; F8 runner idle backoff; F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
 - Production execution, by Nitish's operator after the builder gate (a rerun of `setup:prod -- --cloudflare-only` redeploys later Worker changes and applies new migrations): SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux container, not yet observed on ubuntu-latest.
 
 ## Check status (at the latest commit, 2026-10-10, macOS; CI not yet run because nothing is pushed)
 
 - `npm run typecheck`: pass
-- `npm run test:rca`: 53 passed
+- `npm run test:rca`: 55 passed
 - `npm run test:worker`: 75 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 185 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F5)
+- `uv run pytest`: 185 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F6)
 - `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template (no `pipelines` binding)
 
 ## Deviations from SPEC.md

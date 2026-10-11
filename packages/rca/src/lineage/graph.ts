@@ -1,6 +1,7 @@
 /** Lineage graph from OpenLineage events + relations.json, and upstream closure (SPEC 9, 11). */
 import type { ClosureEntry, ColumnRef, GraphNode, LineageGraph, NodeId, RelationsMap } from '../types';
 import { edgesFromEvent, makeResolver, parseRunEvent, type RunEvent } from './openlineage';
+import { compareIds } from '../order';
 
 export function buildLineageGraph(events: Array<RunEvent | unknown>, relations: RelationsMap): LineageGraph {
   const nodes: Record<NodeId, GraphNode> = {};
@@ -37,9 +38,9 @@ export function buildLineageGraph(events: Array<RunEvent | unknown>, relations: 
     }
   }
   const cmpRef = (a: ColumnRef, b: ColumnRef) =>
-    a.node.localeCompare(b.node) || String(a.column).localeCompare(String(b.column));
+    compareIds(a.node, b.node) || compareIds(String(a.column), String(b.column));
   columnEdges.sort((a, b) => cmpRef(a.to, b.to) || cmpRef(a.from, b.from));
-  datasetEdges.sort((a, b) => a.to.localeCompare(b.to) || a.from.localeCompare(b.from));
+  datasetEdges.sort((a, b) => compareIds(a.to, b.to) || compareIds(a.from, b.from));
   return { nodes, columnEdges, datasetEdges };
 }
 

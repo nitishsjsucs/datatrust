@@ -1,4 +1,5 @@
 export * from './types';
+export * from './order';
 export * from './lineage/openlineage';
 export * from './lineage/graph';
 export * from './rca/trace';

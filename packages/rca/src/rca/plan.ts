@@ -14,6 +14,7 @@ import type {
   RelationsMap,
   TraceCandidate,
 } from '../types';
+import { compareIds } from '../order';
 
 /** Row-multiplicity probes: their anomaly propagates to children through joins, whatever the columns. */
 export const MULTIPLICITY_PROBES: ReadonlySet<ProbeKind> = new Set([
@@ -173,7 +174,7 @@ export function planProbes(
   for (const node of [...nodes].sort()) for (const r of metaProbes(node, relations)) add(r);
   // One more pass so that every column-scoped probe has its parent counterpart.
   for (const r of [...byId.values()]) for (const lifted of liftToParents(r, g, relations)) add(lifted);
-  return [...byId.values()].sort((a, b) => a.probeId.localeCompare(b.probeId));
+  return [...byId.values()].sort((a, b) => compareIds(a.probeId, b.probeId));
 }
 
 /** The last passed run of the same target before the investigated run (the "last green" build). */

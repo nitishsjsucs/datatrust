@@ -25,6 +25,7 @@ import type {
 import { DATASET_SCOPE_PROBES, MULTIPLICITY_PROBES } from './plan';
 import { checkClosure, isFailing } from './trace';
 import { FROZEN_WEIGHTS } from './weights';
+import { compareIds } from '../order';
 
 export interface FeatureRow {
   node: NodeId;
@@ -110,7 +111,7 @@ export function ownAnomaly(
     const c = clip(r.anomaly - parentAnomaly(r, g, byNode, mode));
     if (c > 0) contributions.push({ probeId: r.probeId, contribution: c });
   }
-  contributions.sort((a, b) => b.contribution - a.contribution || a.probeId.localeCompare(b.probeId));
+  contributions.sort((a, b) => b.contribution - a.contribution || compareIds(a.probeId, b.probeId));
   return { value: contributions[0]?.contribution ?? 0, probes: contributions };
 }
 
@@ -160,7 +161,7 @@ export function computeFeatures(input: RankInput, mode: 'column' | 'dataset' = '
       probes: anomaly.probes.map((p) => p.probeId),
     });
   }
-  return rows.sort((a, b) => a.node.localeCompare(b.node));
+  return rows.sort((a, b) => compareIds(a.node, b.node));
 }
 
 export function scoreRows(rows: FeatureRow[], weights: Weights, ablation: Ablation = 'full'): RankedCandidate[] {
@@ -174,7 +175,7 @@ export function scoreRows(rows: FeatureRow[], weights: Weights, ablation: Ablati
         : w.coverage * r.coverage + w.anomaly * r.ownAnomaly + w.changed * r.changed - w.unexplainedPass * r.unexplainedPass;
     return { r, score: Math.round(score * 1e9) / 1e9 };
   });
-  scored.sort((a, b) => b.score - a.score || a.r.distance - b.r.distance || a.r.node.localeCompare(b.r.node));
+  scored.sort((a, b) => b.score - a.score || a.r.distance - b.r.distance || compareIds(a.r.node, b.r.node));
   return scored.map(({ r, score }, i) => ({
     rank: i + 1,
     node: r.node,

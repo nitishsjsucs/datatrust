@@ -1,4 +1,4 @@
-import { upstreamClosure } from '@datatrust/rca';
+import { compareIds, upstreamClosure } from '@datatrust/rca';
 import { Hono } from 'hono';
 import { type HonoEnv, requireRole } from '../hono';
 import { loadLineageGraph } from '../store/repo';
@@ -25,7 +25,7 @@ lineageRead.get('/:runId/upstream', requireRole('viewer', 'operator'), async (c)
         columns: [...e.columns].sort(),
         viaDataset: e.viaDataset,
       }))
-      .sort((a, b) => a.distance - b.distance || a.node.localeCompare(b.node)),
+      .sort((a, b) => a.distance - b.distance || compareIds(a.node, b.node)),
     columnEdges: g.columnEdges.filter((e) => inClosure.has(e.from.node) && inClosure.has(e.to.node)),
     datasetEdges: g.datasetEdges.filter((e) => inClosure.has(e.from) && inClosure.has(e.to)),
   });

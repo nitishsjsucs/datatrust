@@ -1,6 +1,7 @@
 /** Failing checks and failed metrics -> candidate root-cause nodes (SPEC 11 step 1). */
 import { upstreamClosure } from '../lineage/graph';
 import type { CheckResult, ClosureEntry, ColumnRef, LineageGraph, NodeId, TraceCandidate } from '../types';
+import { compareIds } from '../order';
 
 export function isFailing(c: CheckResult): boolean {
   return c.status === 'fail' || c.status === 'error';
@@ -67,6 +68,6 @@ export function traceUpstream(
   }
   const candidates = [...acc.values()]
     .map(({ colSet, ...c }) => ({ ...c, columns: [...colSet].sort(), checks: c.checks.sort() }))
-    .sort((a, b) => a.distance - b.distance || a.node.localeCompare(b.node));
+    .sort((a, b) => a.distance - b.distance || compareIds(a.node, b.node));
   return { candidates, failing: failing.map((c) => c.checkId).sort() };
 }

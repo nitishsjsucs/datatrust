@@ -1,11 +1,12 @@
 /** Naive baselines reported next to the ranker (SPEC 11), computed on the same candidate set. */
 import type { NodeId } from '../types';
 import type { FeatureRow } from './rank';
+import { compareIds } from '../order';
 
 /** "Blame the last change": changed models first, then nearest, then NodeId. */
 export function changeOnly(rows: FeatureRow[]): NodeId[] {
   return [...rows]
-    .sort((a, b) => b.changed - a.changed || a.distance - b.distance || a.node.localeCompare(b.node))
+    .sort((a, b) => b.changed - a.changed || a.distance - b.distance || compareIds(a.node, b.node))
     .map((r) => r.node);
 }
 
@@ -13,7 +14,7 @@ export function changeOnly(rows: FeatureRow[]): NodeId[] {
 export function nearestUpstreamSource(rows: FeatureRow[]): NodeId[] {
   return rows
     .filter((r) => r.kind === 'source')
-    .sort((a, b) => a.distance - b.distance || a.node.localeCompare(b.node))
+    .sort((a, b) => a.distance - b.distance || compareIds(a.node, b.node))
     .map((r) => r.node);
 }
 
