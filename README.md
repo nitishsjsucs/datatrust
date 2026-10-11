@@ -85,6 +85,15 @@ Summaries are written from sanitized evidence only. The model never writes numbe
 | OpenAI-compatible llama-server, Qwen3-1.7B Q4_0 on 127.0.0.1:8160 | local stand-in (`npm run dev:up -- --llm`) | executed locally |
 | Deterministic template | CI and fallback | executed locally and in tests |
 
+Summary faithfulness eval (stretch, `npm run eval:summaries`, 2026-10-10, commit `bbb8e65`): the 20 seed-101 incidents (one per scenario, offline trials on DuckDB) through the same grounded loop the Worker runs. Reports: [`results/summaries-2026-10-10-local-llm.md`](results/summaries-2026-10-10-local-llm.md), [`results/summaries-2026-10-10-template.md`](results/summaries-2026-10-10-template.md).
+
+| Summarizer | Incidents | First draft is JSON | First draft grounded | Accepted after repair | Template fallback | Accepted drafts naming a top-3 root cause | PII leaks |
+|---|---|---|---|---|---|---|---|
+| Qwen3-1.7B Q4_0 via llama-server (local stand-in for Workers AI) | 20 | 100% | 15% | 5% | 80% | 4/4 | 0 |
+| template-v1 | 20 | 100% | 100% | 0% | 0% | 20/20 | 0 |
+
+The small local model mostly fails grounding (violations by rule on the final attempt: unknown diagnostic SQL id (17), unknown evidence ref (11), number outside a placeholder (8), root cause not in top five (2), schema (1)), so most of its incidents carry the template summary and say so. Decoding uses temperature 0 and a fixed seed, but an earlier run in the same session differed by one incident, so treat the local figures as approximate. Workers AI (`llama-3.3-70b-instruct-fp8-fast`) has not run yet; `npm run prod:smoke` measures its grounding pass rate and fallback rate in production.
+
 ## Architecture
 
 ```mermaid
