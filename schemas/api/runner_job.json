@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nitishsjsucs/datatrust/schemas/api/runner_job.json",
+  "title": "RunnerJob",
+  "description": "A leased job as returned by POST /api/runner/lease (SPEC 13.1, ADR-0001). A diagnostics job carries probe invocations, never SQL.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId", "runId", "kind", "payload", "leaseToken", "leaseExpiresAt", "attempts"],
+  "properties": {
+    "jobId": { "type": "string" },
+    "runId": { "type": "string" },
+    "kind": { "enum": ["dbt_build", "diagnostics"] },
+    "leaseToken": { "type": "string", "pattern": "^[0-9a-f]{48}$" },
+    "leaseExpiresAt": { "type": "integer" },
+    "attempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "payload": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runId", "target"],
+          "properties": {
+            "runId": { "type": "string" },
+            "target": { "enum": ["duckdb", "bigquery"] },
+            "seed": { "type": ["integer", "null"] },
+            "scenario": { "type": ["string", "null"], "pattern": "^[ST][0-9]{2}$" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runId", "incidentId", "target", "probes"],
+          "properties": {
+            "runId": { "type": "string" },
+            "incidentId": { "type": "string" },
+            "target": { "enum": ["duckdb", "bigquery"] },
+            "probes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["probeId", "probe", "node", "columns", "params"],
+                "properties": {
+                  "probeId": { "type": "string" },
+                  "probe": { "type": "string" },
+                  "node": { "type": "string" },
+                  "columns": { "type": "array", "items": { "type": "string" } },
+                  "params": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

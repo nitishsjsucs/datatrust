@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nitishsjsucs/datatrust/schemas/api/probe_result.json",
+  "title": "ProbeResult",
+  "description": "One diagnostic probe result after `rca sanitize` (SPEC 10, 13.8). Mirrored by ProbeResultSchema (zod) in apps/worker/src/schemas.ts. Aggregates only; sample keys are HMAC tokens for identifiers and plain values only for internal or public columns.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["probeId", "probe", "node", "columns", "metric", "value", "anomaly", "sql", "dialect", "status", "sampleKeys", "details"],
+  "properties": {
+    "probeId": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "probe": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "node": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "columns": { "type": "array", "items": { "type": "string" } },
+    "metric": { "type": "string" },
+    "value": { "type": "number" },
+    "anomaly": { "type": "number", "minimum": 0, "maximum": 1 },
+    "sql": { "type": "array", "items": { "type": "string", "maxLength": 20000 }, "maxItems": 4 },
+    "dialect": { "type": "string" },
+    "status": { "enum": ["ok", "error", "missing"] },
+    "sampleKeys": {
+      "type": "array",
+      "maxItems": 5,
+      "items": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean", "null"] } }
+    },
+    "details": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean", "null"] } },
+    "error": { "type": ["string", "null"], "maxLength": 200 }
+  }
+}

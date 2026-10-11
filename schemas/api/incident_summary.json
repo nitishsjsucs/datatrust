@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "impact": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600
+    },
+    "suspectedRootCause": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "column": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        }
+      },
+      "required": [
+        "node",
+        "column",
+        "confidence"
+      ],
+      "additionalProperties": false
+    },
+    "reasoning": {
+      "maxItems": 5,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    },
+    "evidenceRefs": {
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "diagnosticSqlIds": {
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "nextSteps": {
+      "maxItems": 5,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400
+      }
+    }
+  },
+  "required": [
+    "title",
+    "impact",
+    "suspectedRootCause",
+    "reasoning",
+    "evidenceRefs",
+    "diagnosticSqlIds",
+    "nextSteps"
+  ],
+  "additionalProperties": false
+}

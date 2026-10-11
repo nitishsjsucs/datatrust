@@ -166,3 +166,14 @@ describe('template summarizer and prompts', () => {
     expect(msgs.at(-2)!.role).toBe('assistant');
   });
 });
+
+describe('published JSON Schema', () => {
+  it('schemas/api/incident_summary.json is the schema generated from the zod definition', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { incidentSummaryJsonSchema } = await import('../src/summary/schema');
+    const file = JSON.parse(
+      readFileSync(new URL('../../../schemas/api/incident_summary.json', import.meta.url), 'utf8'),
+    ) as unknown;
+    expect(file).toEqual(incidentSummaryJsonSchema);
+  });
+});

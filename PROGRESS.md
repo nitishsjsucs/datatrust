@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` done; 21 in progress (eval harness committed, results next); 22-23 not started.
+All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` done; 21 in progress (eval harness committed, results next); 22-23 not started. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
 ## Done
 
@@ -31,6 +31,7 @@ All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incid
 - 19. Final check of results: the test-seed command rerun at commit 019714f (2026-10-10, 305 s with the machine shared by other builds) reproduced all 105 per-trial rankings and the headline numbers exactly, so `results/bench-2026-10-10-offline.*` stand; the rerun's report is committed as `results/bench-2026-10-10-offline-recheck.md`. README: status line, status table (every row with its execution label), Results (offline, recheck, e2e, honest reading), documented frozen weights.
 - 20 (stretch). `apps/web` (React 19.3, Vite 8.3.4, hash routing, incident list and incident detail with summary, failing checks, ranked candidates, lineage path grouped by hop, diagnostic SQL, recovery, provenance with stand-in labels, light and dark themes, local dev-token box), served as Worker static assets (`assets` in `wrangler.jsonc` and the prod template, `run_worker_first` for `/api/*` and `/healthz`), npm workspace, `test/format.test.ts`, `dev-up.sh` builds it if missing, CI e2e job builds all workspaces. Verified by hand on 2026-10-10 in the browser pane against `wrangler dev`: list and T14 incident rendered, no horizontal scroll at 375 px; stack stopped, ports free.
 - 21a (stretch, harness). The grounded summarize loop, `TemplateSummarizer` and `OpenAICompatSummarizer` moved into `packages/rca/src/summary/grounded.ts` (the Worker re-exports them; Workers AI stays in the Worker), `rca summarize` (records raw drafts), `bench/pii.py` (shared PII finder), `bench/summaries.py`, `datatrust bench summaries --provider template|local-llm`, `scripts/eval-summaries.sh` (starts and always stops llama-server on 8160), `npm run eval:summaries`. Violations are reported by grounding rule (`violation_rule`).
+- Gap fill (items in the SPEC 5 file tree and SPEC 19 test plan that were missing): `schemas/api/{check_result,probe_result,runner_job,incident_summary}.json` (the last generated from the zod schema with `rca schema` and asserted equal in `summary-validate.test.ts`), closed inputs for every `rca` CLI command (an unexpected key such as a scenario id is rejected, so ground truth cannot reach the ranker), `test_api_schemas.py` (real check results, the recorded contract failure, sanitized probe results and job payloads validate; `rca rank` refuses `scenario`), `test_restricted_views.py` (reads only the untagged aggregate, no personal columns, exactly the department-months with at least 5 employees reported), `jsonschema` declared as a dev dependency.
 
 ## Next
 
@@ -43,7 +44,7 @@ Core v1 is complete locally. What remains:
 ## Check status (at the final commit, 2026-10-10, macOS; CI not yet run because nothing is pushed)
 
 - `npm run typecheck`: pass
-- `npm run test:rca`: 49 passed
+- `npm run test:rca`: 50 passed
 - `npm run test:worker`: 57 passed
 - `npm run test -w @datatrust/web`: 4 passed
 - `uv run ruff check`: pass
@@ -53,7 +54,6 @@ Core v1 is complete locally. What remains:
 
 - Commit 6 (`feat(checks)`) left two lines over ruff's 110-character limit in `test_warehouse_types.py`, so `uv run ruff check` fails at that commit; fixed in commit 7.
 
-- `apps/web` (stretch) is not in the npm workspaces list until it exists.
 - Contract `data_type` cannot call project macros: dbt 1.12.5 renders schema YAML without them ("'dt_type' is undefined", observed 2026-10-10). Contracts use inline `{{ 'int64' if target.type == 'bigquery' else 'bigint' }}` expressions instead; `test_warehouse_types.py::test_contract_types_mirror_dt_type` asserts every such expression equals the `dt_type` mapping, so `macros/dialect/types.sql` stays the single source of truth.
 - `trailing_median` is split into two macros, `trailing_median` (window step in a CTE) and `trailing_median_finish` (exact median from the BigQuery array; identity on DuckDB), because BigQuery cannot take a median over a window frame in one expression.
 - Probe planning details beyond SPEC 10/11 (all metadata-driven): models use `fanout_ratio` on their grain and sources use `dup_key_rate`; row-multiplicity probes (`fanout_ratio`, `rowcount_ratio`) are judged inherited when any dataset parent shows a multiplicity anomaly (duplicates, fan-out, row count or overlapping intervals), because join fan-out does not follow column lineage. `recompute_delta` also has an `exact` mode (share of rows that differ) for dates and integer formulas. The S04 time-zone probe on `raw.stage_events` reaches the zone through a `tz_path` join chain in source meta.

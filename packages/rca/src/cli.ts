@@ -18,6 +18,10 @@
  *   validate         {draft, evidence}                                    -> {ok, violations}
  *   template         {evidence}                                           -> {draft, rendered}
  *   summarize        {evidence, provider: template|local-llm, llmUrl?}    -> SummaryOutcome (+ rawDrafts)
+ *   schema           {}                                                   -> IncidentSummary JSON Schema
+ *
+ * Inputs are closed: an unexpected top-level key is an error, so ground truth (a scenario id) can never reach
+ * the ranker by accident (SPEC 11).
  */
 import { readFileSync } from 'node:fs';
 import { buildEvidence, type SanitizedEvidence } from './evidence/evidence';
@@ -30,6 +34,7 @@ import {
 } from './summary/grounded';
 import { buildPrompt, type ChatMessage } from './summary/prompt';
 import { renderSummary } from './summary/render';
+import { incidentSummaryJsonSchema } from './summary/schema';
 import { templateDraft } from './summary/template';
 import { validateSummary } from './summary/validate';
 import { buildLineageGraph, columnLineageCoverage } from './lineage/graph';
@@ -43,12 +48,41 @@ import type { CheckResult, LineageGraph, ProbeResult, RankedCandidate, Relations
 
 type Input = Record<string, unknown>;
 
+const COMMON = ['checks', 'graph', 'events', 'relations'];
+const ALLOWED_KEYS: Record<string, string[]> = {
+  graph: ['events', 'relations'],
+  trace: [...COMMON, 'mode'],
+  plan: COMMON,
+  rank: [...COMMON, 'probeResults', 'baselineChecksums', 'weights'],
+  sanitize: ['probeResults', 'relations'],
+  'check-sanitized': ['probeResults', 'relations'],
+  tune: ['trials'],
+  evaluate: ['trials', 'weights'],
+  loso: ['dev', 'test'],
+  coverage: ['graph', 'events', 'relations'],
+  weights: [],
+  schema: [],
+  evidence: ['incidentId', 'runId', 'trigger', 'checks', 'ranked', 'probeResults', 'relations'],
+  prompt: ['evidence'],
+  validate: ['draft', 'evidence'],
+  template: ['evidence'],
+  summarize: ['evidence', 'provider', 'llmUrl'],
+};
+
+export function assertClosedInput(command: string, input: Input): void {
+  const allowed = ALLOWED_KEYS[command];
+  if (!allowed) throw new Error(`unknown command ${command}`);
+  const extra = Object.keys(input).filter((k) => !allowed.includes(k));
+  if (extra.length) throw new Error(`unexpected input for ${command}: ${extra.join(', ')}`);
+}
+
 function graphOf(input: Input): LineageGraph {
   if (input['graph']) return input['graph'] as LineageGraph;
   return buildLineageGraph((input['events'] as unknown[]) ?? [], input['relations'] as RelationsMap);
 }
 
 async function run(command: string, input: Input): Promise<unknown> {
+  assertClosedInput(command, input);
   switch (command) {
     case 'graph':
       return graphOf(input);
@@ -96,6 +130,8 @@ async function run(command: string, input: Input): Promise<unknown> {
       return columnLineageCoverage(graphOf(input));
     case 'weights':
       return FROZEN_WEIGHTS;
+    case 'schema':
+      return incidentSummaryJsonSchema;
     case 'evidence':
       return buildEvidence({
         incidentId: String(input['incidentId'] ?? 'incident'),
@@ -142,7 +178,7 @@ async function run(command: string, input: Input): Promise<unknown> {
 
 async function main(): Promise<void> {
   const command = process.argv[2] ?? '';
-  const raw = command === 'weights' ? '{}' : readFileSync(0, 'utf8');
+  const raw = command === 'weights' || command === 'schema' ? '{}' : readFileSync(0, 'utf8');
   const input = JSON.parse(raw || '{}') as Input;
   const out = await run(command, input);
   process.stdout.write(JSON.stringify(out));
