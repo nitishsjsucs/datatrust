@@ -79,11 +79,19 @@ def markdown(report: dict[str, Any]) -> str:
         "",
         f"- Command: `{m['command']}`",
         f"- Git commit: `{m['gitCommit']}`",
+        *(
+            [
+                f"- Trial records from `{m['sourceReport']}` (commit `{m['sourceGitCommit']}`, "
+                f"{m['sourceDate']}); only the summary was recomputed here, no trial was rerun"
+            ]
+            if m.get("sourceReport")
+            else []
+        ),
         f"- Seeds: {', '.join(str(x) for x in m['seeds'])}; scenarios: {s['trials']['scenarios']}; "
         f"injected trials: {s['trials']['injected']}; clean trials: {s['trials']['clean']}",
         f"- Warehouse: {m['warehouse']}",
         f"- Weights: `{json.dumps(m['weights'])}`",
-        f"- Wall time: {m['wallSeconds']} s",
+        f"- Wall time: {'not rerun' if m.get('sourceReport') else str(m['wallSeconds']) + ' s'}",
         "",
         "## Headline",
         "",
@@ -166,6 +174,7 @@ def write_report(
     tag: str | None = None,
     scenario_titles: dict[str, str] | None = None,
     date: str | None = None,
+    extra_meta: dict[str, Any] | None = None,
 ) -> tuple[Path, Path]:
     date = date or dt.date.today().isoformat()
     name = f"bench-{date}-{mode}" + (f"-{tag}" if tag else "")
@@ -180,6 +189,7 @@ def write_report(
             "warehouse": WAREHOUSE,
             "versions": versions(),
             "weights": weights,
+            **(extra_meta or {}),
         },
         "summary": summary,
         "scenarioTitles": scenario_titles or {},

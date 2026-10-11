@@ -232,6 +232,88 @@ def _cmd_tune(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_report(args: argparse.Namespace) -> int:
+    """Recompute the summary of a committed benchmark report for a subset of its seeds (no trial is rerun),
+    for example the test seeds without seed 101, which was the development smoke seed before the weights froze
+    (README, Protocol)."""
+    from datatrust import config
+    from datatrust.bench.metrics import summarize
+    from datatrust.bench.report import write_report
+
+    source = Path(args.from_path)
+    report = json.loads(source.read_text())
+    seeds = _parse_seeds(args.seeds)
+    records = [r for r in report["records"] if r["seed"] in seeds]
+    missing = sorted(set(seeds) - {r["seed"] for r in records})
+    if missing:
+        print(f"seeds {missing} are not in {source}", file=sys.stderr)
+        return 2
+    meta = report["meta"]
+    jpath, mpath = write_report(
+        records,
+        summarize(records),
+        out_dir=Path(args.out) if args.out else config.RESULTS_DIR,
+        mode=meta["mode"],
+        seeds=seeds,
+        command="uv run datatrust " + " ".join(sys.argv[1:]),
+        wall_seconds=0.0,
+        weights=meta["weights"],
+        tag=args.tag,
+        scenario_titles=report.get("scenarioTitles"),
+        date=args.date,
+        extra_meta={
+            "sourceReport": source.name,
+            "sourceGitCommit": meta["gitCommit"],
+            "sourceDate": meta["date"],
+        },
+    )
+    print(mpath.read_text())
+    print(json.dumps({"json": str(jpath), "md": str(mpath)}))
+    return 0
+
+
+# What two benchmark runs must agree on, trial by trial, for a rerun to reproduce a report (timings, run ids
+# and wall time may differ).
+COMPARED_FIELDS = (
+    "ranked",
+    "rankedColumns",
+    "features",
+    "ablations",
+    "baselines",
+    "detected",
+    "failing",
+    "candidateCount",
+    "probeCount",
+)
+
+
+def _cmd_compare(args: argparse.Namespace) -> int:
+    """Compare two benchmark reports trial by trial on COMPARED_FIELDS; exit 1 on any difference."""
+    a, b = (json.loads(Path(p).read_text()) for p in (args.a, args.b))
+    ra = {r["trial"]: r for r in a["records"]}
+    rb = {r["trial"]: r for r in b["records"]}
+    diffs = [f"trial {t}: only in {args.a if t in ra else args.b}" for t in sorted(set(ra) ^ set(rb))]
+    for t in sorted(set(ra) & set(rb)):
+        diffs += [f"trial {t}: {f} differs" for f in COMPARED_FIELDS if ra[t].get(f) != rb[t].get(f)]
+    same_summary = {k: v for k, v in a["summary"].items() if k != "loso"} == {
+        k: v for k, v in b["summary"].items() if k != "loso"
+    }
+    print(
+        json.dumps(
+            {
+                "a": {"report": Path(args.a).name, "gitCommit": a["meta"]["gitCommit"]},
+                "b": {"report": Path(args.b).name, "gitCommit": b["meta"]["gitCommit"]},
+                "trials": len(set(ra) & set(rb)),
+                "fields": list(COMPARED_FIELDS),
+                "differences": diffs[:50],
+                "summaryEqualExceptLoso": same_summary,
+            },
+            indent=2,
+        )
+    )
+    return 1 if diffs else 0
+
+
 def _cmd_baseline(args: argparse.Namespace) -> int:
     from datatrust.bench.metrics import baseline_from
 
@@ -549,6 +631,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--parity", action="store_true", help="e2e: also run the offline trials and compare top-3")
     p.add_argument("--command-label", help=argparse.SUPPRESS)
     p.set_defaults(func=_cmd_bench)
+
+    p = sub.add_parser("report", help="re-summarize a committed benchmark report for a subset of its seeds")
+    p.add_argument("--from", dest="from_path", required=True, help="benchmark report JSON")
+    p.add_argument("--seeds", required=True, help="e.g. 102-105")
+    p.add_argument("--tag", required=True, help="suffix for the report file name, e.g. heldout-102-105")
+    p.add_argument("--out", help="results directory (default results/)")
+    p.add_argument("--date", help="date in the file name (default today)")
+    p.set_defaults(func=_cmd_report)
+
+    p = sub.add_parser(
+        "compare", help="compare two benchmark reports trial by trial (exit 1 on a difference)"
+    )
+    p.add_argument("a", help="benchmark report JSON")
+    p.add_argument("b", help="benchmark report JSON")
+    p.set_defaults(func=_cmd_compare)
 
     p = sub.add_parser("tune", help="grid-search ranking weights on a dev-seed report (ADR-0004)")
     p.add_argument("--from", dest="from_path", required=True)
