@@ -168,29 +168,34 @@ export function isLeaseValid(job: JobRow | null, token: string | null, now = Dat
 
 // ------------------------------------------------------------------------------------------- checks
 
+/** One set-based upsert for any number of check results (SPEC 28.5.3): one statement per call. */
+export function checkResultsStatement(db: D1Database, runId: string, checks: CheckResult[]): D1PreparedStatement {
+  const rows = checks.map((c) => ({
+    checkId: c.checkId,
+    testName: c.testName,
+    category: c.category,
+    status: c.status,
+    failures: c.failures,
+    node: c.node,
+    columnsJson: JSON.stringify({ columns: c.columns, also: c.also ?? [], kind: c.kind }),
+    message: c.message ?? null,
+  }));
+  return db
+    .prepare(
+      `INSERT INTO check_results (run_id, check_id, test_name, category, status, failures, node, columns_json, message)
+       SELECT ?1, json_extract(value, '$.checkId'), json_extract(value, '$.testName'), json_extract(value, '$.category'),
+         json_extract(value, '$.status'), json_extract(value, '$.failures'), json_extract(value, '$.node'),
+         json_extract(value, '$.columnsJson'), json_extract(value, '$.message')
+       FROM json_each(?2) WHERE true
+       ON CONFLICT (run_id, check_id) DO UPDATE SET status = excluded.status, failures = excluded.failures,
+         message = excluded.message, columns_json = excluded.columns_json`,
+    )
+    .bind(runId, JSON.stringify(rows));
+}
+
 export async function upsertCheckResults(db: D1Database, runId: string, checks: CheckResult[]): Promise<void> {
   if (checks.length === 0) return;
-  const stmt = db.prepare(
-    `INSERT INTO check_results (run_id, check_id, test_name, category, status, failures, node, columns_json, message)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (run_id, check_id) DO UPDATE SET status = excluded.status, failures = excluded.failures,
-       message = excluded.message, columns_json = excluded.columns_json`,
-  );
-  await db.batch(
-    checks.map((c) =>
-      stmt.bind(
-        runId,
-        c.checkId,
-        c.testName,
-        c.category,
-        c.status,
-        c.failures,
-        c.node,
-        JSON.stringify({ columns: c.columns, also: c.also ?? [], kind: c.kind }),
-        c.message ?? null,
-      ),
-    ),
-  );
+  await checkResultsStatement(db, runId, checks).run();
 }
 
 interface CheckRow {
@@ -247,13 +252,7 @@ export function lineageBundleStatements(
   events: Array<{ eventId: string; r2Key: string }>,
 ): D1PreparedStatement[] {
   return [
-    db
-      .prepare(
-        `INSERT INTO lineage_edges (run_id, src_node, src_column, dst_node, dst_column)
-         SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]')
-         FROM json_each(?2) WHERE true ON CONFLICT DO NOTHING`,
-      )
-      .bind(runId, JSON.stringify(edges)),
+    lineageEdgesStatement(db, runId, edges),
     db
       .prepare(
         `INSERT INTO lineage_events (run_id, event_id, r2_key, processed_at)
@@ -273,51 +272,72 @@ export async function countLineageEvents(db: D1Database, runId: string): Promise
   return row?.n ?? 0;
 }
 
+/**
+ * Nodes (and any edges) of a lineage graph with set-based statements (SPEC 28.5.3): one node upsert and, when
+ * the graph has edges, one edge insert. The relations upload writes 42 nodes with a single statement.
+ */
 export async function upsertLineageGraph(db: D1Database, runId: string, g: LineageGraph, meta: Record<string, unknown> = {}): Promise<void> {
-  const nodeStmt = db.prepare(
-    `INSERT INTO lineage_nodes (run_id, node_id, kind, relation, checksum, columns_json, meta_json) VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (run_id, node_id) DO UPDATE SET kind = excluded.kind, relation = excluded.relation,
-       checksum = excluded.checksum, columns_json = excluded.columns_json, meta_json = excluded.meta_json`,
-  );
-  const edgeStmt = db.prepare(
-    `INSERT INTO lineage_edges (run_id, src_node, src_column, dst_node, dst_column) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
-  );
+  const nodes = Object.entries(g.nodes).map(([id, n]) => [
+    id,
+    n.kind,
+    n.relation,
+    n.checksum,
+    JSON.stringify({ columns: n.columns, classification: n.classification }),
+    JSON.stringify(meta[id] ?? {}),
+  ]);
+  const edges: EdgeRow[] = [
+    ...g.columnEdges.map((e): EdgeRow => [e.from.node, e.from.column ?? '*', e.to.node, e.to.column ?? '*']),
+    ...g.datasetEdges.map((e): EdgeRow => [e.from, '*', e.to, '*']),
+  ];
   const stmts: D1PreparedStatement[] = [];
-  for (const [id, n] of Object.entries(g.nodes)) {
+  if (nodes.length) {
     stmts.push(
-      nodeStmt.bind(
-        runId,
-        id,
-        n.kind,
-        n.relation,
-        n.checksum,
-        JSON.stringify({ columns: n.columns, classification: n.classification }),
-        JSON.stringify(meta[id] ?? {}),
-      ),
+      db
+        .prepare(
+          `INSERT INTO lineage_nodes (run_id, node_id, kind, relation, checksum, columns_json, meta_json)
+           SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
+             json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]')
+           FROM json_each(?2) WHERE true
+           ON CONFLICT (run_id, node_id) DO UPDATE SET kind = excluded.kind, relation = excluded.relation,
+             checksum = excluded.checksum, columns_json = excluded.columns_json, meta_json = excluded.meta_json`,
+        )
+        .bind(runId, JSON.stringify(nodes)),
     );
   }
-  for (const e of g.columnEdges) stmts.push(edgeStmt.bind(runId, e.from.node, e.from.column ?? '*', e.to.node, e.to.column ?? '*'));
-  for (const e of g.datasetEdges) stmts.push(edgeStmt.bind(runId, e.from, '*', e.to, '*'));
-  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  if (edges.length) stmts.push(lineageEdgesStatement(db, runId, edges));
+  if (stmts.length === 1) await stmts[0]!.run();
+  else if (stmts.length > 1) await db.batch(stmts);
 }
 
+function lineageEdgesStatement(db: D1Database, runId: string, edges: EdgeRow[]): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO lineage_edges (run_id, src_node, src_column, dst_node, dst_column)
+       SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), json_extract(value, '$[3]')
+       FROM json_each(?2) WHERE true ON CONFLICT DO NOTHING`,
+    )
+    .bind(runId, JSON.stringify(edges));
+}
+
+/** The run's lineage graph in ONE statement: nodes (ordered by id), then edges (ordered as before). */
 export async function loadLineageGraph(db: D1Database, runId: string): Promise<LineageGraph> {
-  const nodes = await db
-    .prepare(`SELECT node_id, kind, relation, checksum, columns_json FROM lineage_nodes WHERE run_id = ? ORDER BY node_id`)
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM (
+         SELECT 'n' AS t, node_id AS a, kind AS b, relation AS c, checksum AS d, columns_json AS e FROM lineage_nodes WHERE run_id = ?1
+         UNION ALL
+         SELECT 'x' AS t, src_node AS a, src_column AS b, dst_node AS c, dst_column AS d, NULL AS e FROM lineage_edges WHERE run_id = ?1
+       ) ORDER BY t, CASE WHEN t = 'n' THEN a END, c, d, a, b`,
+    )
     .bind(runId)
-    .all<{ node_id: string; kind: 'source' | 'model'; relation: string; checksum: string | null; columns_json: string }>();
-  const edges = await db
-    .prepare(`SELECT src_node, src_column, dst_node, dst_column FROM lineage_edges WHERE run_id = ? ORDER BY dst_node, dst_column, src_node, src_column`)
-    .bind(runId)
-    .all<{ src_node: string; src_column: string; dst_node: string; dst_column: string }>();
+    .all<{ t: 'n' | 'x'; a: string; b: string; c: string; d: string | null; e: string | null }>();
   const g: LineageGraph = { nodes: {}, columnEdges: [], datasetEdges: [] };
-  for (const n of nodes.results) {
-    const c = JSON.parse(n.columns_json) as { columns: string[]; classification: LineageGraph['nodes'][string]['classification'] };
-    g.nodes[n.node_id] = { kind: n.kind, relation: n.relation, checksum: n.checksum, columns: c.columns, classification: c.classification };
-  }
-  for (const e of edges.results) {
-    if (e.src_column === '*' && e.dst_column === '*') g.datasetEdges.push({ from: e.src_node, to: e.dst_node });
-    else g.columnEdges.push({ from: { node: e.src_node, column: e.src_column }, to: { node: e.dst_node, column: e.dst_column } });
+  for (const r of results) {
+    if (r.t === 'n') {
+      const c = JSON.parse(r.e ?? '{}') as { columns: string[]; classification: LineageGraph['nodes'][string]['classification'] };
+      g.nodes[r.a] = { kind: r.b as 'source' | 'model', relation: r.c, checksum: r.d, columns: c.columns, classification: c.classification };
+    } else if (r.b === '*' && r.d === '*') g.datasetEdges.push({ from: r.a, to: r.c });
+    else g.columnEdges.push({ from: { node: r.a, column: r.b }, to: { node: r.c, column: r.d ?? '*' } });
   }
   return g;
 }
@@ -330,19 +350,16 @@ export async function loadNodeMeta(db: D1Database, runId: string): Promise<Recor
   return Object.fromEntries(results.map((r) => [r.node_id, JSON.parse(r.meta_json)]));
 }
 
-/** Model checksums of the most recent passed run before this one, for the change signal. */
+/** Model checksums of the most recent passed run before this one, for the change signal (one statement). */
 export async function baselineChecksums(db: D1Database, runId: string): Promise<Record<string, string | null> | null> {
-  const prev = await db
-    .prepare(
-      `SELECT run_id FROM runs WHERE status = 'passed' AND run_id <> ? AND created_at <= (SELECT created_at FROM runs WHERE run_id = ?)
-       ORDER BY created_at DESC LIMIT 1`,
-    )
-    .bind(runId, runId)
-    .first<{ run_id: string }>();
-  if (!prev) return null;
   const { results } = await db
-    .prepare(`SELECT node_id, checksum FROM lineage_nodes WHERE run_id = ? AND kind = 'model'`)
-    .bind(prev.run_id)
+    .prepare(
+      `SELECT node_id, checksum FROM lineage_nodes WHERE kind = 'model' AND run_id = (
+         SELECT run_id FROM runs WHERE status = 'passed' AND run_id <> ?1
+           AND created_at <= (SELECT created_at FROM runs WHERE run_id = ?1)
+         ORDER BY created_at DESC LIMIT 1)`,
+    )
+    .bind(runId)
     .all<{ node_id: string; checksum: string | null }>();
   return results.length ? Object.fromEntries(results.map((r) => [r.node_id, r.checksum])) : null;
 }
@@ -450,9 +467,18 @@ export async function listIncidents(db: D1Database, runId?: string | null): Prom
 
 // ------------------------------------------------------------------------------------------- dead letters
 
-export async function insertDeadLetter(db: D1Database, queue: string, body: unknown, error: string | null): Promise<void> {
+/** Every dead letter of a DLQ batch with one statement (SPEC 28.5.3). */
+export async function insertDeadLetters(
+  db: D1Database,
+  queue: string,
+  letters: Array<{ body: unknown; error: string | null }>,
+): Promise<void> {
+  if (!letters.length) return;
   await db
-    .prepare(`INSERT INTO dead_letters (queue, body_json, error, created_at) VALUES (?, ?, ?, ?)`)
-    .bind(queue, JSON.stringify(body), error, nowIso())
+    .prepare(
+      `INSERT INTO dead_letters (queue, body_json, error, created_at)
+       SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'), ?3 FROM json_each(?2)`,
+    )
+    .bind(queue, JSON.stringify(letters.map((l) => [JSON.stringify(l.body ?? null), l.error])), nowIso())
     .run();
 }

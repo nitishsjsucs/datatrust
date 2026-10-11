@@ -41,6 +41,31 @@ export interface RunSummary {
   failing: string[];
 }
 
+/** Step await-ingested: two D1 counts; throws (so the step retries) until the queues caught up. */
+export async function awaitIngested(db: D1Database, runId: string, build: BuildCompletePayload) {
+  const checks = await countCheckResults(db, runId);
+  const lineage = await countLineageEvents(db, runId);
+  const wantChecks = build.checkCount ?? 0;
+  const wantLineage = build.expectedLineageEvents ?? 0;
+  if (checks < wantChecks || lineage < wantLineage) {
+    throw new Error(`not yet ingested: checks ${checks}/${wantChecks}, lineage ${lineage}/${wantLineage}`);
+  }
+  return { checks, lineage };
+}
+
+/** Step summarize-run: one D1 read. */
+export async function summarizeRun(db: D1Database, runId: string): Promise<RunSummary> {
+  const checks = await listCheckResults(db, runId);
+  const out: RunSummary = { pass: 0, fail: 0, error: 0, skip: 0, byCategory: {}, failing: [] };
+  for (const c of checks) {
+    out[c.status] += 1;
+    const cat = (out.byCategory[c.category] ??= { pass: 0, fail: 0, error: 0, skip: 0 });
+    cat[c.status] += 1;
+    if (c.status === 'fail' || c.status === 'error') out.failing.push(c.checkId);
+  }
+  return out;
+}
+
 export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, ValidationRunParams> {
   override async run(event: WorkflowEvent<ValidationRunParams>, step: WorkflowStep) {
     const { runId, target, seed, scenario } = event.payload;
@@ -86,30 +111,11 @@ export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, Validation
     await jsonStep(
       step,
       'await-ingested',
-      async () => {
-        const checks = await countCheckResults(db, runId);
-        const lineage = await countLineageEvents(db, runId);
-        const wantChecks = build.checkCount ?? 0;
-        const wantLineage = build.expectedLineageEvents ?? 0;
-        if (checks < wantChecks || lineage < wantLineage) {
-          throw new Error(`not yet ingested: checks ${checks}/${wantChecks}, lineage ${lineage}/${wantLineage}`);
-        }
-        return { checks, lineage };
-      },
+      async () => awaitIngested(db, runId, build),
       RETRY_INGEST,
     );
 
-    const summary = await jsonStep<RunSummary>(step, 'summarize-run', async () => {
-      const checks = await listCheckResults(db, runId);
-      const out: RunSummary = { pass: 0, fail: 0, error: 0, skip: 0, byCategory: {}, failing: [] };
-      for (const c of checks) {
-        out[c.status] += 1;
-        const cat = (out.byCategory[c.category] ??= { pass: 0, fail: 0, error: 0, skip: 0 });
-        cat[c.status] += 1;
-        if (c.status === 'fail' || c.status === 'error') out.failing.push(c.checkId);
-      }
-      return out;
-    });
+    const summary = await jsonStep<RunSummary>(step, 'summarize-run', async () => summarizeRun(db, runId));
 
     const failed = summary.fail + summary.error > 0;
     if (failed) {

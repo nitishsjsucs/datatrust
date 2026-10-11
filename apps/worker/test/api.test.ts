@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import type { AppEnv } from '../src/env';
 import { insertRun, upsertLineageGraph } from '../src/store/repo';
-import { seed101Events, seed101Relations } from './helpers/fixtures';
+import { s01, seed101Events, seed101Relations } from './helpers/fixtures';
 import { request } from './helpers/app';
 import { leasedBuildJob, manyEvents, recordingQueue } from './helpers/jobs';
 import { humanClaims, type Keys, makeKeys, mint, OPERATOR, serviceClaims, testEnv } from './helpers/keys';
@@ -96,5 +96,17 @@ describe('POST /api/v1/lineage limits (Free plan, SPEC 28.5.2)', () => {
     expect(bodies).toHaveLength(1);
     const operator = await mint(keys, humanClaims(OPERATOR));
     expect((await request(e, 'POST', '/api/v1/lineage', { token: operator, headers, body: ten })).status).toBe(403);
+  });
+});
+
+describe('completion request caps (Free plan CPU, SPEC 28.5.3)', () => {
+  it('answers 400 to more than 100 check results or probe results', async () => {
+    const runner = await mint(keys, serviceClaims());
+    const headers = await leasedBuildJob('run_api_caps');
+    const path = '/api/runner/jobs/job_run_api_caps_build/complete';
+    const checks = Array.from({ length: 101 }, (_, i) => ({ ...s01.checks[i % 40]!, checkId: `C${i}` }));
+    const probes = Array.from({ length: 101 }, (_, i) => ({ ...s01.probeResults[i % s01.probeResults.length]!, probeId: `p${i}` }));
+    expect((await request(env, 'POST', path, { token: runner, headers, body: { status: 'completed', checkResults: checks } })).status).toBe(400);
+    expect((await request(env, 'POST', path, { token: runner, headers, body: { status: 'completed', probeResults: probes } })).status).toBe(400);
   });
 });

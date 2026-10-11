@@ -21,6 +21,7 @@ import { sendJobEvent } from './jobs';
 import { buildLineageGraph } from '@datatrust/rca';
 
 export const LEASE_HEADER = 'X-DataTrust-Lease-Token';
+export const CHECK_RESULTS_PER_MESSAGE = 50;
 export const JOB_HEADER = 'X-DataTrust-Job-Id';
 
 export const runner = new Hono<HonoEnv>();
@@ -94,12 +95,14 @@ runner.post('/jobs/:jobId/complete', async (c) => {
   const b = body.data;
   const token = c.req.header(LEASE_HEADER) ?? '';
   if (job.kind === 'dbt_build') {
+    // One message per run (40 or 41 results occur; at most 50 per message, SPEC 13.3, 28.5.2).
     const checks = b.checkResults ?? [];
     const messages = [];
-    for (let i = 0; i < checks.length; i += 20) {
-      messages.push({ body: { runId: job.run_id, checkResults: checks.slice(i, i + 20) } });
+    for (let i = 0; i < checks.length; i += CHECK_RESULTS_PER_MESSAGE) {
+      messages.push({ body: { runId: job.run_id, checkResults: checks.slice(i, i + CHECK_RESULTS_PER_MESSAGE) } });
     }
-    if (messages.length) await c.env.CHECK_RESULTS_Q.sendBatch(messages);
+    if (messages.length === 1) await c.env.CHECK_RESULTS_Q.send(messages[0]!.body);
+    else if (messages.length > 1) await c.env.CHECK_RESULTS_Q.sendBatch(messages);
     await completeJob(c.env.DB, job.job_id, token, b.status);
     await sendJobEvent(c.env, job, {
       status: b.status,

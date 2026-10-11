@@ -53,8 +53,10 @@ export const ArtifactSchema = z.object({
 
 export const CompleteSchema = z.object({
   status: z.enum(['completed', 'failed']),
-  checkResults: z.array(CheckResultSchema).max(500).optional(),
-  probeResults: z.array(ProbeResultSchema).max(1000).optional(),
+  // Request caps keep CPU bounded on the Free plan's 10 ms (SPEC 28.5.3): 40 or 41 check results and at most
+  // 68 probe results occur.
+  checkResults: z.array(CheckResultSchema).max(100).optional(),
+  probeResults: z.array(ProbeResultSchema).max(100).optional(),
   expectedLineageEvents: z.number().int().min(0).optional(),
   error: z.string().max(200).optional(),
 });

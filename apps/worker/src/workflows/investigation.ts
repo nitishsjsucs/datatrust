@@ -28,6 +28,7 @@ import type { Alert } from '../schemas';
 import {
   baselineChecksums,
   getRun,
+  type IncidentInsert,
   insertJob,
   lastGreenRun,
   listCheckResults,
@@ -50,7 +51,7 @@ export interface DiagnosticsCompletePayload {
   error?: string;
 }
 
-interface Context {
+export interface Context {
   target: string;
   checks: CheckResult[];
   graph: LineageGraph;
@@ -72,10 +73,33 @@ export function alertAsCheck(alert: Alert): CheckResult {
   };
 }
 
+/** D1 part of step persist-incident: the incident row and, for a checks trigger, the run's incident id. */
+export async function persistIncidentRows(db: D1Database, i: IncidentInsert): Promise<void> {
+  await upsertIncident(db, i);
+  if (i.trigger === 'checks') await setRunIncident(db, i.runId, i.incidentId);
+}
+
 export async function readRelations(env: AppEnv, runId: string): Promise<RelationsMap> {
   const obj = await env.ARTIFACTS.get(`runs/${runId}/relations.json`);
   if (!obj) throw new Error(`relations artifact missing for ${runId}`);
   return (await obj.json()) as RelationsMap;
+}
+
+/** Step load-context: five D1 statements (SPEC 28.5.3, pinned by d1-statements.test.ts) and one R2 read. */
+export async function loadContext(env: AppEnv, p: InvestigationParams): Promise<Context> {
+  const db = env.DB;
+  const run = await getRun(db, p.runId);
+  if (!run) throw new Error(`run ${p.runId} not found`);
+  const checks = await listCheckResults(db, p.runId);
+  if (p.trigger === 'alert' && p.alert) checks.push(alertAsCheck(p.alert));
+  return {
+    target: run.target,
+    checks,
+    graph: await loadLineageGraph(db, p.runId),
+    relations: await readRelations(env, p.runId),
+    baseline: await baselineChecksums(db, p.runId),
+    lastGreen: await lastGreenRun(db, p.runId),
+  };
 }
 
 export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, InvestigationParams> {
@@ -83,20 +107,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
     const { runId, incidentId, trigger, alert } = event.payload;
     const env = this.env;
     const db = env.DB;
-    const ctx = await jsonStep<Context>(step, 'load-context', async () => {
-      const run = await getRun(db, runId);
-      if (!run) throw new Error(`run ${runId} not found`);
-      const checks = await listCheckResults(db, runId);
-      if (trigger === 'alert' && alert) checks.push(alertAsCheck(alert));
-      return {
-        target: run.target,
-        checks,
-        graph: await loadLineageGraph(db, runId),
-        relations: await readRelations(env, runId),
-        baseline: await baselineChecksums(db, runId),
-        lastGreen: await lastGreenRun(db, runId),
-      };
-    }, RETRY_LOAD);
+    const ctx = await jsonStep<Context>(step, 'load-context', async () => loadContext(env, event.payload), RETRY_LOAD);
 
     const trace = await jsonStep(step, 'trace-lineage', async () => traceUpstream(ctx.checks, ctx.graph, 'column'));
 
@@ -229,7 +240,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
       await env.ARTIFACTS.put(`prompts/${incidentId}.json`, JSON.stringify({ prompt: summary.prompt, violations: summary.violations }), {
         httpMetadata: { contentType: 'application/json' },
       });
-      await upsertIncident(db, {
+      await persistIncidentRows(db, {
         incidentId,
         runId,
         trigger,
@@ -246,7 +257,6 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
         summaryFallbackReason: summary.fallbackReason,
         provenance,
       });
-      if (trigger === 'checks') await setRunIncident(db, runId, incidentId);
       await createSink(env).send([
         auditEvent(env, 'incident_created', runId, {
           event_id: auditEventId.incidentCreated(incidentId),
