@@ -122,7 +122,9 @@ if ((DO_CF)); then
   say "1. D1 database datatrust"
   D1_ID="$(wr d1 list --json 2>/dev/null | json_id datatrust || true)"
   if [[ -z "$D1_ID" ]]; then
-    run wr d1 create datatrust
+    # --update-config=false: otherwise wrangler offers (default yes) to write the new id into the committed
+    # local apps/worker/wrangler.jsonc; the production id belongs only in the rendered wrangler.prod.jsonc.
+    run wr d1 create datatrust --update-config=false
     D1_ID="$(wr d1 info datatrust --json 2>/dev/null | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(d.get("uuid") or d.get("id") or "")' || true)"
   fi
   [[ -n "$D1_ID" || $DRY -eq 1 ]] || die "could not read the D1 database id; run \`npx wrangler d1 info datatrust\` and set it in .prod/state.json as d1_id"
@@ -131,7 +133,7 @@ if ((DO_CF)); then
 
   say "2. R2 buckets"
   for b in datatrust-artifacts datatrust-lake; do
-    if wr r2 bucket info "$b" --json >/dev/null 2>&1; then note "$b exists"; else run wr r2 bucket create "$b"; fi
+    if wr r2 bucket info "$b" --json >/dev/null 2>&1; then note "$b exists"; else run wr r2 bucket create "$b" --update-config=false; fi
   done
 
   say "3. Basin Catalog on datatrust-lake"

@@ -3,6 +3,9 @@ import type { Summarizer } from '@datatrust/rca';
 
 type AiRun = (model: string, inputs: unknown, options?: unknown) => Promise<unknown>;
 
+/** The summary schema for JSON mode, without the `$schema` meta key (the docs' examples pass a bare schema). */
+const { $schema: _meta, ...summarySchema } = incidentSummaryJsonSchema;
+
 /**
  * Workers AI through AI Gateway (production only; the AI binding is not available in `wrangler dev --local`).
  * JSON mode can fail with "JSON Mode couldn't be met" and does not stream, so failures go to repair, then to
@@ -23,7 +26,7 @@ export class WorkersAISummarizer implements Summarizer {
       this.model,
       {
         messages,
-        response_format: { type: 'json_schema', json_schema: incidentSummaryJsonSchema },
+        response_format: { type: 'json_schema', json_schema: summarySchema },
         temperature: 0.1,
         max_tokens: 700,
       },

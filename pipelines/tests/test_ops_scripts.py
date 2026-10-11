@@ -110,3 +110,15 @@ def test_wizard_stage_count_and_values_cover_doctor():
     assert declared == len(re.findall(r"^stage ", stages, re.M))
     written = set(re.findall(r"write_env (\w+)", stages))
     assert {k for k, _ in doctor.ENV_KEYS} - written == {"DATATRUST_API_URL"}
+
+
+def test_setup_prod_never_lets_wrangler_edit_the_committed_config():
+    """`wrangler d1 create` and `r2 bucket create` offer (default yes) to patch the wrangler config in the
+    current directory, which would write production ids into the committed apps/worker/wrangler.jsonc."""
+    import re
+
+    text = (config.REPO_ROOT / "scripts" / "setup-prod.sh").read_text()
+    creates = re.findall(r"wr (d1 create|r2 bucket create)[^\n]*", text)
+    assert len(creates) == 2
+    for line in re.findall(r"wr (?:d1 create|r2 bucket create)[^\n]*", text):
+        assert "--update-config=false" in line, line

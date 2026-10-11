@@ -86,8 +86,14 @@ describe('grounded summarization', () => {
     expect(out.fallback).toBe(false);
     expect(out.provider).toBe('workers-ai');
     expect(seen[0]).toBe('@cf/meta/llama-3.3-70b-instruct-fp8-fast');
-    const inputs = seen[1] as { response_format: { type: string }; temperature: number; messages: ChatMessage[] };
+    const inputs = seen[1] as {
+      response_format: { type: string; json_schema: Record<string, unknown> };
+      temperature: number;
+      messages: ChatMessage[];
+    };
     expect(inputs.response_format.type).toBe('json_schema');
+    expect(inputs.response_format.json_schema).not.toHaveProperty('$schema');
+    expect(inputs.response_format.json_schema).toMatchObject({ type: 'object', required: expect.arrayContaining(['title']) });
     expect(inputs.temperature).toBe(0.1);
     expect(seen[2]).toEqual({ gateway: { id: 'datatrust', skipCache: false } });
   });
