@@ -4,7 +4,7 @@ Lineage-aware data quality and root-cause analysis for workforce data (HR, recru
 
 DataTrust builds a synthetic workforce warehouse with dbt, guards it with schema contracts and 40 data checks, captures column-level lineage as OpenLineage events, and when checks or metrics fail it traces the failure upstream, runs read-only diagnostic SQL probes, ranks the likely root cause, and writes an incident summary from sanitized evidence. Validation and investigation are coordinated by Cloudflare Queues and Workflows; summaries come from Workers AI in production.
 
-> **Status: v1 core implemented, production path moved to the Cloudflare Workers Free plan; production not yet executed.** Built against [SPEC.md](SPEC.md). Everything runs locally on stand-ins (DuckDB for BigQuery, Miniflare for Cloudflare, a local LLM or template for Workers AI), and GitHub Actions CI runs the same checks on ubuntu-latest. Its `node` job (typecheck, tests, Worker bundles, CPU gate) has passed on every published commit; until 2026-10-11 the `python`, `bench-offline` and `e2e` jobs could not start because the workflow named a setup-uv tag that does not exist, which is now fixed, and their first ubuntu-latest result is pending (scripted rehearsals of all four jobs passed in a Linux arm64 container on 2026-10-10 and 2026-10-11). The production path is implemented and waits for the account setup below. The status table never claims more than the repo has run.
+> **Status: v1 core implemented, production path moved to the Cloudflare Workers Free plan; production not yet executed.** Built against [SPEC.md](SPEC.md). Everything runs locally on stand-ins (DuckDB for BigQuery, Miniflare for Cloudflare, a local LLM or template for Workers AI), and GitHub Actions CI runs the same checks on ubuntu-latest. All four jobs (`node`, `python`, `bench-offline`, `e2e`) pass there since 2026-10-11 (CI runs 38125877178 and 38127084114). Before that only the `node` job ran: the workflow named a setup-uv tag that does not exist, so the other three could not start. The production path is implemented and waits for the account setup below. The status table never claims more than the repo has run.
 
 All data is synthetic. No real employee or candidate data is used anywhere; emails use the reserved `example.com` domain.
 
@@ -14,17 +14,17 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 
 | Component | Status |
 |---|---|
-| Synthetic data generator (exact, seeded counts) | executed locally, 2026-10-10 (`uv run pytest`); CI `python` job on ubuntu-latest fixed 2026-10-11, first result pending |
-| dbt models, 22 enforced contracts, 40 checks | executed locally on DuckDB (stand-in), 2026-10-10: 29 models, 22 contracts, 40 checks pass on clean seeds 1-3, 7, 42, 101-105; the CI `python` job repeats this under `TZ=UTC` and `TZ=America/Los_Angeles` (first ubuntu-latest result pending) |
+| Synthetic data generator (exact, seeded counts) | executed locally, 2026-10-10 (`uv run pytest`), and on ubuntu-latest in CI since 2026-10-11 (golden hashes included) |
+| dbt models, 22 enforced contracts, 40 checks | executed locally on DuckDB (stand-in), 2026-10-10: 29 models, 22 contracts, 40 checks pass on clean seeds 1-3, 7, 42, 101-105; the CI `python` job repeats this on ubuntu-latest under `TZ=UTC` and `TZ=America/Los_Angeles` (passing since 2026-10-11) |
 | OpenLineage capture and column-level lineage graph | executed locally on DuckDB (stand-in): `dbt-ol build` (openlineage-dbt 1.53.0) and the TypeScript graph |
 | Diagnostic probes, root-cause ranker, baselines | executed locally on DuckDB (stand-in): 14 read-only probe templates, trace, planner, ranker, ablations, baselines, HMAC sanitizer. BigQuery probe SQL rendered and parsed only |
-| Fault-injection benchmark (20 scenarios) | executed locally on DuckDB (stand-in), 2026-10-10, `uv run datatrust bench --seeds 101-105` (see Results); CI gate on seed 101 (`bench-offline` job, first ubuntu-latest result pending) |
-| Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local` and `@cloudflare/vitest-plugin`) only; 2026-10-10 `npm run bench:e2e` (seed 101, 20 scenarios), repeated on 2026-10-11 after the Free plan changes (`npm run bench:e2e -- --out .data/e2e-2026-10-11` at commit `6437742`, [`results/bench-2026-10-11-e2e.md`](results/bench-2026-10-11-e2e.md): same 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, identical top-3 lists) |
+| Fault-injection benchmark (20 scenarios) | executed locally on DuckDB (stand-in), 2026-10-10, `uv run datatrust bench --seeds 101-105` (see Results); the CI `bench-offline` job gates seed 101 on ubuntu-latest (passing since 2026-10-11) |
+| Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local` and `@cloudflare/vitest-plugin`) only, locally and in the CI `e2e` job on ubuntu-latest (S01, T14, S04, since 2026-10-11); 2026-10-10 `npm run bench:e2e` (seed 101, 20 scenarios), repeated on 2026-10-11 after the Free plan changes (`npm run bench:e2e -- --out .data/e2e-2026-10-11` at commit `6437742`, [`results/bench-2026-10-11-e2e.md`](results/bench-2026-10-11-e2e.md): same 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, identical top-3 lists) |
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | implemented, not executed (tests mock the AI binding, including the daily neuron ledger and the one-call-per-step Workflow under Miniflare; the local stand-ins are llama-server with Qwen3-1.7B and a deterministic template) |
 | Audit lake: Queue to R2 objects, Basin Catalog commit | implemented, not executed in production. Local path executed in Miniflare on 2026-10-10: queue `datatrust-audit-events`, immutable R2 `lake/` objects, `/api/lake/export`, then `uv run datatrust lake commit` (exactly once per `event_id`) into the pyiceberg SQL catalog (stand-in for Basin Catalog) |
 | BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check) |
-| Workers Free plan budget: configuration, D1 statement counts, CPU per code path, usage model | executed locally, 2026-10-11: `npm run test:worker` (`free-plan.test.ts`, `d1-statements.test.ts`, `budget.test.ts`), `npm run budget:cpu -- --gate 8`, `uv run pytest pipelines/tests/test_free_budget.py`; the CPU gate also passed on GitHub's ubuntu-latest x64 runner (CI run 38123502863, commit `6a0bda3`, 2026-10-11: largest median 3.63 ms); production usage not yet observed |
+| Workers Free plan budget: configuration, D1 statement counts, CPU per code path, usage model | executed locally, 2026-10-11: `npm run test:worker` (`free-plan.test.ts`, `d1-statements.test.ts`, `budget.test.ts`), `npm run budget:cpu -- --gate 8`, `uv run pytest pipelines/tests/test_free_budget.py`; the CPU gate passes on GitHub's ubuntu-latest x64 runners (largest median 7.30 ms on a slow runner before the JWT warm-up, 4.47 ms after; see Workers Free plan budget); production usage not yet observed |
 | Incident dashboard (stretch) | executed locally under `wrangler dev` (Miniflare) as Worker static assets, 2026-10-10 |
 | `setup:prod`, `setup:wizard` and `doctor` | implemented; `npm run doctor` (local) executed; `npm run doctor -- --prod` executed read-only against the real Cloudflare and Google Cloud logins on 2026-10-11 (31 required items missing, listed under Production setup); `setup:prod` and the wizard have not been run (they create resources, which is the operator's step) |
 
@@ -186,7 +186,7 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 | Probe identity | DuckDB connection opened read-only | impersonated service account `datatrust-prober`, dry run plus byte cap |
 | Lineage | `dbt-ol` file transport, uploaded by the runner in POSTs of at most 10 events and 256 KB, one queue message per POST | same |
 | Cloudflare plan and account | none | Workers Free on an account shared by four repos; DataTrust budgets 25% of every daily allowance and names every resource `datatrust*` |
-| Google Cloud project | none | shared project `master-magnet-444903-u4` (US), billing enabled, only `datatrust_*` datasets and `datatrust-*` identities, dataset- or resource-scoped grants, every query capped and labelled `app=datatrust` |
+| Google Cloud project | none | shared project `master-magnet-444903-u4` (US), billing enabled (required; still off on 2026-10-11), only `datatrust_*` datasets and `datatrust-*` identities, dataset- or resource-scoped grants, every query capped and labelled `app=datatrust` |
 
 ## Local setup
 
@@ -314,7 +314,7 @@ Only `npm run prod:smoke` may move a status label above to "executed in producti
 
 Production runs on the Cloudflare Workers Free plan, in an account shared with three other repos, so DataTrust budgets itself at 25% of every account-wide daily allowance ([SPEC section 28](SPEC.md), [ADR-0008](docs/adr/0008-workers-free-plan.md)). What keeps it there: lineage arrives in POSTs of at most 10 events and 256 KB with one queue message each; every multi-row D1 write is one set-based statement (the largest invocation issues 10); Workers AI spend is capped by a daily neuron ledger; an idle runner backs off to one poll every 30 s; queue and Workflow names carry the `datatrust` prefix; and nothing in the production config needs Workers Paid (`apps/worker/test/free-plan.test.ts`).
 
-Budget model, from `uv run python -m datatrust.prod.free_budget` on 2026-10-11 (commit `51f6323`; pinned by `pipelines/tests/test_free_budget.py`). Per-run counts come from the code and the committed seed-101 fixtures; D1 rows read, R2 and log volumes, the run length (12.5 minutes on BigQuery) and the per-incident neurons are the measurements in SPEC section 28.3:
+Budget model, from `uv run python -m datatrust.prod.free_budget` on 2026-10-11 (commit `51f6323`, unchanged when rerun at `c27ae3e`; pinned by `pipelines/tests/test_free_budget.py`). Per-run counts come from the code and the committed seed-101 fixtures; D1 rows read, R2 and log volumes, the run length (12.5 minutes on BigQuery) and the per-incident neurons are the measurements in SPEC section 28.3:
 
 | Metric | Free allowance (account) | DataTrust share (25%) | Per failing run | Smoke (1 clean + 5 failing) | Smoke, % of share |
 |---|---|---|---|---|---|
@@ -334,21 +334,23 @@ Budget model, from `uv run python -m datatrust.prod.free_budget` on 2026-10-11 (
 - Workers AI: a summary reserves at most 187 + 201 neurons; the code caps a UTC day at 2,000.
 - Sustained failing runs per day inside the share: 21 (tightest daily metric).
 
-Cold CPU per Worker code path, from `npm run budget:cpu` on 2026-10-11 (commit `51f6323`, Apple M5, Node 25.9): the median of 5 fresh processes, main-thread CPU, zod in its jitless mode as in workerd, Cloudflare bindings faked. The Free plan allows 10 ms per request and per Workflow step; CI runs the same script on x86 and fails above 8 ms. These are this machine's numbers: x86 server cores are slower, and the edge's CPU speed was not measured.
+Cold CPU per Worker code path, from `npm run budget:cpu`: the median of 5 fresh processes, main-thread CPU, zod in its jitless mode as in workerd, Cloudflare bindings faked. The Free plan allows 10 ms per request and per Workflow step; the CI `node` job runs the same script on GitHub's ubuntu-latest x64 runners and fails above 8 ms. Those runners differ in speed by about 1.8x from run to run, and on a slow one (CI run 38125877178, commit `6154828`) the diagnostics completion read 7.30 ms. Most of a small authenticated request was compiling jose's Access JWT verification on first use, so since commit `5795f3b` the start-up warm-up verifies an embedded throwaway token (its key is trusted by no configuration). The next CI run, on a runner of the same speed class, read 4.47 ms at most. The edge's CPU speed was not measured.
 
-| Code path | Main-thread CPU |
-|---|---|
-| POST /api/v1/lineage (10 largest events) | 2.06 ms |
-| lineage bundle consumer (10 largest events) | 1.30 ms |
-| relations upload (42 nodes) | 1.55 ms |
-| build completion (41 check results) | 1.61 ms |
-| diagnostics completion (68 probe results) | 2.51 ms |
-| check-results consumer (10 messages of 41) | 2.44 ms |
-| audit consumer (10 messages of 50 events) | 0.96 ms |
-| workflow step trace-lineage + plan-probes | 0.67 ms |
-| workflow step rank | 1.39 ms |
-| workflow steps sanitize + summarize (template) | 1.49 ms |
-| start-up: module scope incl. warm-up (1 s limit) | 31.45 ms |
+| Code path | This Mac (Apple M5, Node 25.9), commit `c27ae3e` | CI x64 (Node 24.21), run 38125877178, before the JWT warm-up | CI x64, run 38127084114, commit `c27ae3e` |
+|---|---|---|---|
+| POST /api/v1/lineage (10 largest events) | 1.99 ms | 6.12 ms | 4.47 ms |
+| lineage bundle consumer (10 largest events) | 1.57 ms | 3.77 ms | 3.76 ms |
+| relations upload (42 nodes) | 1.25 ms | 3.86 ms | 2.69 ms |
+| build completion (41 check results) | 1.21 ms | 4.55 ms | 2.69 ms |
+| diagnostics completion (68 probe results) | 2.21 ms | 7.30 ms | 4.45 ms |
+| check-results consumer (10 messages of 41) | 1.46 ms | 4.41 ms | 3.93 ms |
+| audit consumer (10 messages of 50 events) | 1.05 ms | 2.84 ms | 2.64 ms |
+| workflow step trace-lineage + plan-probes | 0.82 ms | 1.78 ms | 1.78 ms |
+| workflow step rank | 1.13 ms | 3.64 ms | 3.59 ms |
+| workflow steps sanitize + summarize (template) | 2.22 ms | 2.36 ms | 2.96 ms |
+| start-up: module scope incl. warm-up (1 s limit) | 62.14 ms | 109.45 ms | 102.73 ms |
+
+The Mac column was measured on 2026-10-11 while other builds shared the machine (load average about 3), so it reads higher than a quiet run; CI's figures come from the job logs of the named runs.
 
 The start-up line is module scope: schema construction, the module-scope collator, and a warm-up that runs the hot parsers and the router once on tiny inputs (`apps/worker/src/warmup.ts`), so V8 compiles them at start-up rather than in the first request. Without the warm-up the cold paths measured about twice as high. This assumes start-up work counts against the 1 s start-up limit and not the first request's 10 ms (SPEC risk 23).
 
