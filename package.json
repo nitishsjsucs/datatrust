@@ -27,7 +27,10 @@
     "dev:reset": "rm -rf apps/worker/.wrangler/state .data",
     "bench:e2e": "bash scripts/bench-e2e.sh",
     "prod:validate": "uv run datatrust prod validate",
-    "prod:smoke": "uv run datatrust prod smoke"
+    "prod:smoke": "uv run datatrust prod smoke",
+    "doctor": "bash scripts/doctor.sh",
+    "setup:prod": "bash scripts/setup-prod.sh",
+    "deploy:prod": "bash scripts/setup-prod.sh --cloudflare-only"
   },
   "devDependencies": {
     "typescript": "5.9.3",

@@ -340,6 +340,12 @@ def _cmd_prod(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from datatrust.doctor import main as doctor_main
+
+    return doctor_main("prod" if args.prod else "local")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="datatrust", description=__doc__)
     parser.add_argument("--version", action="version", version=f"datatrust {__version__}")
@@ -419,6 +425,14 @@ def build_parser() -> argparse.ArgumentParser:
     rs = prod.add_parser("reset", help="delete the DataTrust tables in the four BigQuery datasets")
     rs.add_argument("--yes", action="store_true")
     p.set_defaults(func=_cmd_prod)
+
+    p = sub.add_parser("doctor", help="check prerequisites and print exactly what is missing (SPEC 18.2)")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--local", action="store_true", help="local and CI prerequisites (default)")
+    mode.add_argument(
+        "--prod", action="store_true", help="Cloudflare and Google Cloud production prerequisites"
+    )
+    p.set_defaults(func=_cmd_doctor)
 
     p = sub.add_parser("baseline", help="extract the gate numbers from a benchmark report")
     p.add_argument("--from", dest="from_path", required=True)

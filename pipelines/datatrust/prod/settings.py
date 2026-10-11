@@ -11,7 +11,7 @@ import yaml
 
 from datatrust import config
 
-ENV_PROD = config.REPO_ROOT / ".env.prod"
+ENV_PROD = Path(os.environ.get("DATATRUST_ENV_FILE", config.REPO_ROOT / ".env.prod"))
 PROD_DIR = config.REPO_ROOT / ".prod"
 DBT_VARS = PROD_DIR / "dbt_vars.yml"
 PLACEHOLDER_PROJECT = "datatrust-ci-placeholder"

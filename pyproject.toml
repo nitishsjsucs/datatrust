@@ -56,5 +56,6 @@ extend-exclude = ["dbt", "node_modules", ".data"]
 select = ["E", "F", "I", "B", "UP", "W"]
 
 [tool.ruff.lint.per-file-ignores]
-# Markdown table rows are built from long f-strings.
+# Markdown table rows and user-facing fix instructions are long strings.
 "pipelines/datatrust/bench/report.py" = ["E501"]
+"pipelines/datatrust/doctor.py" = ["E501"]

@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 17 of 19 (core) done: `feat(prod): production wrangler template and BigQuery governance`.
+Commit 18 of 19 (core) done: `feat(ops): idempotent setup:prod and doctor`.
 
 ## Done
 
@@ -27,10 +27,11 @@ Commit 17 of 19 (core) done: `feat(prod): production wrangler template and BigQu
 - 15b (extra). `npm run bench:e2e` at commit df7496b (clean), 2026-10-10, 327.7 s of e2e trials (412 s with dev-up and the offline parity run): 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, offline parity yes. `results/bench-2026-10-10-e2e.{json,md}`; README Results and status updated.
 - 16. `schemas/lake/audit_event.stream.json` (Basin Pipelines stream schema), Worker `sinks/event-sink.ts` (`PipelinesSink` on the EVENTS binding, `R2NdjsonSink` locally, schema validation before every send because Pipelines drops invalid records silently), `check_result` events from the dt-check-results consumer, `run_completed` from ValidationRunWorkflow finalize, `incident_created` from InvestigationWorkflow persist, `/api/dev/lake-export` (runner, local only), Python `lake/{schema,iceberg_local,iceberg_basin,sync}.py` (SqlCatalog on SQLite with an absolute `file://` warehouse; RestCatalog reader for Basin Catalog), `datatrust lake sync|query`, `event-sink.test.ts`, `test_lake_local.py` (append, read, snapshot time travel, cwd independence). Verified by hand on 2026-10-10: one S03 run through `wrangler dev`, then `datatrust lake sync` appended 42 events (40 check_result, 1 run_completed, 1 incident_created) to the local Iceberg table; stack stopped, ports free.
 - 17. `apps/worker/wrangler.prod.template.jsonc` (AI, Pipelines, `workers_dev: true`, `preview_urls: false`, no cron, production vars, `secrets.required`), `scripts/render-prod-config.mjs` (fail-closed `https://unset.cloudflareaccess.com` default; `--placeholders` for CI), CI dry-run deploy of the rendered template; Python `prod/settings.py` (.env.prod, placeholder refusal), `warehouse/bigquery_wh.py` (impersonated `datatrust-prober`, dry run then capped query, parameterized information schema), `load/bigquery_loader.py` (Parquet loads, type assertions), `prod/governance.py` (taxonomy, three policy tags, SHA256 / DATE_YEAR_MASK / ALWAYS_NULL data policies, Fine-Grained Reader and Masked Reader IAM with read-modify-write, dataset readers, `.prod/dbt_vars.yml`, analyst verification with 10 s doubling retries for 10 minutes), `prod/validate.py` (steps a-f), `prod/smoke.py`, `dbt/dialect_check.py` (shared banned-construct check), runner BigQuery build and diagnostics paths, `datatrust prod governance apply|verify|validate|smoke|reset`, `npm run prod:validate|prod:smoke`, `test_prod_offline.py` (11 tests with fakes). `datatrust prod validate` on this machine stops at step a and names the missing `DATATRUST_GCP_PROJECT`, as designed. Nothing here has run against Google Cloud or Cloudflare.
+- 18. `scripts/setup-prod.sh` (SPEC 18.1 steps P1-P3 and 1-21: idempotent existence checks with JSON parsing, `wr()` wrapper that strips env credentials, `--dry-run`, `--cloudflare-only`, `--gcp-only`, `--use-env-token`, `.prod/state.json`, catalog text parse with a paste fallback, fail-closed first deploy with `--secrets-file`, gcloud/bq steps, governance, validate, real build, verify), `scripts/doctor.sh` + `datatrust doctor` (local, `.env.prod`, Cloudflare and Google Cloud checks with `[ok]`/`[missing]`/`[warn]` and the exact fix), `npm run doctor|setup:prod|deploy:prod`, Makefile targets (setup, test, bench, bench-e2e, doctor, bootstrap, dev-up, dev-down), README production setup (SPEC 21 checklists), `test_ops_scripts.py`. On this machine: `npm run doctor` all ok; `npm run doctor -- --prod` lists the 9 missing `.env.prod` values, wrangler login and the missing gcloud CLI; `setup:prod --cloudflare-only --dry-run` stops at "wrangler is not logged in".
 
 ## Next
 
-- 18. `feat(ops): idempotent setup:prod and doctor` (scripts/setup-prod.sh, scripts/doctor.sh + `datatrust doctor`, Makefile targets, README production setup).
+- 19. `docs: final benchmark results and README status` (refresh `results/` only if anything changed since commit 10; README Results and status table with commands and dates).
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
@@ -38,7 +39,7 @@ Commit 17 of 19 (core) done: `feat(prod): production wrangler template and BigQu
 - `npm run test:rca`: 49 passed
 - `npm run test:worker`: 57 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 134 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
+- `uv run pytest`: 145 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
 
 ## Deviations from SPEC.md
 
@@ -53,6 +54,7 @@ Commit 17 of 19 (core) done: `feat(prod): production wrangler template and BigQu
 - Worker secrets are declared with `secrets.required` in the wrangler config, so `wrangler types` output does not depend on a machine's `.dev.vars` (otherwise `wrangler types --check` would differ between the Mac and CI). `/api/whoami` (any role) was added for the smoke and doctor checks.
 - Workflow step results are serialized to JSON strings explicitly (`workflows/steps.ts`), which keeps step outputs visibly serializable and avoids TypeScript's deep `Serializable<T>` instantiation on lineage types. Tests that inspect step results parse the JSON.
 - The grounding validator reads a root cause given as a candidate key (`candidate.1`) as that candidate's node, and treats the run and incident ids as known identifiers.
+- `setup-prod.sh` loads `.env.prod` through Python-quoted assignments and `eval` (bash 3.2 on macOS does not support `source <(...)`), honours `DATATRUST_ENV_FILE` (used by tests), and treats `wrangler whoami` output text, not its exit code, as the login signal (it exits 0 when not authenticated).
 - Project-level IAM (BigQuery Job User for the prober and analyst, Service Account Token Creator for Nitish) is granted by gcloud in `setup-prod.sh` rather than `governance.py`, because it needs the Resource Manager and IAM APIs; dataset-level reader grants are in `governance.py`. `datatrust prod reset --yes` deletes the tables in the four datasets (it never runs unless Nitish asks).
 - Extra dialect macros `days_between` and `month_start` (date arithmetic argument order differs between DuckDB and BigQuery).
 - Raw stage values are ATS labels rather than canonical codes, so the staging "stage code mapping" that scenario T19 corrupts is a real mapping.
