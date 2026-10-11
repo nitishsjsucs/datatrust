@@ -8,6 +8,8 @@ All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incid
 
 Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F13 (the Free plan migration is complete, including the F13 stretch item, which is implemented and tested offline only).
 
+Builder 4 (2026-10-11) continues from 98d1914: every local check passed again first. GitHub Actions had run on every published commit and failed every time: the `node` job always passed on ubuntu-latest, but the `python` job could not start because `astral-sh/setup-uv@v10` does not exist (setup-uv publishes no floating major tag since v8), so `bench-offline` and `e2e` never ran. Builder 4 fixes CI first, then reruns the evals, checks the doctor against the real logins and brings the README and docs up to date.
+
 ## Done
 
 - 1. SPEC.md, README skeleton (status all "planned"), LICENSE (MIT), .gitignore, this file.
@@ -85,22 +87,25 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 3, verification after F13 (2026-10-11): `npm run bench:e2e -- --out <tmp>` at commit a49d6e9 (all 20 seed-101 scenarios through the local Worker with the bundles, set-based writes, split summary steps and the audit queue): 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, offline parity yes, and all 21 top-3 lists equal to `results/bench-2026-10-10-e2e.json`; ports freed. CI rehearsal in the `datatrust-ci-linux` image (node:24 bookworm, linux/arm64, sources from `git archive`): node job (npm ci, `wrangler types --check`, typecheck, build, 55 + 91 vitest tests, `budget:cpu --gate 8` with a largest median of 3.5 ms, both dry-run deploys) and python job (uv sync --locked, ruff, 203 pytest tests, the clean baseline under `TZ=America/Los_Angeles`, the seed-101 bench-offline command, `pytest -m bench` 3 passed) passed; containers removed.
 
+- Builder 4, `ci: pin setup-uv to a release that exists`: `astral-sh/setup-uv@v10.3.0` with `version: "0.12.17"` (the uv that wrote `uv.lock`) in `ci.yml`, `nightly.yml` and `prod-runner.yml`; the release list and tags were read with `gh api` on 2026-10-11 (v10.0.0 to v10.3.0, no `v10`; checkout, setup-node, upload-artifact and google-github-actions/auth do publish `v7`/`v3` majors). New `test_ci_workflows.py` (7 tests: the three workflows parse, setup-uv names an exact release and uv version, every other action is one whose major tag was checked, `uv sync --locked` runs). Observed on GitHub before the fix: CI run 38123502863 (commit 6a0bda3, ubuntu-latest x64, Node 24.21.0) passed the whole `node` job, including `npm run budget:cpu -- --gate 8` with a largest median of 3.63 ms (diagnostics completion with 68 probes; lineage POST 3.54 ms; start-up 61.7 ms).
+
 ## Next
 
 - SPEC 23.1: F1 to F13 done. The Workers AI summary eval (F13) is for Nitish to run after the production smoke.
 - Production execution, by Nitish's operator after the builder gate (a rerun of `setup:prod -- --cloudflare-only` redeploys later Worker changes and applies new migrations): SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
-- First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux arm64 container, not yet observed on ubuntu-latest. Watch the new `budget:cpu -- --gate 8` step first: it is the one CI result that depends on x86 speed (see the CPU gate risk under Deviations). If it fails, shrink the lineage POST to 5 events before anything else; never raise the gate.
+- Watch the first GitHub Actions run after the setup-uv fix is published: the `python`, `bench-offline` and `e2e` jobs have never run on ubuntu-latest (the `node` job, CPU gate included, already passes there). Fix whatever they find before anything else.
 - Not built yet: a D1 prune command (SPEC risk 25: about 3,000 runs fill the 500 MB database at the measured 167 KB per run; `datatrust prod reset --yes` exists).
 
-## Check status (at the latest commit, 2026-10-11, macOS; GitHub CI not yet observed)
+## Check status (at the latest commit, 2026-10-11, macOS; GitHub CI as noted)
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 55 passed
 - `npm run test:worker`: 91 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 203 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at the perf follow-up); full `npm run bench:e2e` (20 scenarios) at a49d6e9: identical to the committed e2e results
-- `npm run budget:cpu -- --gate 8`: pass when this machine is not loaded by other builds (largest median 2.4 to 3.3 ms on Apple M5, Node 25.9; 2.9 to 3.5 ms in a node:24 Linux arm64 container); under a load average of 6 to 16 every figure, the unchanged rank step included, reads 3 to 4 times higher. Not yet observed on the x86 CI runner
+- `uv run pytest`: 210 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at the perf follow-up); full `npm run bench:e2e` (20 scenarios) at a49d6e9: identical to the committed e2e results
+- `npm run budget:cpu -- --gate 8`: pass when this machine is not loaded by other builds (largest median 2.4 to 3.3 ms on Apple M5, Node 25.9; 2.9 to 3.5 ms in a node:24 Linux arm64 container); under a load average of 6 to 16 every figure, the unchanged rank step included, reads 3 to 4 times higher. on GitHub's ubuntu-latest x64 runner (run 38123502863, commit 6a0bda3, Node 24.21.0) the largest median was 3.63 ms
+- GitHub Actions `ci` (ubuntu-latest): `node` job passes (every published commit); `python`, `bench-offline` and `e2e` failed to start on every published commit up to 6a0bda3 (setup-uv `@v10` does not exist), fixed in this commit, result not yet observed
 - `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template (no `pipelines` binding)
 
 ## Deviations from SPEC.md
