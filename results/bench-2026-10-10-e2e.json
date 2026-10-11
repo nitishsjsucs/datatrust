@@ -1,0 +1,1443 @@
+{
+ "meta": {
+  "command": "uv run datatrust bench --mode e2e --seeds 101 --parity --workers 4",
+  "date": "2026-10-10",
+  "gitCommit": "df7496b617f943819e10efba8ac7dde504964fa6",
+  "mode": "e2e",
+  "seeds": [
+   101
+  ],
+  "versions": {
+   "dbt-core": "1.12.5",
+   "dbt-duckdb": "1.11.0",
+   "duckdb": "1.5.6",
+   "node": "v25.9.0",
+   "openlineage-dbt": "1.53.0",
+   "pyarrow": "26.0.0",
+   "python": "3.12.13",
+   "sqlglot": "30.22.0"
+  },
+  "wallSeconds": 327.7,
+  "warehouse": "DuckDB 1.5.6 via dbt-duckdb 1.11.0, local stand-in for BigQuery",
+  "worker": "wrangler dev --local (Miniflare, workerd): local stand-in for Cloudflare Workers, Queues, Workflows, D1 and R2"
+ },
+ "records": [
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 0,
+    "pass": 40,
+    "skip": 0
+   },
+   "detected": false,
+   "diagnosticSqlCount": 0,
+   "failing": [],
+   "groundTruth": null,
+   "groundTruthColumn": null,
+   "incidentId": null,
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 7.33,
+     "status": "completed"
+    }
+   ],
+   "kind": "clean",
+   "provenance": null,
+   "ranked": [],
+   "runId": "run_01M4MC6657XTFP8DM0DZDNBAH2",
+   "scenario": null,
+   "seed": 101,
+   "status": "passed",
+   "summaryFallback": null,
+   "summaryProvider": null,
+   "trial": "s101-clean",
+   "wallSeconds": 0.0
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 38,
+    "skip": 1
+   },
+   "detected": true,
+   "diagnosticSqlCount": 2,
+   "failing": [
+    "U05"
+   ],
+   "groundTruth": "source.datatrust.raw.hires",
+   "groundTruthColumn": "application_id",
+   "incidentId": "inc_run_01M4MC6JCD6KYJC1FREAG2QSGX_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 6.34,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.18,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 3,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 46
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.hires",
+    "model.datatrust.stg_hires",
+    "model.datatrust.fct_hires"
+   ],
+   "runId": "run_01M4MC6JCD6KYJC1FREAG2QSGX",
+   "scenario": "S01",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S01",
+   "wallSeconds": 12.79
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 36,
+    "skip": 2
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "R04",
+    "S05"
+   ],
+   "groundTruth": "source.datatrust.raw.applications",
+   "groundTruthColumn": "requisition_id",
+   "incidentId": "inc_run_01M4MC6YWD8KRH70RDHMJWE7N7_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 3.94,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.19,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 5,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 27
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.applications",
+    "model.datatrust.stg_applications",
+    "source.datatrust.raw.locations",
+    "model.datatrust.stg_stage_events",
+    "source.datatrust.raw.stage_events"
+   ],
+   "runId": "run_01M4MC6YWD8KRH70RDHMJWE7N7",
+   "scenario": "S02",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S02",
+   "wallSeconds": 10.39
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 32,
+    "skip": 7
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "C03"
+   ],
+   "groundTruth": "source.datatrust.raw.fx_rates",
+   "groundTruthColumn": "rate_to_usd",
+   "incidentId": "inc_run_01M4MC790V2AN8R4BNFERMHPMA_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 4.92,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.12,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 2,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 8
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_fx_rates"
+   ],
+   "runId": "run_01M4MC790V2AN8R4BNFERMHPMA",
+   "scenario": "S03",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S03",
+   "wallSeconds": 11.25
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 37,
+    "skip": 2
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "S05"
+   ],
+   "groundTruth": "source.datatrust.raw.stage_events",
+   "groundTruthColumn": "entered_at",
+   "incidentId": "inc_run_01M4MC7M0KAWWFPVC8MKGSRG8D_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 3.79,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.17,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 3,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 22
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.stage_events",
+    "source.datatrust.raw.locations",
+    "model.datatrust.stg_stage_events"
+   ],
+   "runId": "run_01M4MC7M0KAWWFPVC8MKGSRG8D",
+   "scenario": "S04",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S04",
+   "wallSeconds": 10.22
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 32,
+    "skip": 6
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "H01",
+    "H02"
+   ],
+   "groundTruth": "source.datatrust.raw.job_assignments",
+   "groundTruthColumn": "valid_to",
+   "incidentId": "inc_run_01M4MC7XZYGREGZQ2HCCRE851C_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 3.86,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.13,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 4,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 18
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.job_assignments",
+    "model.datatrust.stg_job_assignments",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "runId": "run_01M4MC7XZYGREGZQ2HCCRE851C",
+   "scenario": "S05",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S05",
+   "wallSeconds": 10.22
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "C04"
+   ],
+   "groundTruth": "source.datatrust.raw.fx_rates",
+   "groundTruthColumn": "rate_date",
+   "incidentId": "inc_run_01M4MC87Z8A8B8XV2YPAQVYJRX_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 6.62,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.17,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 2,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 8
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_fx_rates"
+   ],
+   "runId": "run_01M4MC87Z8A8B8XV2YPAQVYJRX",
+   "scenario": "S06",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S06",
+   "wallSeconds": 12.97
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 32,
+    "skip": 7
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "C05"
+   ],
+   "groundTruth": "source.datatrust.raw.fx_rates",
+   "groundTruthColumn": "rate_to_usd",
+   "incidentId": "inc_run_01M4MC8MMPCNW9R71CFVKWN6S4_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 4.23,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.11,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 2,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 8
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_fx_rates"
+   ],
+   "runId": "run_01M4MC8MMPCNW9R71CFVKWN6S4",
+   "scenario": "S07",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S07",
+   "wallSeconds": 10.58
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 36,
+    "skip": 2
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "S02",
+    "S03"
+   ],
+   "groundTruth": "source.datatrust.raw.stage_events",
+   "groundTruthColumn": "stage",
+   "incidentId": "inc_run_01M4MC8YZCZY3RZEVXWJ4H1ARK_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 12.24,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.29,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 2,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 22
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.stage_events",
+    "model.datatrust.stg_stage_events"
+   ],
+   "runId": "run_01M4MC8YZCZY3RZEVXWJ4H1ARK",
+   "scenario": "S08",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S08",
+   "wallSeconds": 18.84
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 38,
+    "skip": 1
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "X01"
+   ],
+   "groundTruth": "source.datatrust.raw.payroll_lines",
+   "groundTruthColumn": null,
+   "incidentId": "inc_run_01M4MC9HC28QQJHZJM55XGFTG8_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 11.07,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.63,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 6,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 49
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.stg_payroll_lines",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation"
+   ],
+   "runId": "run_01M4MC9HC28QQJHZJM55XGFTG8",
+   "scenario": "S09",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S09",
+   "wallSeconds": 18.18
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 38,
+    "skip": 0
+   },
+   "detected": true,
+   "diagnosticSqlCount": 0,
+   "failing": [
+    "C06",
+    "X03"
+   ],
+   "groundTruth": "source.datatrust.raw.compensation",
+   "groundTruthColumn": "currency",
+   "incidentId": "inc_run_01M4MCA34EZG32BWQHDPMXB3MD_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 11.92,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.56,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 19,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 68
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.int_compensation_usd",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.int_assignment_current",
+    "model.datatrust.metric_payroll_cost_usd_monthly",
+    "model.datatrust.stg_locations",
+    "model.datatrust.int_fx_daily",
+    "model.datatrust.fct_compensation_usd"
+   ],
+   "runId": "run_01M4MCA34EZG32BWQHDPMXB3MD",
+   "scenario": "S10",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S10",
+   "wallSeconds": 18.95
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 36,
+    "skip": 3
+   },
+   "detected": true,
+   "diagnosticSqlCount": 0,
+   "failing": [
+    "H07"
+   ],
+   "groundTruth": "source.datatrust.raw.payroll_lines",
+   "groundTruthColumn": "pay_month",
+   "incidentId": "inc_run_01M4MCANMHXHKMD498QBP9W6VR_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 16.23,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.2,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 4,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 12
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.stg_payroll_lines",
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "runId": "run_01M4MCANMHXHKMD498QBP9W6VR",
+   "scenario": "S11",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S11",
+   "wallSeconds": 22.73
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "R05"
+   ],
+   "groundTruth": "source.datatrust.raw.hires",
+   "groundTruthColumn": "employee_id",
+   "incidentId": "inc_run_01M4MCBBTR8GWPTYK61E04K0EC_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 11.96,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.14,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 2,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 14
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.hires",
+    "model.datatrust.stg_hires"
+   ],
+   "runId": "run_01M4MCBBTR8GWPTYK61E04K0EC",
+   "scenario": "S12",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S12",
+   "wallSeconds": 18.45
+  },
+  {
+   "checkCounts": {
+    "error": 1,
+    "fail": 0,
+    "pass": 31,
+    "skip": 9
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "schema_contract:stg_compensation"
+   ],
+   "groundTruth": "source.datatrust.raw.compensation",
+   "groundTruthColumn": "base_salary_local_minor",
+   "incidentId": "inc_run_01M4MCBXV69X3SYDEAEGC01X8H_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 8.89,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.09,
+     "status": "completed"
+    }
+   ],
+   "kind": "source",
+   "provenance": {
+    "candidateCount": 2,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 5,
+     "ok": 5
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_compensation"
+   ],
+   "runId": "run_01M4MCBXV69X3SYDEAEGC01X8H",
+   "scenario": "S13",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-S13",
+   "wallSeconds": 15.33
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 38,
+    "skip": 0
+   },
+   "detected": true,
+   "diagnosticSqlCount": 2,
+   "failing": [
+    "C02",
+    "U02"
+   ],
+   "groundTruth": "model.datatrust.int_compensation_usd",
+   "groundTruthColumn": null,
+   "incidentId": "inc_run_01M4MCCCTBSXE0D1B6SW3G3DDQ_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 5.18,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.66,
+     "status": "completed"
+    }
+   ],
+   "kind": "transformation",
+   "provenance": {
+    "candidateCount": 9,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 32
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.int_compensation_usd",
+    "model.datatrust.fct_compensation_usd",
+    "model.datatrust.stg_fx_rates",
+    "model.datatrust.int_fx_daily",
+    "source.datatrust.raw.fx_rates",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "runId": "run_01M4MCCCTBSXE0D1B6SW3G3DDQ",
+   "scenario": "T14",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-T14",
+   "wallSeconds": 12.11
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "detected": true,
+   "diagnosticSqlCount": 2,
+   "failing": [
+    "U06"
+   ],
+   "groundTruth": "model.datatrust.dim_employee",
+   "groundTruthColumn": null,
+   "incidentId": "inc_run_01M4MCCRMWZ1CSGBDG2Y2TGH7Q_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 5.95,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.13,
+     "status": "completed"
+    }
+   ],
+   "kind": "transformation",
+   "provenance": {
+    "candidateCount": 3,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 25
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.dim_employee",
+    "model.datatrust.stg_employees",
+    "source.datatrust.raw.employees"
+   ],
+   "runId": "run_01M4MCCRMWZ1CSGBDG2Y2TGH7Q",
+   "scenario": "T15",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-T15",
+   "wallSeconds": 12.31
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 37,
+    "skip": 2
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "S07"
+   ],
+   "groundTruth": "model.datatrust.stg_stage_events",
+   "groundTruthColumn": "event_local_date",
+   "incidentId": "inc_run_01M4MCD4NPNGZMKRBJ31QSWMPB_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 3.76,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.2,
+     "status": "completed"
+    }
+   ],
+   "kind": "transformation",
+   "provenance": {
+    "candidateCount": 4,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 36
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.stg_stage_events",
+    "model.datatrust.stg_hires",
+    "source.datatrust.raw.hires",
+    "source.datatrust.raw.stage_events"
+   ],
+   "runId": "run_01M4MCD4NPNGZMKRBJ31QSWMPB",
+   "scenario": "T16",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-T16",
+   "wallSeconds": 10.2
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 37,
+    "skip": 1
+   },
+   "detected": true,
+   "diagnosticSqlCount": 2,
+   "failing": [
+    "U08",
+    "X01"
+   ],
+   "groundTruth": "model.datatrust.int_employee_month",
+   "groundTruthColumn": null,
+   "incidentId": "inc_run_01M4MCDEMJ3CNQCJ3G0SB61REK_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 10.57,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.23,
+     "status": "completed"
+    }
+   ],
+   "kind": "transformation",
+   "provenance": {
+    "candidateCount": 10,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 51
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.int_employee_month",
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_payroll_lines",
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.stg_employees",
+    "model.datatrust.stg_job_assignments",
+    "source.datatrust.raw.employees",
+    "source.datatrust.raw.job_assignments"
+   ],
+   "runId": "run_01M4MCDEMJ3CNQCJ3G0SB61REK",
+   "scenario": "T17",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-T17",
+   "wallSeconds": 17.29
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 38,
+    "skip": 1
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "X01"
+   ],
+   "groundTruth": "model.datatrust.fct_payroll_reconciliation",
+   "groundTruthColumn": "expected_gross_local_minor",
+   "incidentId": "inc_run_01M4MCDZGZH8HDNM75NDTW7Q9D_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 14.88,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.47,
+     "status": "completed"
+    }
+   ],
+   "kind": "transformation",
+   "provenance": {
+    "candidateCount": 6,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 49
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.fct_payroll_reconciliation",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.stg_payroll_lines",
+    "source.datatrust.raw.payroll_lines",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation"
+   ],
+   "runId": "run_01M4MCDZGZH8HDNM75NDTW7Q9D",
+   "scenario": "T18",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-T18",
+   "wallSeconds": 21.57
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 2,
+    "pass": 36,
+    "skip": 2
+   },
+   "detected": true,
+   "diagnosticSqlCount": 1,
+   "failing": [
+    "S02",
+    "S03"
+   ],
+   "groundTruth": "model.datatrust.stg_stage_events",
+   "groundTruthColumn": "stage",
+   "incidentId": "inc_run_01M4MCEMK48CR1RC0F1AYC4M9H_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 18.81,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.76,
+     "status": "completed"
+    }
+   ],
+   "kind": "transformation",
+   "provenance": {
+    "candidateCount": 2,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 22
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.stg_stage_events",
+    "source.datatrust.raw.stage_events"
+   ],
+   "runId": "run_01M4MCEMK48CR1RC0F1AYC4M9H",
+   "scenario": "T19",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-T19",
+   "wallSeconds": 26.26
+  },
+  {
+   "checkCounts": {
+    "error": 0,
+    "fail": 1,
+    "pass": 39,
+    "skip": 0
+   },
+   "detected": true,
+   "diagnosticSqlCount": 0,
+   "failing": [
+    "X02"
+   ],
+   "groundTruth": "model.datatrust.metric_headcount_monthly",
+   "groundTruthColumn": null,
+   "incidentId": "inc_run_01M4MCFE7QQABSYW7PN6TY4AHV_checks_00000000",
+   "jobs": [
+    {
+     "kind": "dbt_build",
+     "seconds": 17.72,
+     "status": "completed"
+    },
+    {
+     "kind": "diagnostics",
+     "seconds": 0.25,
+     "status": "completed"
+    }
+   ],
+   "kind": "transformation",
+   "provenance": {
+    "candidateCount": 8,
+    "environment": "local",
+    "lakeSink": "r2-ndjson (local stand-in for Basin Pipelines)",
+    "probes": {
+     "diagnostics": "completed",
+     "error": 0,
+     "missing": 0,
+     "ok": 31
+    },
+    "summarizer": {
+     "fallback": false,
+     "firstDraftGrounded": true,
+     "model": "template-v1",
+     "provider": "template",
+     "repaired": false
+    },
+    "warehouse": "duckdb (local stand-in for BigQuery)",
+    "weights": {
+     "anomaly": 0.3,
+     "changed": 0.15,
+     "coverage": 0.4,
+     "unexplainedPass": 0.1
+    }
+   },
+   "ranked": [
+    "model.datatrust.metric_headcount_monthly",
+    "model.datatrust.int_employee_month",
+    "model.datatrust.stg_compensation",
+    "source.datatrust.raw.compensation",
+    "model.datatrust.stg_employees",
+    "model.datatrust.stg_job_assignments",
+    "source.datatrust.raw.employees",
+    "source.datatrust.raw.job_assignments"
+   ],
+   "runId": "run_01M4MCFE7QQABSYW7PN6TY4AHV",
+   "scenario": "T20",
+   "seed": 101,
+   "status": "failed",
+   "summaryFallback": false,
+   "summaryProvider": "template",
+   "trial": "s101-T20",
+   "wallSeconds": 24.31
+  }
+ ],
+ "summary": {
+  "cleanFalsePositives": 0,
+  "detected": 20,
+  "injectedTrials": 20,
+  "parityChecked": true,
+  "parityMismatches": [],
+  "top1": 18,
+  "top3": 20
+ }
+}
