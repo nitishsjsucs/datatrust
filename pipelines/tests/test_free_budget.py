@@ -86,3 +86,17 @@ def test_sustained_rate_is_about_20_runs_per_day():
     assert 20 <= fb.sustained_runs_per_day() <= 25
     table = fb.markdown()
     assert "| Queue operations | 10,000 per day | 2,500 | 57 | 336 | 13.4% |" in table
+
+
+def test_pruning_is_in_the_budget():
+    """Prune deletes count as D1 rows written (SPEC risk 25): the Worker's constants match the model, and the
+    sustained rate is reported with pruning too."""
+    worker = fb.WORKER / "src" / "schemas.ts"
+    assert fb.lineage_nodes_per_run() == 42
+    assert fb.prune_rows_per_run() == 2 * (275 + 140 + 42) == 914
+    assert fb.ts_constant(worker, "PRUNE_ROWS_PER_RUN") == fb.prune_rows_per_run()
+    assert fb.prune_daily_rows() == 5_000 <= 0.2 * fb.SHARE * fb.ALLOWANCES["d1_rows_written"].amount
+    # One call prunes at most PRUNE_MAX_RUNS runs and stays under the ledger.
+    assert fb.ts_constant(worker, "PRUNE_MAX_RUNS") * fb.prune_rows_per_run() <= fb.prune_daily_rows()
+    assert fb.sustained_runs_per_day_pruned() == 5
+    assert "once D1 is full and each new run's lineage is pruned: 5" in fb.markdown()

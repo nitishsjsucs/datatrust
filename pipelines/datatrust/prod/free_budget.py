@@ -161,14 +161,30 @@ def retry_limit(name: str) -> int:
     return int(m.group(1))
 
 
-def lineage_events_per_run() -> int:
-    """dbt-ol emits START and COMPLETE for every model and test node, plus the job's own pair."""
-    relations = json.loads(
+@lru_cache(maxsize=1)
+def seed101_relations() -> dict[str, Any]:
+    return json.loads(
         (ROOT / "packages" / "rca" / "test" / "fixtures" / "relations.seed101.json").read_text()
     )
-    models = sum(1 for n in relations["nodes"].values() if n["kind"] == "model")
+
+
+def lineage_events_per_run() -> int:
+    """dbt-ol emits START and COMPLETE for every model and test node, plus the job's own pair."""
+    models = sum(1 for n in seed101_relations()["nodes"].values() if n["kind"] == "model")
     checks = len(yaml.safe_load((ROOT / "checks" / "registry.yml").read_text())["checks"])
     return 2 * (models + checks) + 2
+
+
+def lineage_nodes_per_run() -> int:
+    """Sources and models of the seed-101 relations: one lineage_nodes row each."""
+    return len(seed101_relations()["nodes"])
+
+
+def prune_rows_per_run() -> int:
+    """D1 rows written to prune one run's lineage (POST /api/admin/prune): every deleted edge, event and node
+    row, plus its primary-key index entry, which the D1 pricing page counts as another written row. Miniflare
+    counts the rows only (half of this, prune.test.ts), so this is the upper bound the Worker's ledger uses."""
+    return 2 * (MEASURED["lineage_edges_per_run"] + lineage_events_per_run() + lineage_nodes_per_run())
 
 
 VALIDATION_STEPS_FAILING = (
@@ -264,7 +280,7 @@ def per_run(failing: bool) -> Run:
     rows = (
         2 * MEASURED["lineage_edges_per_run"]
         + 2 * events
-        + 2 * 42
+        + 2 * lineage_nodes_per_run()
         + 2 * checks
         + MEASURED["d1_rows_written_other"]
     )
@@ -340,6 +356,20 @@ def sustained_runs_per_day() -> int:
     return min(x.runs_per_day for x in daily)
 
 
+def prune_daily_rows() -> int:
+    return ts_constant(WORKER / "src" / "schemas.ts", "PRUNE_DAILY_ROWS")
+
+
+def sustained_runs_per_day_pruned() -> int:
+    """Failing runs per day once D1 is full (about 3,000 runs, SPEC risk 25) and every new run's lineage is
+    pruned to make room: each run then also costs its prune deletes, and the Worker's prune ledger allows at
+    most PRUNE_DAILY_ROWS of them per UTC day."""
+    d1_share = SHARE * ALLOWANCES["d1_rows_written"].amount
+    by_writes = int(d1_share // (per_run(True).d1_rows_written + prune_rows_per_run()))
+    by_ledger = prune_daily_rows() // prune_rows_per_run()
+    return min(sustained_runs_per_day(), by_writes, by_ledger)
+
+
 def markdown() -> str:
     f = per_run(True)
     rows = [
@@ -363,7 +393,10 @@ def markdown() -> str:
         f"- Workers AI: a summary reserves at most {reservation_neurons(MEASURED['largest_prompt_chars'])} + "
         f"{reservation_neurons(MEASURED['largest_repair_prompt_chars'])} neurons; the code caps a UTC day at "
         f"{ai_daily_neuron_cap():,}.",
-        f"- Sustained failing runs per day inside the share: {sustained_runs_per_day()} (tightest daily metric).",
+        f"- Sustained failing runs per day inside the share: {sustained_runs_per_day()} (tightest daily metric) "
+        f"while D1 has room; once D1 is full and each new run's lineage is pruned: "
+        f"{sustained_runs_per_day_pruned()} (pruning a run writes up to {prune_rows_per_run()} D1 rows, and the "
+        f"Worker's prune ledger allows {prune_daily_rows():,} a day).",
     ]
     return "\n".join(rows)
 

@@ -62,10 +62,15 @@ export const CompleteSchema = z.object({
 });
 
 /**
- * POST /api/admin/prune (operator). At most 10 runs per call: each pruned run deletes about 900 D1 rows
- * (index entries included), and deletes count as rows written against the Free plan's daily allowance.
+ * POST /api/admin/prune (operator). Deletes count as D1 rows written against the Free plan's daily allowance.
+ * A seed-101 run's lineage is 275 edges, 140 events and 42 nodes: 457 rows written in Miniflare
+ * (prune.test.ts), and up to 914 if production also counts each primary-key index entry (the D1 pricing page
+ * says an index adds a written row), so the budget uses 914. A daily ledger records D1's own count and holds
+ * pruning to PRUNE_DAILY_ROWS per UTC day, a fifth of DataTrust's 25,000-row share: at most 5 runs per call.
  */
-export const PRUNE_MAX_RUNS = 10;
+export const PRUNE_ROWS_PER_RUN = 914;
+export const PRUNE_DAILY_ROWS = 5_000;
+export const PRUNE_MAX_RUNS = 5;
 export const PruneSchema = z.object({
   olderThanDays: z.number().int().min(7).max(3650).default(30),
   maxRuns: z.number().int().min(1).max(PRUNE_MAX_RUNS).default(5),

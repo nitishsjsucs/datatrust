@@ -620,15 +620,44 @@ export async function prunableRuns(db: D1Database, cutoffIso: string, limit: num
 /**
  * Deletes the lineage rows (edges, events, nodes) of the given runs: three set-based statements in one batch.
  * Runs, jobs, check results and incidents (with their ranked candidates, evidence and summary) stay. Each
- * deleted row and index entry counts as a row written on D1 (about 900 per seed-101 run).
+ * deleted row and index entry counts as a row written on D1; `rowsWritten` is D1's own count
+ * (`meta.rows_written`), which the daily prune ledger records.
  */
 export async function pruneLineageRows(
   db: D1Database,
   runIds: string[],
-): Promise<{ edges: number; events: number; nodes: number }> {
-  if (!runIds.length) return { edges: 0, events: 0, nodes: 0 };
+): Promise<{ edges: number; events: number; nodes: number; rowsWritten: number }> {
+  if (!runIds.length) return { edges: 0, events: 0, nodes: 0, rowsWritten: 0 };
   const ids = JSON.stringify(runIds);
   const del = (table: string) => db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT value FROM json_each(?1))`).bind(ids);
-  const [edges, events, nodes] = await db.batch([del('lineage_edges'), del('lineage_events'), del('lineage_nodes')]);
-  return { edges: edges?.meta.changes ?? 0, events: events?.meta.changes ?? 0, nodes: nodes?.meta.changes ?? 0 };
+  const results = await db.batch([del('lineage_edges'), del('lineage_events'), del('lineage_nodes')]);
+  const [edges, events, nodes] = results;
+  return {
+    edges: edges?.meta.changes ?? 0,
+    events: events?.meta.changes ?? 0,
+    nodes: nodes?.meta.changes ?? 0,
+    rowsWritten: results.reduce((sum, r) => sum + (r.meta.rows_written ?? 0), 0),
+  };
+}
+
+// ------------------------------------------------------------------------------------------- prune ledger
+
+/** Today's (UTC) prune ledger: D1 rows written by prune deletes and runs pruned (migration 0004). */
+export async function pruneLedger(db: D1Database, day: string): Promise<{ rowsWritten: number; runs: number }> {
+  const row = await db
+    .prepare(`SELECT rows_written, runs FROM prune_budget WHERE day = ?`)
+    .bind(day)
+    .first<{ rows_written: number; runs: number }>();
+  return { rowsWritten: row?.rows_written ?? 0, runs: row?.runs ?? 0 };
+}
+
+/** Add one prune call's measured rows written and pruned runs to the day's ledger (one statement). */
+export async function recordPrune(db: D1Database, day: string, rowsWritten: number, runs: number): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO prune_budget (day, rows_written, runs) VALUES (?1, ?2, ?3)
+       ON CONFLICT (day) DO UPDATE SET rows_written = rows_written + excluded.rows_written, runs = runs + excluded.runs`,
+    )
+    .bind(day, rowsWritten, runs)
+    .run();
 }

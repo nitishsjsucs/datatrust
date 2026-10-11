@@ -25,7 +25,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Audit lake: Queue to R2 objects, Basin Catalog commit | implemented, not executed in production. Local path executed in Miniflare on 2026-10-10: queue `datatrust-audit-events`, immutable R2 `lake/` objects, `/api/lake/export`, then `uv run datatrust lake commit` (exactly once per `event_id`) into the pyiceberg SQL catalog (stand-in for Basin Catalog) |
 | BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check). Optional SQL check on the goccy BigQuery emulator, which is not BigQuery (ZetaSQL analyzer, SQLite execution, empty tables): `bash scripts/bq-emulator-check.sh` on 2026-10-11 built all 29 models with their enforced contracts and passed 37 of the 40 tests; the emulator stopped during the other 3 (X02 to X04), so they have no result ([`results/bq-emulator-2026-10-11.md`](results/bq-emulator-2026-10-11.md)) |
 | Workers Free plan budget: configuration, D1 statement counts, CPU per code path, usage model | executed locally, 2026-10-11: `npm run test:worker` (`free-plan.test.ts`, `d1-statements.test.ts`, `budget.test.ts`), `npm run budget:cpu -- --gate 8`, `uv run pytest pipelines/tests/test_free_budget.py`; the CPU gate passes on GitHub's ubuntu-latest x64 runners (largest median 7.30 ms on a slow runner before the JWT warm-up, 4.47 ms after; see Workers Free plan budget); production usage not yet observed |
-| Lineage prune for old runs (`datatrust prune`, D1 stays under 500 MB) | executed in Miniflare only: `prune.test.ts` (`npm run test:worker`) and one call against `wrangler dev` on 2026-10-11 (nothing old enough to prune); not executed in production |
+| Lineage prune for old runs (`datatrust prune`, with a daily D1 write ledger; keeps D1 under 500 MB when run periodically) | executed in Miniflare only: `prune.test.ts` (`npm run test:worker`, a full seed-101 run's lineage measured at 457 rows written) and one call against `wrangler dev` on 2026-10-11 (nothing old enough to prune); not executed in production |
 | Incident dashboard (stretch) | executed locally under `wrangler dev` (Miniflare) as Worker static assets, 2026-10-10 |
 | `setup:prod`, `setup:wizard` and `doctor` | implemented; `npm run doctor` (local) executed; `npm run doctor -- --prod` executed read-only against the real Cloudflare and Google Cloud logins on 2026-10-11 (31 required items missing, listed under Production setup); `setup:prod` and the wizard have not been run (they create resources, which is the operator's step) |
 
@@ -307,7 +307,7 @@ uv run datatrust run --env prod --seed 101 --scenario S01 --wait         # termi
 
 BigQuery runs go one at a time: every run loads and builds the same `datatrust_*` datasets, so a second build would change the tables the first run's diagnostics are probing. While a BigQuery run is queued or running, or has failed and its investigation has not written the incident yet, `POST /api/runs` answers 409 and `datatrust run` exits with status 3 and names the run in flight; start the next run once the first has finished. Local DuckDB runs each have their own warehouse file and are not limited.
 
-D1 on the Free plan holds 500 MB, about 3,000 runs at 167 KB each, and the bulk is lineage. `uv run datatrust prune --env prod --older-than-days 30` (operator; `--dry-run` lists first) removes the lineage detail of up to 5 old runs per call (`--max-runs`, at most 10): their D1 lineage edges, events and nodes and their raw OpenLineage events in R2. Runs, check results, incidents and the audit lake stay, and so does the latest passed run, which the next investigation compares checksums against. Each pruned run writes about 900 D1 rows (deletes count as writes), so a call of 5 uses about a fifth of DataTrust's daily D1 write share.
+D1 on the Free plan holds 500 MB, about 3,000 runs at 167 KB each, and the bulk is lineage. `uv run datatrust prune --env prod --older-than-days 30` (operator; `--dry-run` lists first) removes the lineage detail of up to 5 old runs per call (`--max-runs`): their D1 lineage edges, events and nodes and their raw OpenLineage events in R2. Runs, check results, incidents and the audit lake stay, and so does the latest passed run, which the next investigation compares checksums against. Deletes count as D1 rows written: pruning a seed-101 run writes 457 rows in Miniflare and up to 914 if production also counts each primary-key index entry, as the D1 pricing page says an index does. A ledger in D1 records each call's count and stops pruning for the UTC day before 5,000 rows (a fifth of DataTrust's daily write share), so pruning keeps up with at most 5 new runs a day once the database is full.
 
 The production runner also commits the audit lake to Basin Catalog every 15 minutes and when it stops (`uv run datatrust lake commit --catalog basin` does the same by hand). The dashboard is the Worker URL in a browser; Access signs you in with your email.
 
@@ -317,13 +317,13 @@ Only `npm run prod:smoke` may move a status label above to "executed in producti
 
 Production runs on the Cloudflare Workers Free plan, in an account shared with three other repos, so DataTrust budgets itself at 25% of every account-wide daily allowance ([SPEC section 28](SPEC.md), [ADR-0008](docs/adr/0008-workers-free-plan.md)). What keeps it there: lineage arrives in POSTs of at most 10 events and 256 KB with one queue message each; every multi-row D1 write is one set-based statement (the largest invocation issues 10); Workers AI spend is capped by a daily neuron ledger; an idle runner backs off to one poll every 30 s; queue and Workflow names carry the `datatrust` prefix; and nothing in the production config needs Workers Paid (`apps/worker/test/free-plan.test.ts`).
 
-Budget model, from `uv run python -m datatrust.prod.free_budget` on 2026-10-11 (commit `51f6323`, unchanged when rerun at `c27ae3e`; pinned by `pipelines/tests/test_free_budget.py`). Per-run counts come from the code and the committed seed-101 fixtures; D1 rows read, R2 and log volumes, the run length (12.5 minutes on BigQuery) and the per-incident neurons are the measurements in SPEC section 28.3:
+Budget model, from `uv run python -m datatrust.prod.free_budget` on 2026-10-11 (first at commit `51f6323`; rerun after the 2026-10-11 review added the `expire-diagnostics` step to the worst case and the prune term; pinned by `pipelines/tests/test_free_budget.py`). Per-run counts come from the code and the committed seed-101 fixtures; D1 rows read, R2 and log volumes, the run length (12.5 minutes on BigQuery) and the per-incident neurons are the measurements in SPEC section 28.3:
 
 | Metric | Free allowance (account) | DataTrust share (25%) | Per failing run | Smoke (1 clean + 5 failing) | Smoke, % of share |
 |---|---|---|---|---|---|
-| Workers requests | 100,000 per day | 25,000 | 254 | 1,500 | 6.0% |
+| Workers requests | 100,000 per day | 25,000 | 255 | 1,505 | 6.0% |
 | Queue operations | 10,000 per day | 2,500 | 57 | 336 | 13.4% |
-| Workflow steps (worst case) | 3,000 per day | 750 | 35 | 191 | 25.5% |
+| Workflow steps (worst case) | 3,000 per day | 750 | 36 | 196 | 26.1% |
 | D1 rows written | 100,000 per day | 25,000 | 1,026 | 6,156 | 24.6% |
 | D1 rows read | 5,000,000 per day | 1,250,000 | 9,000 | 54,000 | 4.3% |
 | Workers AI neurons (typical) | 10,000 per day | 2,500 | 86 | 430 | 17.2% |
@@ -333,9 +333,9 @@ Budget model, from `uv run python -m datatrust.prod.free_budget` on 2026-10-11 (
 | R2 Class B operations | 10,000,000 per month | 2,500,000 | 175 | 1,050 | under 0.1% |
 | R2 storage (MB-month) | 10,000 per month | 2,500 | 0.94 | 5.6 | 0.2% |
 
-- Per failing run: 14 lineage POSTs, 19 queue messages (57 operations), 17 workflow steps typical and 35 with every designed retry.
+- Per failing run: 14 lineage POSTs, 19 queue messages (57 operations), 17 workflow steps typical and 36 with every designed retry.
 - Workers AI: a summary reserves at most 187 + 201 neurons; the code caps a UTC day at 2,000.
-- Sustained failing runs per day inside the share: 21 (tightest daily metric).
+- Sustained failing runs per day inside the share: 20 (tightest daily metric) while D1 has room; once D1 is full and each new run's lineage is pruned: 5 (pruning a run writes up to 914 D1 rows, and the Worker's prune ledger allows 5,000 a day).
 
 Cold CPU per Worker code path, from `npm run budget:cpu`: the median of 5 fresh processes, main-thread CPU, zod in its jitless mode as in workerd, Cloudflare bindings faked. The Free plan allows 10 ms per request and per Workflow step; the CI `node` job runs the same script on GitHub's ubuntu-latest x64 runners and fails above 8 ms. Those runners differ in speed by about 1.8x from run to run, and on a slow one (CI run 38125877178, commit `6154828`) the diagnostics completion read 7.30 ms. Most of a small authenticated request was compiling jose's Access JWT verification on first use, so since commit `5795f3b` the start-up warm-up verifies an embedded throwaway token (its key is trusted by no configuration). The next CI run, on a runner of the same speed class, read 4.47 ms at most. The edge's CPU speed was not measured.
 

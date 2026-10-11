@@ -343,10 +343,16 @@ def _cmd_prune(args: argparse.Namespace) -> int:
 
     out = WorkerClient.from_env("operator", args.env).prune(args.older_than_days, args.max_runs, args.dry_run)
     print(json.dumps(out, indent=2))
-    if out.get("more"):
+    if out.get("refused") == "daily_prune_cap":
         print(
-            "more runs to prune: rerun later (each pruned run writes about 900 D1 rows of the daily "
-            "allowance)",
+            "today's prune ledger is full (D1 rows written by pruning, a fifth of DataTrust's daily share): "
+            "rerun after 00:00 UTC",
+            file=sys.stderr,
+        )
+    elif out.get("more"):
+        print(
+            "more runs to prune: rerun later (pruning a run writes up to 914 D1 rows; the Worker stops "
+            "for the day at 5,000)",
             file=sys.stderr,
         )
     return 0
@@ -586,7 +592,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--env", choices=["local", "prod"], default="local")
     p.add_argument("--older-than-days", type=int, default=30, help="at least 7 (default 30)")
-    p.add_argument("--max-runs", type=int, default=5, help="1 to 10 per call (default 5)")
+    p.add_argument("--max-runs", type=int, default=5, help="1 to 5 per call (default 5)")
     p.add_argument("--dry-run", action="store_true", help="list the runs that would be pruned")
     p.set_defaults(func=_cmd_prune)
 
