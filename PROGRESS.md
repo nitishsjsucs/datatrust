@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 15 of 19 (core) done, plus 15b: `docs: end-to-end benchmark results through Miniflare`.
+Commit 16 of 19 (core) done: `feat(lake): event sink with Basin Pipelines and local pyiceberg catalog`.
 
 ## Done
 
@@ -24,19 +24,20 @@ Commit 15 of 19 (core) done, plus 15b: `docs: end-to-end benchmark results throu
 - 13. `runner/client.py` (dev JWT or Access service-token headers, retries with exponential backoff on 5xx and network errors, 4xx fatal), `runner/loop.py` (dbt_build: synth, scenario + decoys when a scenario is given, load, dbt-ol build, mart snapshots on green runs, relations and slim run_results artifacts, OpenLineage in batches of 50, complete; diagnostics: probes on the runner's own warehouse and relations, read-only, `rca sanitize`, complete), `datatrust runner --once|--watch`, `scripts/dev-up.sh` / `dev-down.sh` (process groups in `.dev/pids`, port checks for 8792/9242/8160), `npm run dev:up|dev:down|dev:reset`, `test_runner_client.py`. Verified by hand on 2026-10-10: `npm run dev:up`, `POST /api/runs {seed 101, scenario S01}`, two `datatrust runner --once` calls (build: 40 checks, U05 failing, 136 OpenLineage events; diagnostics: 46 probes) produced incident `inc_<run>_checks_00000000` ranking `source.datatrust.raw.hires` first with diagnostic SQL and local-stand-in provenance; `npm run dev:down` stopped everything and confirmed 8792, 9242 and 8160 free.
 - 14. `packages/rca/src/summary/` (zod `IncidentSummary` + JSON Schema, `{ev:key.field}` renderer with integer/percent/ratio formats, grounding validator with the six SPEC 13.7 rules, deterministic template draft, prompt and repair prompt listing keys and fields without values), rca CLI `evidence|prompt|validate|template`; Worker `llm/` (grounded summarize loop: draft, one repair quoting violations, template fallback; Workers AI with JSON mode through AI Gateway; OpenAI-compatible local; template; production refuses non-Workers-AI), `recovery.ts` (bq cp / local restore / rebuild hints), `datatrust restore --from-snapshot`, harness builds evidence, prompt and template summary per trial, `test_no_pii_in_prompts.py` (marked `bench`, run by CI bench-offline: 20 seed-101 prompts and summaries free of names, emails, phones, birth dates and salaries, plus a planted-leak control), `summary-validate.test.ts`, `summarizer.test.ts` (AI binding and local fetch mocked). `dev-up.sh --llm` switches the Worker to the local LLM. Observed by hand on 2026-10-10 with Qwen3-1.7B through wrangler dev (S01, T14, S04 on seed 101): all three drafts failed grounding twice (bare digits, invented SQL as a diagnostic id, wrong evidence keys) and fell back to the template, which is the designed behavior; this is an observation, not a reported result.
 - 15. `bench/e2e.py` (POST /api/runs as operator, runner loop in-process, polling run and incident state, records), `datatrust bench --mode e2e [--parity]`, e2e report writer, `scripts/bench-e2e.sh` (dev-up, trap dev-down), `npm run bench:e2e`, `test_e2e_parity.py` (marked `e2e`), CI `e2e` job, portable port checks (`lsof` or `ss`). Verified on 2026-10-10: `npm run bench:e2e -- --pytest` passed (S01, T14, S04 incidents with expected fields; top-3 identical to offline); a full seed-101 e2e run before this commit gave 20/20 detected, 20/20 top-3, parity yes (results rerun at the clean commit in 15b).
-- 15b (extra). `npm run bench:e2e` at commit df7496b (clean), 2026-10-10, 412 s: 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, offline parity yes. `results/bench-2026-10-10-e2e.{json,md}`; README Results and status updated.
+- 15b (extra). `npm run bench:e2e` at commit df7496b (clean), 2026-10-10, 327.7 s of e2e trials (412 s with dev-up and the offline parity run): 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, offline parity yes. `results/bench-2026-10-10-e2e.{json,md}`; README Results and status updated.
+- 16. `schemas/lake/audit_event.stream.json` (Basin Pipelines stream schema), Worker `sinks/event-sink.ts` (`PipelinesSink` on the EVENTS binding, `R2NdjsonSink` locally, schema validation before every send because Pipelines drops invalid records silently), `check_result` events from the dt-check-results consumer, `run_completed` from ValidationRunWorkflow finalize, `incident_created` from InvestigationWorkflow persist, `/api/dev/lake-export` (runner, local only), Python `lake/{schema,iceberg_local,iceberg_basin,sync}.py` (SqlCatalog on SQLite with an absolute `file://` warehouse; RestCatalog reader for Basin Catalog), `datatrust lake sync|query`, `event-sink.test.ts`, `test_lake_local.py` (append, read, snapshot time travel, cwd independence). Verified by hand on 2026-10-10: one S03 run through `wrangler dev`, then `datatrust lake sync` appended 42 events (40 check_result, 1 run_completed, 1 incident_created) to the local Iceberg table; stack stopped, ports free.
 
 ## Next
 
-- 16. `feat(lake): event sink with Basin Pipelines and local pyiceberg catalog`.
+- 17. `feat(prod): production wrangler template and BigQuery governance` (template, governance.py, validate.py, smoke; time-boxed, label "implemented, not executed").
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 49 passed
-- `npm run test:worker`: 50 passed
+- `npm run test:worker`: 57 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 120 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
+- `uv run pytest`: 123 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
 
 ## Deviations from SPEC.md
 

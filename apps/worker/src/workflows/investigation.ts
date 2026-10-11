@@ -20,6 +20,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloud
 import { jsonStep, RETRY_LOAD } from './steps';
 import type { AppEnv } from '../env';
 import { createSummarizer, summarizeGrounded } from '../llm/summarizer';
+import { auditEvent, createSink } from '../sinks/event-sink';
 import { recoveryCommands } from '../recovery';
 import type { Alert } from '../schemas';
 import {
@@ -177,7 +178,7 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
           repaired: summary.repaired,
           fallback: summary.fallback,
         },
-        lakeSink: env.EVENTS ? 'basin-pipelines' : 'r2-ndjson (local stand-in for Basin Pipelines)',
+        lakeSink: createSink(env).kind === 'basin-pipelines' ? 'basin-pipelines' : 'r2-ndjson (local stand-in for Basin Pipelines)',
         weights: FROZEN_WEIGHTS,
         probes: ranking.probeStatus,
         candidateCount: ranking.candidateCount,
@@ -229,6 +230,20 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
         provenance,
       });
       if (trigger === 'checks') await setRunIncident(db, runId, incidentId);
+      await createSink(env).send([
+        auditEvent(env, 'incident_created', runId, {
+          status: 'open',
+          node: ranking.ranked[0]?.node ?? null,
+          payload: {
+            incident_id: incidentId,
+            trigger,
+            top3: ranking.ranked.slice(0, 3).map((c) => c.node),
+            failing: failing.map((c) => c.checkId),
+            summary_provider: summary.provider,
+            summary_fallback: summary.fallback,
+          },
+        }),
+      ]);
       return { incidentId, top: ranking.ranked[0]?.node ?? null };
     });
 

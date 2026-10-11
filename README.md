@@ -22,7 +22,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local` and `@cloudflare/vitest-plugin`) only; 2026-10-10 `npm run bench:e2e` (seed 101, 20 scenarios) |
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | implemented, not executed (tests mock the AI binding; the local stand-ins are llama-server with Qwen3-1.7B and a deterministic template) |
-| Basin Pipelines, Basin Catalog (Iceberg) | planned |
+| Basin Pipelines, Basin Catalog (Iceberg) | implemented, not executed (local pyiceberg SQL catalog stand-in executed: `uv run datatrust lake sync`) |
 | BigQuery path, policy tags, masking, authorized view, time travel | in progress: dialect macros, BigQuery profiles, policy-tag and authorized-view config implemented, not executed (CI renders the BigQuery macro branches and runs `dbt parse --target bigquery` only) |
 | `setup:prod` and `doctor` | planned |
 
@@ -208,6 +208,8 @@ npm run dev:down                                     # stops everything dev:up s
 ```
 
 `npm run bench:e2e` runs the seed-101 benchmark through all of the above (20 scenarios, each through Queues and both Workflows) and checks that the incident top-3 lists equal the offline mode's; `npm run bench:e2e -- --pytest` is the CI subset (S01, T14, S04). Both stop everything they started.
+
+Audit events (check results, completed runs, incidents) go to the lake. Locally the Worker writes NDJSON to its R2 bucket and `uv run datatrust lake sync` appends them to a pyiceberg SQL catalog under `.data/lake/` (stand-in for Basin Catalog); `uv run datatrust lake query` reads the Iceberg table through DuckDB.
 
 `npm run dev:up -- --llm` also starts llama-server (Qwen3-1.7B) on 127.0.0.1:8160; set `DATATRUST_LLM_MODEL_PATH` if the GGUF lives elsewhere.
 

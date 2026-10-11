@@ -260,6 +260,28 @@ def _cmd_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_lake(args: argparse.Namespace) -> int:
+    if args.lake_command == "sync":
+        from datatrust.lake.sync import sync
+        from datatrust.runner.client import WorkerClient
+
+        print(json.dumps(sync(WorkerClient.from_env("runner", "local"))))
+        return 0
+    import duckdb
+
+    from datatrust.lake.iceberg_local import read
+
+    events = read()
+    con = duckdb.connect()
+    con.register("audit_events", events)
+    sql = args.sql or "select event_type, count(*) as events from audit_events group by 1 order by 1"
+    cur = con.execute(sql)
+    cols = [d[0] for d in cur.description or []]
+    for row in cur.fetchall():
+        print(json.dumps(dict(zip(cols, row, strict=True)), default=str))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="datatrust", description=__doc__)
     parser.add_argument("--version", action="version", version=f"datatrust {__version__}")
@@ -319,6 +341,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("node", help="mart model name, e.g. fct_hires")
     p.add_argument("--duckdb-path", help=DUCKDB_HELP)
     p.set_defaults(func=_cmd_restore)
+
+    p = sub.add_parser("lake", help="local Iceberg lake (pyiceberg SQL catalog stand-in for Basin Catalog)")
+    lake = p.add_subparsers(dest="lake_command", required=True)
+    lake.add_parser("sync", help="append the local Worker's audit events to the local Iceberg table")
+    q = lake.add_parser("query", help="query the local Iceberg table with DuckDB")
+    q.add_argument("--sql", help="SQL over the table audit_events")
+    p.set_defaults(func=_cmd_lake)
 
     p = sub.add_parser("baseline", help="extract the gate numbers from a benchmark report")
     p.add_argument("--from", dest="from_path", required=True)

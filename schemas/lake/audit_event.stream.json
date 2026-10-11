@@ -1,0 +1,13 @@
+{
+  "fields": [
+    { "name": "event_id", "type": "string", "required": true },
+    { "name": "event_type", "type": "string", "required": true },
+    { "name": "environment", "type": "string", "required": true },
+    { "name": "run_id", "type": "string", "required": true },
+    { "name": "occurred_at", "type": "timestamp", "required": true },
+    { "name": "check_id", "type": "string", "required": false },
+    { "name": "status", "type": "string", "required": false },
+    { "name": "node", "type": "string", "required": false },
+    { "name": "payload", "type": "json", "required": true }
+  ]
+}
