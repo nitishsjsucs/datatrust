@@ -361,7 +361,7 @@ Command (test seeds 101-105, weights frozen beforehand from dev seeds 1-3, ADR-0
 uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json
 ```
 
-Full report: [`results/bench-2026-10-10-offline.md`](results/bench-2026-10-10-offline.md) (data in the matching `.json`; gate numbers in `results/baseline.json`). The same command rerun at commit `019714f` on 2026-10-10 reproduced every one of the 105 per-trial rankings exactly ([`results/bench-2026-10-10-offline-recheck.md`](results/bench-2026-10-10-offline-recheck.md)).
+Full report: [`results/bench-2026-10-10-offline.md`](results/bench-2026-10-10-offline.md) (data in the matching `.json`; gate numbers in `results/baseline.json`). The same command rerun at commit `019714f` on 2026-10-10 reproduced every one of the 105 per-trial rankings exactly ([`results/bench-2026-10-10-offline-recheck.md`](results/bench-2026-10-10-offline-recheck.md)). Rerun again at commit `e00de5c` on 2026-10-11, after the Free plan changes (190 s, with `--gate results/baseline.json`, which passed): all 105 trials gave the same rankings, column rankings, features, ablations, baselines, failing checks, candidate sets and probe counts, so every figure below is unchanged ([`results/bench-2026-10-11-offline-recheck.md`](results/bench-2026-10-11-offline-recheck.md)).
 
 | Metric (100 injected trials: 20 scenarios x 5 seeds) | Measured | Wilson 95% | Scenario-clustered bootstrap 95% |
 |---|---|---|---|
