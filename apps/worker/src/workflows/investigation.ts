@@ -226,7 +226,11 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
         timeTravel: ranking.timeTravel,
         candidateCount: ranking.candidateCount,
       };
-      const failing = ctx.checks.filter((c) => c.status === 'fail' || c.status === 'error');
+      // Without dbt's message: viewers read incidents, and a database error can quote a value (the runner
+      // already reduces messages to an error class; this is defense in depth).
+      const failing = ctx.checks
+        .filter((c) => c.status === 'fail' || c.status === 'error')
+        .map(({ message: _message, ...check }) => check);
       const evidenceKey = `incidents/${incidentId}.json`;
       const incident = {
         incidentId,

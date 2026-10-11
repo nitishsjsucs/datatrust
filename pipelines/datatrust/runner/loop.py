@@ -125,12 +125,18 @@ def handle_dbt_build(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
 
 
 def _slim_run_results(rr: dict[str, Any]) -> dict[str, Any]:
-    """run_results without compiled SQL text or row values (no store_failures)."""
-    keep = ("unique_id", "status", "failures", "execution_time", "message")
+    """run_results without compiled SQL text or row values (no store_failures); messages are reduced the
+    same way as in check results (`safe_message`), since database errors quote values."""
+    from datatrust.checks.results import safe_message
+
+    keep = ("unique_id", "status", "failures", "execution_time")
     return {
         "metadata": rr.get("metadata", {}),
         "elapsed_time": rr.get("elapsed_time"),
-        "results": [{k: r.get(k) for k in keep} for r in rr.get("results", [])],
+        "results": [
+            {**{k: r.get(k) for k in keep}, "message": safe_message(r.get("message"), str(r.get("status")))}
+            for r in rr.get("results", [])
+        ],
     }
 
 

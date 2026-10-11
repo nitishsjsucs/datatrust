@@ -58,6 +58,8 @@ describe('InvestigationWorkflow', () => {
       failingChecks: Array<{ checkId: string }>;
     };
     expect(incident.failingChecks.map((c) => c.checkId)).toEqual(['U05']);
+    expect(incident.failingChecks.every((c) => !('message' in c))).toBe(true);
+    expect(row!.failing_checks_json).not.toContain('"message"');
     expect(incident.diagnosticSql.length).toBeGreaterThan(0);
     expect(incident.diagnosticSql[0]!.sql[0]).toMatch(/^with grouped as/);
     expect(incident.provenance['warehouse']).toBe('duckdb (local stand-in for BigQuery)');

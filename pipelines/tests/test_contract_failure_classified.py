@@ -38,3 +38,44 @@ def test_contract_table_parser_ignores_header_and_separator():
         "| amount      | VARCHAR         | BIGINT        | data type mismatch |\n"
     )
     assert contract_columns(msg) == ["amount"]
+
+
+def test_database_errors_never_carry_values_into_check_results(parsed_manifest):
+    """A runtime error on bad data quotes the value (DuckDB's ConversionException, BigQuery's "Bad int64
+    value"); only the error class may reach the Worker, D1, R2 and the incident JSON viewers read."""
+    from datatrust.checks.results import safe_message
+    from datatrust.runner.loop import _slim_run_results
+
+    leak = "85,000"
+    rr = {
+        "results": [
+            {
+                "unique_id": "model.datatrust.stg_compensation",
+                "status": "error",
+                "message": "Runtime Error in model stg_compensation (models/staging/stg_compensation.sql)\n"
+                f"  Conversion Error: Could not convert string '{leak}' to INT64 when casting from column x",
+            },
+            {
+                "unique_id": next(
+                    u for u, n in parsed_manifest["nodes"].items() if n["resource_type"] == "test"
+                ),
+                "status": "error",
+                "message": f"Database Error in test x (tests/x.sql)\n  Bad int64 value: {leak}",
+            },
+        ]
+    }
+    results = classify(rr, parsed_manifest)
+    by_kind = {r.kind: r for r in results}
+    assert by_kind["model_error"].message == "Conversion Error"
+    assert by_kind["data_test"].message == "Database Error"
+    assert leak not in json.dumps([r.to_json() for r in results])
+    assert leak not in json.dumps(_slim_run_results(rr))
+    # What stays: dbt's count line, and the contract marker with column names only.
+    assert safe_message("Got 3 results, configured to fail if != 0", "fail") == (
+        "Got 3 results, configured to fail if != 0"
+    )
+    assert safe_message("Got 3 results, configured to fail if != 0 'x'", "fail") == "Error"
+    contract = json.loads(FIXTURE.read_text())["results"]
+    msg = next(r["message"] for r in contract if r["status"] == "error")
+    assert safe_message(msg, "error") == f"{CONTRACT_MARKER}: base_salary_local_minor"
+    assert safe_message("OK created table", "success") is None

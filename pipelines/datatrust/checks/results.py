@@ -2,7 +2,8 @@
 
 Data tests map to the registry's check ids. A model that fails its enforced contract becomes a
 `schema_contract` result naming the mismatched columns; any other model error becomes `model_error`.
-Row values never appear in a CheckResult: only counts, node ids, column names and dbt's message.
+Row values never appear in a CheckResult: only counts, node ids, column names and a message reduced by
+`safe_message` (database errors quote the offending value, so their text never leaves the runner).
 """
 
 from __future__ import annotations
@@ -57,10 +58,39 @@ def contract_columns(message: str) -> list[str]:
     return cols
 
 
-def _short(message: str | None, limit: int = 2000) -> str | None:
-    if message is None:
+# dbt's own line for a failing or warning data test: a count and the threshold, never a row value.
+_TEST_LINE = re.compile(r"^Got \d+ results?, configured to (?:fail|warn) if [!=<>]{1,2} ?\d+$")
+# An error class such as "Conversion Error", "Runtime Error" or "Database Error".
+_ERROR_CLASS = re.compile(r"\b([A-Z][A-Za-z]*(?: [A-Z][A-Za-z]*)? (?:Error|Exception))(:?)")
+
+
+def error_class(text: str) -> str:
+    """The error class of a dbt or database error, without the rest of its text: the class a colon follows
+    (the database's own, e.g. "Conversion Error"), else the first one ("Database Error"), else "Error"."""
+    found = _ERROR_CLASS.findall(text)
+    for name, colon in found:
+        if colon:
+            return name
+    return found[0][0] if found else "Error"
+
+
+def safe_message(text: str | None, status: str) -> str | None:
+    """What a CheckResult (and the slim run_results artifact) may carry of dbt's message (2026-10-11
+    review): dbt's count line for a failing data test; for a contract failure the fixed marker and the
+    mismatched column names; for any other error only its class. Database errors quote values (DuckDB:
+    "Could not convert string '85,000' to INT64"; BigQuery: "Bad int64 value: ..."), and incidents are
+    readable by viewers, so the rest of the text is dropped."""
+    if not text:
         return None
-    return message if len(message) <= limit else message[:limit] + "..."
+    line = text.strip()
+    if _TEST_LINE.match(line):
+        return line
+    if CONTRACT_MARKER in text:
+        cols = contract_columns(text)
+        return f"{CONTRACT_MARKER}: {', '.join(cols)}" if cols else CONTRACT_MARKER
+    if status in ("fail", "error", "runtime error", "warn"):
+        return error_class(text)
+    return None
 
 
 def classify(
@@ -92,7 +122,7 @@ def classify(
                     failures=int(failures) if failures is not None and status != "error" else 0,
                     node=check.node,
                     columns=list(check.columns),
-                    message=_short(message) if status in ("fail", "error") else None,
+                    message=safe_message(message, status) if status in ("fail", "error") else None,
                     also=[{"node": t.node, "columns": list(t.columns)} for t in check.also],
                 )
             )
@@ -112,7 +142,7 @@ def classify(
                     failures=1,
                     node=uid,
                     columns=cols,
-                    message=_short(text),
+                    message=safe_message(text, "error"),
                 )
             )
     return out
