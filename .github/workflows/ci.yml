@@ -30,6 +30,8 @@ jobs:
       - run: npm run build
       - run: npm run test:rca
       - run: npm run test:worker
+      - name: Workers Free plan CPU budget (cold main-thread CPU per path, gate 8 ms of the 10 ms limit)
+        run: npm run budget:cpu -- --gate 8
       - name: Worker bundles (local config)
         run: npx wrangler deploy --dry-run --outdir dist
         working-directory: apps/worker

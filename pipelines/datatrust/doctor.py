@@ -623,9 +623,17 @@ def service_token_checks(url: str, get: Callable[..., Any] | None = None) -> lis
 
 def ai_budget_check(url: str, get: Callable[..., Any] | None = None) -> Check:
     """GET /api/ai/budget answers for the operator token and shows today's Workers AI headroom (SPEC 28.5.5)."""
-    cid, secret = os.environ.get("CF_ACCESS_OPERATOR_CLIENT_ID"), os.environ.get("CF_ACCESS_OPERATOR_CLIENT_SECRET")
+    cid, secret = (
+        os.environ.get("CF_ACCESS_OPERATOR_CLIENT_ID"),
+        os.environ.get("CF_ACCESS_OPERATOR_CLIENT_SECRET"),
+    )
     if not (cid and secret):
-        return Check("missing", "Workers AI budget endpoint", "operator service token not set", "README Cloudflare step 14")
+        return Check(
+            "missing",
+            "Workers AI budget endpoint",
+            "operator service token not set",
+            "README Cloudflare step 14",
+        )
     if get is None:
         import requests
 

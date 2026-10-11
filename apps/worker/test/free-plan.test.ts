@@ -9,6 +9,9 @@ import templateText from '../wrangler.prod.template.jsonc?raw';
 import testText from '../wrangler.test.jsonc?raw';
 import { NEURON_RATES, PAID_ONLY_MODELS } from '../src/llm/budget';
 import { QUEUES } from '../src/queues/router';
+import { CheckResultsMessage, CompleteSchema } from '../src/schemas';
+import { warmUp, warmUpCheck, warmUpEvent, warmUpProbe, warmUpRelations } from '../src/warmup';
+import { buildLineageGraph, findUnsanitized, RunEventSchema } from '@datatrust/rca';
 
 /** JSONC to JSON: drop // and block comments outside strings (URLs inside strings keep their slashes). */
 function parseJsonc(text: string): Record<string, unknown> {
@@ -118,5 +121,21 @@ describe('production configuration fits the Workers Free plan', () => {
       expect(cfg['workflows']).toEqual(prod['workflows']);
       expect(cfg).not.toHaveProperty('pipelines');
     }
+  });
+});
+
+describe('start-up warm-up (Free plan CPU per request)', () => {
+  it('runs the real parsers on valid inputs, so their compile cost moves to start-up', () => {
+    expect(RunEventSchema.safeParse(warmUpEvent).success).toBe(true);
+    expect(buildLineageGraph([warmUpEvent], warmUpRelations).columnEdges).toHaveLength(1);
+    expect(
+      CompleteSchema.safeParse({ status: 'completed', checkResults: [warmUpCheck], probeResults: [warmUpProbe], expectedLineageEvents: 1 }).success,
+    ).toBe(true);
+    expect(CheckResultsMessage.safeParse({ runId: 'w', checkResults: [warmUpCheck] }).success).toBe(true);
+    expect(findUnsanitized([warmUpProbe] as never, warmUpRelations)).toEqual([]);
+    const matched: string[] = [];
+    warmUp({ match: (method: string, path: string) => void matched.push(`${method} ${path}`) } as never);
+    expect(matched).toEqual(['GET /healthz', 'POST /api/v1/lineage']);
+    expect(() => warmUp({ match: () => { throw new Error('boom'); } } as never)).not.toThrow();
   });
 });

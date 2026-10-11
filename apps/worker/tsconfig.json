@@ -1,7 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["@cloudflare/vitest-plugin/types"]
+    "types": [
+      "@cloudflare/vitest-plugin/types"
+    ]
   },
-  "include": ["worker-configuration.d.ts", "src", "test", "vitest.config.ts"]
+  "include": [
+    "worker-configuration.d.ts",
+    "src",
+    "test",
+    "vitest.config.ts",
+    "../../scripts/cpu-budget"
+  ]
 }

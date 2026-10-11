@@ -2,11 +2,14 @@
 import { createApp } from './app';
 import type { AppEnv } from './env';
 import { queue } from './queues/router';
+import { warmUp } from './warmup';
 
 export { InvestigationWorkflow } from './workflows/investigation';
 export { ValidationRunWorkflow } from './workflows/validation-run';
 
 const app = createApp();
+// Compile the hot parsers and the router during start-up instead of the first request (see warmup.ts).
+warmUp(app.router);
 
 export default {
   fetch(request: Request, env: AppEnv, ctx: ExecutionContext) {
