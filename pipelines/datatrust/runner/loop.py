@@ -202,6 +202,16 @@ def handle_diagnostics(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
 
 HANDLERS = {"dbt_build": handle_dbt_build, "diagnostics": handle_diagnostics}
 
+# Calls made on behalf of a leased job (artifacts, lineage, completion).
+JOB_PATHS = ("/api/runner/jobs/", "/api/v1/lineage")
+
+
+def lease_lost(err: WorkerHTTPError) -> bool:
+    """A 403 or 409 on a job call after a successful lease means the job is no longer ours: its workflow
+    stopped waiting (a stale run, expired diagnostics) and failed it, or another runner re-leased it after the
+    lease expired. The runner drops the job and keeps going; any other HTTP error stops it."""
+    return err.status in (403, 409) and err.path.startswith(JOB_PATHS)
+
 
 def run_once(
     client: WorkerClient, *, target: str, kinds: list[str], runner_id: str | None = None
@@ -214,12 +224,21 @@ def run_once(
     try:
         outcome = HANDLERS[job.kind](client, job)
         status = "completed"
-    except WorkerHTTPError:
-        raise
+    except WorkerHTTPError as err:
+        if not lease_lost(err):
+            raise
+        log.warning("job %s dropped, lease no longer held: %s", job.job_id, err)
+        outcome, status = {"error": f"lease_lost_{err.status}"}, "lease_lost"
     except Exception as err:  # noqa: BLE001 - report the failure to the workflow, then continue
         log.exception("job %s failed", job.job_id)
-        client.complete(job, {"status": "failed", "error": type(err).__name__})
         outcome, status = {"error": type(err).__name__}, "failed"
+        try:
+            client.complete(job, {"status": "failed", "error": type(err).__name__})
+        except WorkerHTTPError as http_err:
+            if not lease_lost(http_err):
+                raise
+            log.warning("job %s dropped, lease no longer held: %s", job.job_id, http_err)
+            status = "lease_lost"
     return {
         "jobId": job.job_id,
         "runId": job.run_id,

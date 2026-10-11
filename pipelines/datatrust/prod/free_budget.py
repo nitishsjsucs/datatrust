@@ -192,6 +192,9 @@ INVESTIGATION_STEPS = (
     "summarize-finalize",
     "persist-incident",
 )
+# Steps that run only on a worse path of a failing run: a repair draft, and failing the diagnostics job when
+# its wait times out. Both count in the worst case.
+INVESTIGATION_EXTRA_STEPS = ("summarize-repair", "expire-diagnostics")
 
 
 # ------------------------------------------------------------------------------------------- per run
@@ -247,7 +250,12 @@ def per_run(failing: bool) -> Run:
     steps_worst = steps + retry_limit("RETRY_INGEST")
     if failing:
         steps += len(INVESTIGATION_STEPS)
-        steps_worst += len(INVESTIGATION_STEPS) + 1 + retry_limit("RETRY_LOAD") + 2 * retry_limit("RETRY_AI")
+        steps_worst += (
+            len(INVESTIGATION_STEPS)
+            + len(INVESTIGATION_EXTRA_STEPS)
+            + retry_limit("RETRY_LOAD")
+            + 2 * retry_limit("RETRY_AI")
+        )
     runner = 2 * (2 if failing else 1) + 2 + posts  # leases and completions per job, two artifacts, lineage
     runner_idle = idle_polls(MEASURED["run_seconds"])
     operator = MEASURED["run_seconds"] // SMOKE_OPERATOR_POLL_SECONDS + 1 + (1 if failing else 0)

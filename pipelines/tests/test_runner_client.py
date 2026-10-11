@@ -205,3 +205,30 @@ def test_prune_posts_the_bounded_request_and_returns_the_report():
     assert (method, path) == ("POST", "/api/admin/prune")
     assert body == {"olderThanDays": 30, "maxRuns": 5, "dryRun": True}
     assert headers["Cf-Access-Jwt-Assertion"] == "t0ken"
+
+
+def test_a_job_whose_lease_was_lost_is_dropped_and_the_runner_continues(monkeypatch):
+    from datatrust.runner import loop
+
+    def stale(client_, job):
+        raise WorkerHTTPError(403, f"/api/runner/jobs/{job.job_id}/complete", '{"error":"forbidden"}')
+
+    monkeypatch.setitem(loop.HANDLERS, "dbt_build", stale)
+    with FakeWorker([(200, {"job": JOB})]) as w:
+        report = loop.run_once(client(w.url), target="duckdb", kinds=["dbt_build"], runner_id="r1")
+    assert report is not None
+    assert (report["status"], report["error"]) == ("lease_lost", "lease_lost_403")
+
+
+def test_other_http_errors_still_stop_the_runner(monkeypatch):
+    from datatrust.runner import loop
+
+    def unauthorized(client_, job):
+        raise WorkerHTTPError(401, "/api/runner/jobs/job_1/artifacts", '{"error":"unauthorized"}')
+
+    monkeypatch.setitem(loop.HANDLERS, "dbt_build", unauthorized)
+    with FakeWorker([(200, {"job": JOB})]) as w:
+        with pytest.raises(WorkerHTTPError):
+            loop.run_once(client(w.url), target="duckdb", kinds=["dbt_build"], runner_id="r1")
+    assert not loop.lease_lost(WorkerHTTPError(403, "/api/runs", ""))
+    assert loop.lease_lost(WorkerHTTPError(409, "/api/runner/jobs/job_1/complete", ""))

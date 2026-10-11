@@ -39,9 +39,9 @@ def test_per_run_counts_come_from_the_code():
     # 1 check-results + 14 lineage bundles + 1 investigate + 3 audit messages, 3 operations each.
     assert (f.queue_messages, f.queue_ops) == (19, 57)
     assert (c.queue_messages, c.queue_ops) == (17, 51)
-    assert (f.workflow_steps_typical, f.workflow_steps_worst) == (17, 35)
-    assert set(fb.VALIDATION_STEPS_FAILING) | set(fb.INVESTIGATION_STEPS) <= fb.workflow_step_names()
-    assert "summarize-repair" in fb.workflow_step_names()
+    assert (f.workflow_steps_typical, f.workflow_steps_worst) == (17, 36)
+    steps = set(fb.VALIDATION_STEPS_FAILING) | set(fb.INVESTIGATION_STEPS) | set(fb.INVESTIGATION_EXTRA_STEPS)
+    assert steps <= fb.workflow_step_names()
 
 
 def test_consumer_settings_in_the_production_template_match_the_model():

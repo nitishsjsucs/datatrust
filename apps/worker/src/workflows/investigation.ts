@@ -28,6 +28,7 @@ import { recoveryCommands } from '../recovery';
 import type { Alert } from '../schemas';
 import {
   baselineChecksums,
+  failOpenJobs,
   getRun,
   type IncidentInsert,
   insertJob,
@@ -140,6 +141,9 @@ export class InvestigationWorkflow extends WorkflowEntrypoint<AppEnv, Investigat
       });
       diag = evt.payload;
     } catch {
+      // No diagnostics within the wait: rank without probes, and fail the job so no runner probes for a
+      // workflow that has stopped listening (on BigQuery that would spend bytes for nothing).
+      await jsonStep(step, 'expire-diagnostics', async () => ({ failed: await failOpenJobs(db, runId, event.instanceId) }));
       diag = { jobId: diagJobId, status: 'failed', error: 'timeout' };
     }
 

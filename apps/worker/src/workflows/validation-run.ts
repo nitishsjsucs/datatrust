@@ -1,7 +1,9 @@
 /**
  * ValidationRunWorkflow (SPEC 13.4): register the run, enqueue a dbt_build job for the runner, wait for the
  * runner's build-complete event, wait until Queues have ingested every check result and lineage event,
- * summarize, dispatch one investigation if anything failed, finalize.
+ * summarize, dispatch one investigation if anything failed, finalize. A run that cannot finish (no build
+ * event within the wait, a failed build, or queues that never caught up) ends 'stale' or 'error' and fails
+ * its open jobs, so no runner leases work whose result nothing would receive.
  */
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { jsonStep, RETRY_INGEST } from './steps';
@@ -11,6 +13,7 @@ import { auditEvent, auditEventId, createSink } from '../sinks/event-sink';
 import {
   countCheckResults,
   countLineageEvents,
+  failOpenJobs,
   finishRun,
   insertJob,
   listCheckResults,
@@ -95,6 +98,7 @@ export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, Validation
     } catch {
       await jsonStep(step, 'mark-stale', async () => {
         await finishRun(db, runId, 'stale');
+        await failOpenJobs(db, runId, instanceId);
         return { status: 'stale' };
       });
       return { runId, status: 'stale' as const };
@@ -103,17 +107,24 @@ export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, Validation
     if (build.status !== 'completed') {
       await jsonStep(step, 'mark-error', async () => {
         await finishRun(db, runId, 'error');
+        await failOpenJobs(db, runId, instanceId);
         return { status: 'error' };
       });
       return { runId, status: 'error' as const, jobId, reason: build.error ?? 'build failed' };
     }
 
-    await jsonStep(
-      step,
-      'await-ingested',
-      async () => awaitIngested(db, runId, build),
-      RETRY_INGEST,
-    );
+    try {
+      await jsonStep(step, 'await-ingested', async () => awaitIngested(db, runId, build), RETRY_INGEST);
+    } catch {
+      // Every retry used (about 85 minutes): a check-results or lineage message was dead-lettered. The run
+      // ends 'error' instead of staying 'running'; summarizing a partial run would misreport it.
+      await jsonStep(step, 'mark-ingest-error', async () => {
+        await finishRun(db, runId, 'error');
+        await failOpenJobs(db, runId, instanceId);
+        return { status: 'error' };
+      });
+      return { runId, status: 'error' as const, jobId, reason: 'ingest_incomplete' };
+    }
 
     const summary = await jsonStep<RunSummary>(step, 'summarize-run', async () => summarizeRun(db, runId));
 

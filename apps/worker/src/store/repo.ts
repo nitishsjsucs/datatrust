@@ -40,6 +40,12 @@ export interface JobRow {
 
 export const LEASE_TTL_MS = 15 * 60 * 1000;
 export const MAX_ATTEMPTS = 3;
+/**
+ * How long each kind's workflow waits for the job's event (ValidationRunWorkflow wait-build, 6 hours;
+ * InvestigationWorkflow wait-diagnostics, 1 hour). A job older than its wait can never be delivered: the
+ * workflow has moved on, so the job is never leased again and the lease sweep fails it.
+ */
+export const JOB_WAIT_MS: Record<JobKind, number> = { dbt_build: 6 * 60 * 60 * 1000, diagnostics: 60 * 60 * 1000 };
 
 const nowIso = () => new Date().toISOString();
 
@@ -105,7 +111,15 @@ export async function insertJob(
   return jobId;
 }
 
-/** Lease the oldest eligible job in one statement (UPDATE ... RETURNING, SPEC 13.2). */
+/** ISO cutoffs: jobs created before these are past their workflow's wait (JOB_WAIT_MS). */
+function waitCutoffs(now: number): [build: string, diagnostics: string] {
+  return [new Date(now - JOB_WAIT_MS.dbt_build).toISOString(), new Date(now - JOB_WAIT_MS.diagnostics).toISOString()];
+}
+
+/**
+ * Lease the oldest eligible job in one statement (UPDATE ... RETURNING, SPEC 13.2). A job older than its
+ * workflow's wait is never leased: nothing would receive its result.
+ */
 export async function leaseJob(
   db: D1Database,
   kinds: JobKind[],
@@ -116,6 +130,7 @@ export async function leaseJob(
   if (kinds.length === 0) return null;
   const token = randomToken();
   const placeholders = kinds.map(() => '?').join(', ');
+  const [buildCutoff, diagCutoff] = waitCutoffs(now);
   return db
     .prepare(
       `UPDATE jobs SET status = 'leased', lease_token = ?, lease_owner = ?, lease_expires_at = ?,
@@ -125,25 +140,48 @@ export async function leaseJob(
          WHERE kind IN (${placeholders}) AND attempts < ${MAX_ATTEMPTS}
            AND json_extract(payload_json, '$.target') = ?
            AND (status = 'queued' OR (status = 'leased' AND lease_expires_at < ?))
+           AND created_at > CASE kind WHEN 'dbt_build' THEN ? ELSE ? END
          ORDER BY created_at, rowid LIMIT 1
        )
        RETURNING *`,
     )
-    .bind(token, owner, now + LEASE_TTL_MS, nowIso(), ...kinds, target, now)
+    .bind(token, owner, now + LEASE_TTL_MS, nowIso(), ...kinds, target, now, buildCutoff, diagCutoff)
     .first<JobRow>();
 }
 
-/** Jobs whose last lease expired after the final attempt: mark failed and return them (SPEC 13.2 sweep). */
+/**
+ * The lease sweep (SPEC 13.2), one statement: fail jobs whose last lease expired after the final attempt, and
+ * open jobs past their workflow's wait (JOB_WAIT_MS), and return them. Their lease token is cleared, so a
+ * runner still holding one is refused from then on.
+ */
 export async function sweepExhaustedJobs(db: D1Database, now = Date.now()): Promise<JobRow[]> {
+  const [buildCutoff, diagCutoff] = waitCutoffs(now);
   const { results } = await db
     .prepare(
-      `UPDATE jobs SET status = 'failed', updated_at = ?
-       WHERE status = 'leased' AND attempts >= ${MAX_ATTEMPTS} AND lease_expires_at < ?
+      `UPDATE jobs SET status = 'failed', lease_token = NULL, updated_at = ?
+       WHERE (status = 'leased' AND attempts >= ${MAX_ATTEMPTS} AND lease_expires_at < ?)
+          OR (status IN ('queued', 'leased') AND created_at <= CASE kind WHEN 'dbt_build' THEN ? ELSE ? END)
        RETURNING *`,
     )
-    .bind(nowIso(), now)
+    .bind(nowIso(), now, buildCutoff, diagCutoff)
     .all<JobRow>();
   return results;
+}
+
+/**
+ * Fail the open (queued or leased) jobs a workflow instance created, in one statement: called when the run
+ * goes stale or errors, and when an investigation stops waiting for its diagnostics, so no runner leases a
+ * job whose result nothing would receive. Returns how many jobs it failed.
+ */
+export async function failOpenJobs(db: D1Database, runId: string, workflowInstanceId: string): Promise<number> {
+  const res = await db
+    .prepare(
+      `UPDATE jobs SET status = 'failed', lease_token = NULL, updated_at = ?
+       WHERE run_id = ? AND workflow_instance_id = ? AND status IN ('queued', 'leased')`,
+    )
+    .bind(nowIso(), runId, workflowInstanceId)
+    .run();
+  return res.meta.changes ?? 0;
 }
 
 export async function getJob(db: D1Database, jobId: string): Promise<JobRow | null> {
@@ -160,10 +198,21 @@ export async function completeJob(db: D1Database, jobId: string, token: string, 
   return (res.meta.changes ?? 0) > 0;
 }
 
-export function isLeaseValid(job: JobRow | null, token: string | null, now = Date.now()): job is JobRow {
-  return (
-    !!job && !!token && job.status === 'leased' && job.lease_token === token && (job.lease_expires_at ?? 0) >= now
-  );
+/**
+ * Where a job stands for the holder of `token`: 'active' while the job is leased under that token, also past
+ * `lease_expires_at` as long as nobody re-leased it (a re-lease rotates the token, and the sweep clears it, so
+ * a stale holder is still refused); 'done' once that holder completed it, so a retried completion can be
+ * answered again; null otherwise.
+ */
+export function leaseState(job: JobRow | null, token: string | null): 'active' | 'done' | null {
+  if (!job || !token || job.lease_token !== token) return null;
+  if (job.status === 'leased') return 'active';
+  if (job.status === 'completed' || job.status === 'failed') return 'done';
+  return null;
+}
+
+export function isLeaseValid(job: JobRow | null, token: string | null): job is JobRow {
+  return leaseState(job, token) === 'active';
 }
 
 // ------------------------------------------------------------------------------------------- checks

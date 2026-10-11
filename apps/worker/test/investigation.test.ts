@@ -81,6 +81,11 @@ describe('InvestigationWorkflow', () => {
     const provenance = JSON.parse(row!.provenance_json) as { probes: { diagnostics: string } };
     expect(provenance.probes.diagnostics).toBe('timeout');
     expect((JSON.parse(row!.ranked_json) as unknown[]).length).toBeGreaterThan(0);
+    // The diagnostics job is failed, so no runner probes for a workflow that stopped waiting.
+    expect(await instance.waitForStepResult({ name: 'expire-diagnostics' })).toBe(JSON.stringify({ failed: 1 }));
+    const job = await getJob(baseEnv.DB, `job_${ids.incidentId}_diag`);
+    expect(job?.status).toBe('failed');
+    expect(job?.lease_token).toBeNull();
   });
 
   it('adds evidence-only time-travel probes against the last green run of the same target', async () => {
