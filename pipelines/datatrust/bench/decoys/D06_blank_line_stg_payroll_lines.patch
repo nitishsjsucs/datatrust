@@ -1,0 +1,6 @@
+--- a/models/staging/stg_payroll_lines.sql
++++ b/models/staging/stg_payroll_lines.sql
+@@ -8,2 +8,3 @@
+     paid_at
++
+ from {{ source('raw', 'payroll_lines') }}

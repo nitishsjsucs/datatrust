@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-Commit 8 of 19 (core) done: `feat(rca): diagnostic probes, planner and ranker`.
+Commit 9 of 19 (core) done: `feat(bench): 20 fault scenarios, decoys and offline harness`.
 
 ## Done
 
@@ -16,10 +16,11 @@ Commit 8 of 19 (core) done: `feat(rca): diagnostic probes, planner and ranker`.
 - 6. 40 checks (18 generic incl. custom `unique_combination` and `expression_is_true`, 22 singular SQL), `checks/registry.yml`, `datatrust.checks.registry` and `datatrust.checks.results` (run_results to CheckResult, contract failures classified as `schema_contract` with columns), `add_days` dialect macro, recorded contract-failure fixture (`pipelines/tests/record_fixtures.py`), `test_check_registry.py`, `test_clean_baseline.py` (CI runs it again under `TZ=America/Los_Angeles`), `test_contract_failure_classified.py`, documented-columns test. Clean build (29 models, 40 checks pass) verified by hand on seeds 1, 2, 3, 7, 42, 101-105.
 - 7. `datatrust.dbt.build.build_with_lineage` (`dbt-ol build`, file transport to `<target>/openlineage.jsonl`, `relations.json` from the manifest), `datatrust build` prints check counts; `packages/rca` types, OpenLineage zod schemas, (schema, table) resolver, `buildLineageGraph`, `upstreamClosure` (column mode with dataset fallback, dataset mode), `columnLineageCoverage`; recorded seed-101 fixtures with namespaces scrubbed; `lineage.test.ts` (incl. `/home/runner` path rewrite), `test_lineage_capture.py`. `stg_stage_events` CTE now lists columns explicitly (the OpenLineage SQL parser cannot see through `select *` in a CTE).
 - 8. Python: `warehouse/{base,readonly,duckdb_wh}.py` (sqlglot guard, read-only DuckDB connection, information-schema column lookup), `diagnostics/probes.py` + 14 Jinja templates with DuckDB/BigQuery branches, probe expression language (`tz_local_date`, `int_div`), `rca_cli.py` (calls `packages/rca/dist/cli.mjs`); probe meta added to sources and staging. TypeScript: `rca/{trace,plan,rank,baselines,weights,tune}.ts`, `evidence/sanitize.ts` (WebCrypto HMAC tokens + Worker-side re-check), `cli.ts` bundled with esbuild (`npm run build`). Tests: `trace.test.ts`, `rank.test.ts`, `baselines.test.ts`, `sanitize.test.ts`, `test_probes_render.py`, `test_readonly_guard.py`, `test_probes_clean.py` (every planned probe on clean seed 101: status ok, anomaly 0). CI python job now sets up Node and builds the RCA CLI first.
+- 9. `bench/scenarios.py` (20 scenarios, injections, severities, decoy draw with `random.Random(seed * 1000 + index)`), 7 scenario patches and 12 decoy patches, `dbt/overlay.py` (strict unified-diff applier), `bench/harness.py` (offline trials in a process pool), `bench/metrics.py` (Wilson, scenario-clustered bootstrap, ablations, baselines, candidate-set size), `bench/report.py`, `datatrust bench` and `datatrust tune` CLI, `npm run bench`, `make bench`. Tests: `test_scenarios.py`, `test_patch_combinations.py` (every drawn combination for seeds 1-3 and 101-105; all 12 decoys together build clean), `test_injection_detected_smoke.py` (S01, T14, S04 and a clean trial through dbt), `test_metrics.py`. First look with initial weights on dev seed 1 only: 20/20 detected, 0 clean false positives (not a reported result).
 
 ## Next
 
-- 9. `feat(bench): 20 fault scenarios, decoys and offline harness`.
+- 10. `docs: offline benchmark results on test seeds` (tune on dev seeds 1-3, freeze weights with ADR-0004, run seeds 101-105, commit results and the seed-101 CI gate).
 
 ## Check status (at this commit, 2026-10-10, macOS)
 
@@ -27,7 +28,7 @@ Commit 8 of 19 (core) done: `feat(rca): diagnostic probes, planner and ranker`.
 - `npm run test:rca`: 37 passed
 - `npm run test:worker`: no tests yet (`--passWithNoTests`, removed when the Worker lands in commit 11)
 - `uv run ruff check`: pass
-- `uv run pytest`: 73 passed
+- `uv run pytest`: 112 passed
 
 ## Deviations from SPEC.md
 

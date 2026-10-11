@@ -1,0 +1,12 @@
+--- a/models/marts/fct_compensation_usd.sql
++++ b/models/marts/fct_compensation_usd.sql
+@@ -6,3 +6,3 @@
+ -#}
+-with employees as (
++with employee_asof as (
+     select
+@@ -22,3 +22,3 @@
+     {{ dt_cast('c.base_salary_usd', 'money') }} as base_salary_usd
+-from employees as e
++from employee_asof as e
+ inner join {{ ref('int_compensation_usd') }} as c

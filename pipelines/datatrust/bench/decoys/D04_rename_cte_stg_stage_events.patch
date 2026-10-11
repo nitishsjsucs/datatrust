@@ -1,0 +1,11 @@
+--- a/models/staging/stg_stage_events.sql
++++ b/models/staging/stg_stage_events.sql
+@@ -21,3 +21,3 @@
+ 
+-mapped as (
++labelled as (
+     select
+@@ -70,2 +70,2 @@
+     cast({{ tz_local_hour('entered_at', 'location_tz') }} as {{ dt_type('int') }}) as event_local_hour
+-from mapped
++from labelled

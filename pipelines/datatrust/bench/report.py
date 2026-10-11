@@ -1,0 +1,190 @@
+"""Benchmark reports: results/bench-<date>-<mode>[-<tag>].json and .md (SPEC 12.3)."""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import platform
+import subprocess
+from importlib import metadata
+from pathlib import Path
+from typing import Any
+
+from datatrust import config
+
+WAREHOUSE = "DuckDB 1.5.6 via dbt-duckdb 1.11.0, local stand-in for BigQuery"
+
+
+def git_commit() -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=config.REPO_ROOT, capture_output=True, text=True, check=True
+        )
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=config.REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        return out.stdout.strip() + ("-dirty" if dirty else "")
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def versions() -> dict[str, str]:
+    out = {"python": platform.python_version()}
+    for pkg in ("duckdb", "dbt-core", "dbt-duckdb", "openlineage-dbt", "sqlglot", "pyarrow"):
+        try:
+            out[pkg] = metadata.version(pkg)
+        except metadata.PackageNotFoundError:
+            out[pkg] = "missing"
+    try:
+        out["node"] = subprocess.run(
+            ["node", "--version"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        out["node"] = "missing"
+    return out
+
+
+def slim(record: dict[str, Any]) -> dict[str, Any]:
+    """Keep what tuning, LOSO and the report need; drop dataset-mode features and probe detail."""
+    rec = dict(record)
+    feats = rec.get("features")
+    if feats:
+        rec["features"] = {"column": feats.get("column", [])}
+    rec.pop("top", None)
+    return rec
+
+
+def pct(x: float) -> str:
+    return f"{100 * x:.1f}%"
+
+
+def interval(block: dict[str, Any], key: str) -> str:
+    lo, hi = block[key]
+    return f"{pct(lo)} to {pct(hi)}"
+
+
+def markdown(report: dict[str, Any]) -> str:
+    s = report["summary"]
+    m = report["meta"]
+    rc = s["rootCause"]["overAllInjected"]
+    lines = [
+        f"# DataTrust benchmark, {m['mode']} mode, {m['date']}",
+        "",
+        f"- Command: `{m['command']}`",
+        f"- Git commit: `{m['gitCommit']}`",
+        f"- Seeds: {', '.join(str(x) for x in m['seeds'])}; scenarios: {s['trials']['scenarios']}; "
+        f"injected trials: {s['trials']['injected']}; clean trials: {s['trials']['clean']}",
+        f"- Warehouse: {m['warehouse']}",
+        f"- Weights: `{json.dumps(m['weights'])}`",
+        f"- Wall time: {m['wallSeconds']} s",
+        "",
+        "## Headline",
+        "",
+        "| Metric | Value | Wilson 95% | Scenario-clustered bootstrap 95% |",
+        "|---|---|---|---|",
+        f"| Detection recall (target 95%) | {pct(s['detectionRecall']['value'])} "
+        f"({s['detectionRecall']['k']}/{s['detectionRecall']['n']}) | "
+        f"{interval(s['detectionRecall'], 'wilson95')} | {interval(s['detectionRecall'], 'scenarioBootstrap95')} |",
+        f"| Top-3 root-cause accuracy, all injected trials (target 90%) | {pct(rc['top3'])} "
+        f"({rc['top3Interval']['k']}/{rc['top3Interval']['n']}) | {interval(rc['top3Interval'], 'wilson95')} | "
+        f"{interval(rc['top3Interval'], 'scenarioBootstrap95')} |",
+        f"| Top-1 root-cause accuracy, all injected trials | {pct(rc['top1'])} | "
+        f"{interval(rc['top1Interval'], 'wilson95')} | {interval(rc['top1Interval'], 'scenarioBootstrap95')} |",
+        "",
+        f"- Clean false positives (failing checks over the clean trials): {s['cleanFalsePositives']}",
+        f"- Over detected trials only: top-1 {pct(s['rootCause']['overDetected']['top1'])}, "
+        f"top-3 {pct(s['rootCause']['overDetected']['top3'])}",
+        f"- MRR (all injected): {rc['mrr']:.3f}; column-level top-3: {pct(s['rootCause']['columnTop3']['value'])} "
+        f"over {s['rootCause']['columnTop3']['n']} trials with a column label",
+        f"- Candidate-set size: median {s['candidateSetSize']['median']}, IQR {s['candidateSetSize']['q1']} to "
+        f"{s['candidateSetSize']['q3']}",
+        f"- Column-lineage coverage (share of model columns with a column edge): "
+        f"{pct(s['lineageCoverage']['meanShare'])}",
+        f"- Ranker top-3 gain over the best naive baseline ({s['bestBaseline']['name']}, "
+        f"{pct(s['bestBaseline']['top3'])}): {s['top3GainOverBestBaselinePp']} percentage points",
+    ]
+    if s.get("loso"):
+        lo = s["loso"]["pooled"]
+        lines += [
+            f"- Leave-one-scenario-out top-3: {pct(lo['top3'])} over {lo['n']} trials (weights re-tuned on dev "
+            "seeds without the held-out scenario). The main result holds out seeds, values and severities but "
+            "not defect types, because weights were tuned on dev seeds over the same 20 scenarios; LOSO is the "
+            "closer estimate for unseen defect types.",
+        ]
+    lines += [
+        "",
+        "## Ablations and baselines (all injected trials)",
+        "",
+        "| Ranking | Top-1 | Top-3 | MRR |",
+        "|---|---|---|---|",
+    ]
+    lines.append(f"| Full ranker | {pct(rc['top1'])} | {pct(rc['top3'])} | {rc['mrr']:.3f} |")
+    for name, v in s["ablations"].items():
+        lines.append(f"| ablation: {name} | {pct(v['top1'])} | {pct(v['top3'])} | {v['mrr']:.3f} |")
+    for name, v in s["baselines"].items():
+        if "top1" in v:
+            lines.append(f"| baseline: {name} | {pct(v['top1'])} | {pct(v['top3'])} | {v['mrr']:.3f} |")
+        else:
+            lines.append(f"| baseline: {name} (expected) | n/a | {pct(v['top3'])} | n/a |")
+    lines += ["", "## Per kind", "", "| Kind | Trials | Detection | Top-1 | Top-3 |", "|---|---|---|---|---|"]
+    for kind, v in s["perKind"].items():
+        lines.append(f"| {kind} | {v['n']} | {pct(v['detection'])} | {pct(v['top1'])} | {pct(v['top3'])} |")
+    lines += [
+        "",
+        "## Per scenario",
+        "",
+        "| Scenario | Kind | Trials | Detected | Top-1 | Top-3 | Ground-truth rank per trial |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for sid, v in s["perScenario"].items():
+        ranks = ", ".join("miss" if r is None else str(r) for r in v["ranks"])
+        lines.append(
+            f"| {sid} {report['scenarioTitles'].get(sid, '')} | {v['kind']} | {v['n']} | {v['detected']} | "
+            f"{v['top1']} | {v['top3']} | {ranks} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_report(
+    records: list[dict[str, Any]],
+    summary: dict[str, Any],
+    *,
+    out_dir: Path,
+    mode: str,
+    seeds: list[int],
+    command: str,
+    wall_seconds: float,
+    weights: dict[str, float],
+    tag: str | None = None,
+    scenario_titles: dict[str, str] | None = None,
+    date: str | None = None,
+) -> tuple[Path, Path]:
+    date = date or dt.date.today().isoformat()
+    name = f"bench-{date}-{mode}" + (f"-{tag}" if tag else "")
+    report = {
+        "meta": {
+            "mode": mode,
+            "date": date,
+            "command": command,
+            "gitCommit": git_commit(),
+            "seeds": seeds,
+            "wallSeconds": round(wall_seconds, 1),
+            "warehouse": WAREHOUSE,
+            "versions": versions(),
+            "weights": weights,
+        },
+        "summary": summary,
+        "scenarioTitles": scenario_titles or {},
+        "records": [slim(r) for r in records],
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    jpath = out_dir / f"{name}.json"
+    jpath.write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
+    mpath = out_dir / f"{name}.md"
+    mpath.write_text(markdown(report))
+    return jpath, mpath

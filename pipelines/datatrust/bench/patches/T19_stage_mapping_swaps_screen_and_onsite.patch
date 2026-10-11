@@ -1,0 +1,9 @@
+--- a/models/staging/stg_stage_events.sql
++++ b/models/staging/stg_stage_events.sql
+@@ -28,4 +28,4 @@
+             when 'Applied' then 'applied'
+-            when 'Phone Screen' then 'screen'
+-            when 'Onsite Interview' then 'onsite'
++            when 'Phone Screen' then 'onsite'
++            when 'Onsite Interview' then 'screen'
+             when 'Offer Extended' then 'offer'

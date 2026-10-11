@@ -1,0 +1,12 @@
+--- a/models/marts/fct_payroll_reconciliation.sql
++++ b/models/marts/fct_payroll_reconciliation.sql
+@@ -7,3 +7,3 @@
+ -#}
+-with actual as (
++with actual_pay as (
+     select
+@@ -47,3 +47,3 @@
+ from expected as x
+-left join actual as a
++left join actual_pay as a
+     on a.employee_id = x.employee_id

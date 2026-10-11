@@ -1,0 +1,7 @@
+--- a/models/staging/stg_fx_rates.sql
++++ b/models/staging/stg_fx_rates.sql
+@@ -3,3 +3,3 @@
+     rate_date,
+-    {{ dt_cast('rate_to_usd', 'rate') }} as rate_to_usd
++    {{ dt_cast('rate_to_usd', 'rate') }} as rate_to_usd  -- USD per unit of currency
+ from {{ source('raw', 'fx_rates') }}

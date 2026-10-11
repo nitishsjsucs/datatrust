@@ -1,0 +1,7 @@
+--- a/models/metrics/metric_headcount_monthly.sql
++++ b/models/metrics/metric_headcount_monthly.sql
+@@ -4,3 +4,3 @@
+     month_start,
+-    count(*) as headcount
++    count(1) as headcount
+ from {{ ref('int_employee_month') }}

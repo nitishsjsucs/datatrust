@@ -1,0 +1,7 @@
+--- a/models/staging/stg_stage_events.sql
++++ b/models/staging/stg_stage_events.sql
+@@ -68,3 +68,3 @@
+     cast(location_tz as {{ dt_type('string') }}) as location_tz,
+-    {{ tz_local_date('entered_at', 'location_tz') }} as event_local_date,
++    cast(entered_at as date) as event_local_date,
+     cast({{ tz_local_hour('entered_at', 'location_tz') }} as {{ dt_type('int') }}) as event_local_hour

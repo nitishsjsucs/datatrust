@@ -1,0 +1,5 @@
+--- a/models/staging/stg_hires.sql
++++ b/models/staging/stg_hires.sql
+@@ -1 +1,2 @@
++-- HRIS hire records: one row per hire.
+ select

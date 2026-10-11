@@ -1,0 +1,8 @@
+--- a/models/staging/stg_job_assignments.sql
++++ b/models/staging/stg_job_assignments.sql
+@@ -5,4 +5,4 @@
+     cast(location_id as {{ dt_type('int') }}) as location_id,
+-    cast(job_title as {{ dt_type('string') }}) as job_title,
+     cast(job_level as {{ dt_type('int') }}) as job_level,
++    cast(job_title as {{ dt_type('string') }}) as job_title,
+     valid_from,

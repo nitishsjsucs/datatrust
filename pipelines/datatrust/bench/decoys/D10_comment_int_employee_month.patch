@@ -1,0 +1,7 @@
+--- a/models/intermediate/int_employee_month.sql
++++ b/models/intermediate/int_employee_month.sql
+@@ -7,3 +7,3 @@
+     from {{ date_spine("date '" ~ var('calendar_start') ~ "'", "date '" ~ var('calendar_end') ~ "'") }} as spine
+-    where extract(day from d) = 1
++    where extract(day from d) = 1  -- first of each month
+ ),

@@ -18,7 +18,8 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test:rca && npm run test:worker && uv run pytest",
     "test:rca": "npm run test -w @datatrust/rca",
-    "test:worker": "npm run test -w @datatrust/worker"
+    "test:worker": "npm run test -w @datatrust/worker",
+    "bench": "uv run datatrust bench --mode offline --seeds 101-105"
   },
   "devDependencies": {
     "typescript": "5.9.3",

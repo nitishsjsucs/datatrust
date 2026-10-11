@@ -1,0 +1,5 @@
+--- a/models/intermediate/int_compensation_usd.sql
++++ b/models/intermediate/int_compensation_usd.sql
+@@ -34,2 +34 @@
+     on f.currency = c.currency
+-    and f.rate_date = c.fx_date

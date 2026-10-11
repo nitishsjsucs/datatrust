@@ -1,0 +1,6 @@
+--- a/models/marts/fct_hires.sql
++++ b/models/marts/fct_hires.sql
+@@ -4,2 +4,3 @@
+ select
++    -- keys
+     h.hire_id,

@@ -18,7 +18,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | dbt models, 22 enforced contracts, 40 checks | implemented: 29 models, 22 enforced contracts and 40 checks build and pass on clean seeds on DuckDB (stand-in), tested locally; CI configured to run them under `TZ=UTC` and `TZ=America/Los_Angeles` |
 | OpenLineage capture and column-level lineage graph | implemented: `dbt-ol build` (openlineage-dbt 1.53.0, file transport) on DuckDB (stand-in), TypeScript graph and upstream closure; tested locally |
 | Diagnostic probes, root-cause ranker, baselines | implemented: 14 read-only probe templates (DuckDB executed, BigQuery rendered only), TypeScript trace, planner, ranker, ablations, naive baselines and HMAC sanitizer; tested locally |
-| Fault-injection benchmark (20 scenarios) | planned |
+| Fault-injection benchmark (20 scenarios) | implemented: 13 source and 7 transformation scenarios, 12 decoy patches, offline harness on DuckDB (stand-in); results pending |
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | planned |
 | Access JWT verification | planned |
 | Workers AI summaries, AI Gateway | planned |
@@ -67,6 +67,12 @@ When checks fail, the TypeScript RCA core (`packages/rca`, the same code in the 
 4. **Rank.** `score = 0.40 coverage + 0.35 own_anomaly + 0.15 changed - 0.10 unexplained_pass` (initial weights; ADR-0004 freezes the tuned ones). `own_anomaly` subtracts the same probe's anomaly on the lineage-mapped parent columns, so the first anomalous node along the column path wins; row-multiplicity anomalies are discounted against any dataset parent.
 
 Ablations (`coverage_only`, `dataset_lineage_only`, `no_probes`, `no_change_signal`) and naive baselines (`change_only`, `nearest_upstream_source`, `random_in_closure`) are computed from the same probe results.
+
+## Fault-injection benchmark
+
+20 scenarios (`pipelines/datatrust/bench/scenarios.py`): 13 source-data defects injected into the generated tables before loading, and 7 transformation bugs applied as patches to a temporary copy of the dbt project. The named resume defects are duplicate hires (S01), join fan-out (T14, T15), stale exchange rates (S03) and timezone mismatches (S04, T16). Every trial also applies 0 to 4 decoy patches (12 benign refactors across staging, intermediate, marts and metrics, half the time including one on the failing lineage path), so "the model that changed" is often innocent. Severities are drawn per seed and include low ones on purpose.
+
+Protocol: weights are tuned only on dev seeds 1-3 and frozen (ADR-0004) before the test seeds 101-105 run (100 injected trials plus 5 clean trials). Detection recall and top-3 root-cause accuracy are reported with Wilson intervals and scenario-clustered bootstrap intervals, next to ablations, naive baselines and a leave-one-scenario-out figure.
 
 ## Architecture
 
@@ -169,6 +175,13 @@ Generate, load and build one seed locally (DuckDB is the local stand-in for BigQ
 uv run datatrust synth --seed 101   # .data/raw/101/*.parquet + manifest.json
 uv run datatrust load --seed 101    # raw.* tables in .data/warehouse.duckdb (session pinned to UTC)
 uv run datatrust build              # dbt-ol build: 29 models, 22 contracts, 40 checks, OpenLineage events in dbt/target/
+```
+
+Run the offline fault-injection benchmark (DuckDB stand-in; about 30 seconds per seed with 6 workers on a laptop):
+
+```sh
+npm run build -w @datatrust/rca                          # bundle the TypeScript RCA CLI the runner calls
+uv run datatrust bench --seeds 1 --workers 6 --out /tmp/dt # 20 injected trials + 1 clean trial
 ```
 
 More commands are added here as the components land.

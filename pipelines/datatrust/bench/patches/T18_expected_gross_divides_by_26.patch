@@ -1,0 +1,7 @@
+--- a/models/marts/fct_payroll_reconciliation.sql
++++ b/models/marts/fct_payroll_reconciliation.sql
+@@ -24,3 +24,3 @@
+         base_salary_local_minor,
+-        {{ int_div('base_salary_local_minor + 6', 12) }} as expected_gross_local_minor
++        {{ int_div('base_salary_local_minor + 13', 26) }} as expected_gross_local_minor
+     from {{ ref('int_employee_month') }}

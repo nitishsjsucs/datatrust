@@ -1,0 +1,7 @@
+--- a/models/staging/stg_applications.sql
++++ b/models/staging/stg_applications.sql
+@@ -5,3 +5,3 @@
+     cast(source_channel as {{ dt_type('string') }}) as source_channel,
+-    applied_at
++    applied_at  -- careers site submission time
+ from {{ source('raw', 'applications') }}

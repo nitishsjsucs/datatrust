@@ -1,0 +1,6 @@
+--- a/models/intermediate/int_employee_month.sql
++++ b/models/intermediate/int_employee_month.sql
+@@ -44,2 +44,2 @@
+     and c.valid_from <= em.month_start
+-    and (c.valid_to is null or em.month_start < c.valid_to)
++    and (c.valid_to is null or em.month_start <= c.valid_to)

@@ -1,4 +1,4 @@
-.PHONY: setup test typecheck
+.PHONY: setup test typecheck bench
 
 setup:
 	npm ci
@@ -9,3 +9,7 @@ typecheck:
 
 test:
 	npm test
+
+bench:
+	npm run build -w @datatrust/rca
+	uv run datatrust bench --mode offline --seeds 101-105

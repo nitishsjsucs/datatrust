@@ -1,0 +1,12 @@
+--- a/models/intermediate/int_compensation_usd.sql
++++ b/models/intermediate/int_compensation_usd.sql
+@@ -4,3 +4,3 @@
+ -#}
+-with compensation as (
++with comp_intervals as (
+     select
+@@ -31,3 +31,3 @@
+     {{ dt_cast('c.base_salary_local * f.rate_to_usd', 'money') }} as base_salary_usd
+-from compensation as c
++from comp_intervals as c
+ left join {{ ref('int_fx_daily') }} as f

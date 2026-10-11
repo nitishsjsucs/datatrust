@@ -1,0 +1,10 @@
+--- a/models/marts/dim_employee.sql
++++ b/models/marts/dim_employee.sql
+@@ -22,3 +22,6 @@
+ from {{ ref('stg_employees') }} as e
+-left join {{ ref('int_assignment_current') }} as ac
++left join (
++    select employee_id, valid_from as as_of_date, department_id, location_id, job_title, job_level
++    from {{ ref('stg_job_assignments') }}
++) as ac
+     on ac.employee_id = e.employee_id

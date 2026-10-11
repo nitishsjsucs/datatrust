@@ -1,0 +1,6 @@
+--- a/models/metrics/metric_headcount_monthly.sql
++++ b/models/metrics/metric_headcount_monthly.sql
+@@ -7,3 +7,2 @@
+ where hire_date <= month_start
+-    and (termination_date is null or termination_date >= month_start)
+ group by department_id, month_start
