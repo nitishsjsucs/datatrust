@@ -233,7 +233,10 @@ def local_checks() -> list[Check]:
 ENV_KEYS: tuple[tuple[str, str], ...] = (
     ("CLOUDFLARE_ACCOUNT_ID", "shown by `npx wrangler whoami` (README Cloudflare step 8)"),
     ("DATATRUST_OPERATOR_EMAIL", "the email you log in to Access with (README Cloudflare step 8)"),
-    ("BASIN_CATALOG_TOKEN", "R2 API token, Admin Read & Write (README Cloudflare step 9)"),
+    (
+        "BASIN_CATALOG_TOKEN",
+        "token datatrust-lake-committer scoped to the datatrust-lake bucket (docs/basin-catalog-token.md)",
+    ),
     ("ACCESS_TEAM_DOMAIN", "https://<team>.cloudflareaccess.com (README Cloudflare step 8)"),
     ("ACCESS_AUD", "Application Audience tag of the datatrust Access app (README Cloudflare step 13)"),
     ("CF_ACCESS_CLIENT_ID", "service token datatrust-runner (README Cloudflare step 14)"),
@@ -570,7 +573,7 @@ def cloudflare_checks() -> list[Check]:
                 "missing",
                 "Basin Catalog REST (pyiceberg)",
                 str(err)[:200],
-                "check BASIN_CATALOG_URI, BASIN_WAREHOUSE and BASIN_CATALOG_TOKEN (Admin Read & Write)",
+                "check BASIN_CATALOG_URI, BASIN_WAREHOUSE and BASIN_CATALOG_TOKEN (docs/basin-catalog-token.md)",
             )
         )
     return out

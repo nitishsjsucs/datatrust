@@ -74,7 +74,7 @@ Repository variables: `DATATRUST_API_URL` (the Worker URL), `DATATRUST_GCP_PROJE
 (`projects/<number>/locations/global/workloadIdentityPools/datatrust-github/providers/datatrust`),
 `DATATRUST_DBT_VARS_YAML` (the contents of `.prod/dbt_vars.yml`, policy-tag resource names, not secret), and
 optionally `DATATRUST_SCHEDULED_RUNNER=true`. Optionally also `BASIN_CATALOG_URI` and `BASIN_WAREHOUSE` (from
-`.env.prod`) with the secret `BASIN_CATALOG_TOKEN`, so the runner commits the audit lake to Basin Catalog every
+`.env.prod`) with the secret `BASIN_CATALOG_TOKEN` (the bucket-scoped token of `docs/basin-catalog-token.md`), so the runner commits the audit lake to Basin Catalog every
 15 minutes and before it exits.
 
 Repository secrets: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` (service token `datatrust-runner`),

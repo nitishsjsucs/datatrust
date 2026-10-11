@@ -185,7 +185,7 @@ PYCAT
   # Workers Paid only, and production runs on the Workers Free plan (SPEC 28, ADR-0008). The audit lake needs
   # only the queue of step 4 and the catalog of step 3; `datatrust lake commit --catalog basin` writes it.
   if [[ -z "${BASIN_CATALOG_TOKEN:-}" ]]; then
-    note "BASIN_CATALOG_TOKEN is not in .env.prod yet: the lake commit and the smoke need it (R2, Manage API tokens, Account API token, Admin Read & Write; README Cloudflare step 9)"
+    note "BASIN_CATALOG_TOKEN is not in .env.prod yet: the lake commit and the smoke need it (token datatrust-lake-committer scoped to the datatrust-lake bucket: docs/basin-catalog-token.md, README Cloudflare step 9)"
   fi
 
   say "8. AI Gateway datatrust"

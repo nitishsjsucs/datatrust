@@ -363,3 +363,17 @@ def test_doctor_reports_each_env_prod_value_once(monkeypatch, tmp_path):
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "0" * 32)
     wrong = {c.name: c for c in doctor.cloudflare_checks()}
     assert wrong["CLOUDFLARE_ACCOUNT_ID is an account of this login"].status == "missing"
+
+
+def test_basin_catalog_token_is_scoped_to_the_lake_bucket():
+    """The account is shared by four repos: the committer's token reaches datatrust-lake only, never through
+    the dashboard's account-wide Admin Read & Write token (2026-10-11 review)."""
+    root = config.REPO_ROOT
+    for rel in ("scripts/prod-wizard.sh", "scripts/setup-prod.sh", "pipelines/datatrust/doctor.py"):
+        assert "Admin Read & Write" not in (root / rel).read_text(), rel
+    readme = (root / "README.md").read_text().splitlines()
+    readme_step = next(line for line in readme if line.startswith("| 9 |"))
+    assert "datatrust-lake" in readme_step and "docs/basin-catalog-token.md" in readme_step
+    doc = (root / "docs" / "basin-catalog-token.md").read_text()
+    assert "_default_datatrust-lake" in doc
+    assert "d229766a2f7f4d299f20eaa8c9b1fde9" in doc and "2efd5506f9c8494dacb1fa10a3e7d5b6" in doc
