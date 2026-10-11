@@ -224,7 +224,7 @@ curl -s -H "Cf-Access-Jwt-Assertion: $OP" http://127.0.0.1:8792/api/incidents/<i
 npm run dev:down                                     # stops everything dev:up started and confirms the ports are free
 ```
 
-The same in two commands: `uv run datatrust runner --watch --idle-exit 60` in one terminal, and `uv run datatrust run --scenario S01 --wait` in another (it posts the run as operator with a local dev token and prints the run status, failing checks, top three candidates and summary title once the incident exists).
+While idle, `--watch` polls 2 s after a job and doubles the wait up to 30 s (`--interval`, `--max-interval`), so an idle runner sends at most 2,880 requests a day. The same in two commands: `uv run datatrust runner --watch --idle-exit 60` in one terminal, and `uv run datatrust run --scenario S01 --wait` in another (it posts the run as operator with a local dev token and prints the run status, failing checks, top three candidates and summary title once the incident exists).
 
 `npm run bench:e2e` runs the seed-101 benchmark through all of the above (20 scenarios, each through Queues and both Workflows) and checks that the incident top-3 lists equal the offline mode's; `npm run bench:e2e -- --pytest` is the CI subset (S01, T14, S04). Both stop everything they started.
 

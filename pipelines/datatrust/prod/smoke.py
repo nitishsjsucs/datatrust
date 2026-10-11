@@ -134,16 +134,19 @@ class RunnerThread(threading.Thread):
         self.jobs: list[dict[str, Any]] = []
 
     def run(self) -> None:
-        from datatrust.runner.loop import run_once
+        from datatrust.runner.loop import IDLE_INTERVAL_MAX, IDLE_INTERVAL_START, run_once
 
         try:
+            wait = IDLE_INTERVAL_START  # the runner's idle backoff, 2 s doubling to 30 s (SPEC 28.5.6)
             while not self.stop.is_set():
                 report = run_once(
                     self.client, target="bigquery", kinds=["dbt_build", "diagnostics"], runner_id="prod-smoke"
                 )
                 if report is None:
-                    self.stop.wait(3)
+                    self.stop.wait(wait)
+                    wait = min(wait * 2, IDLE_INTERVAL_MAX)
                 else:
+                    wait = IDLE_INTERVAL_START
                     self.jobs.append(report)
         except BaseException as err:  # noqa: BLE001 - surfaced by wait_for_run
             self.error = err

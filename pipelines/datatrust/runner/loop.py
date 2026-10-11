@@ -230,32 +230,45 @@ def run_once(
     }
 
 
+# Idle polling backs off: 2 s after a job, doubling to a 30 s cap (SPEC 28.5.6). An idle runner then costs
+# at most 86,400 / 30 = 2,880 requests per day, inside DataTrust's share of the Free plan's 100,000.
+IDLE_INTERVAL_START = 2.0
+IDLE_INTERVAL_MAX = 30.0
+
+
 def watch(
     client: WorkerClient,
     *,
     target: str,
     kinds: list[str],
-    interval: float = 2.0,
+    interval: float = IDLE_INTERVAL_START,
+    max_interval: float = IDLE_INTERVAL_MAX,
     max_jobs: int | None = None,
     idle_exit: float | None = None,
     periodic: Any = None,
+    sleep: Any = time.sleep,
+    clock: Any = time.monotonic,
 ) -> list[dict]:
-    """Keep leasing until stopped, `max_jobs` jobs ran, or nothing arrived for `idle_exit` seconds.
+    """Keep leasing until stopped, `max_jobs` jobs ran, or nothing arrived for `idle_exit` seconds. While idle
+    the wait doubles from `interval` up to `max_interval`; a job resets it.
     `periodic` (a lake.commit.PeriodicCommit with `--env prod`) gets `tick()` after every poll and `final()`
     on exit, so the Basin Catalog table is committed every 15 minutes and before the runner stops."""
     done: list[dict] = []
-    idle_since = time.monotonic()
+    idle_since = clock()
+    wait = interval
     try:
         while max_jobs is None or len(done) < max_jobs:
             report = run_once(client, target=target, kinds=kinds)
             if periodic is not None:
                 periodic.tick()
             if report is None:
-                if idle_exit is not None and time.monotonic() - idle_since > idle_exit:
+                if idle_exit is not None and clock() - idle_since > idle_exit:
                     break
-                time.sleep(interval)
+                sleep(wait)
+                wait = min(wait * 2, max_interval)
                 continue
-            idle_since = time.monotonic()
+            idle_since = clock()
+            wait = interval
             done.append(report)
             print(json.dumps(report), flush=True)
     finally:

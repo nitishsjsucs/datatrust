@@ -6,7 +6,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` and 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B` done; 22 `ci: nightly full five-seed benchmark` and 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation` done. A gap-filling commit added the SPEC 5 API schemas and the restricted-view test.
 
-Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F7.
+Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudflare Workers Free plan. Builder 3 works through the SPEC 23.1 plan F1 to F13 (the interrupted session's uncommitted changes were resolved first, commit 26d8c94). Done so far: F1 to F8.
 
 ## Done
 
@@ -69,9 +69,11 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 
 - Builder 3, F7 `feat(llm): daily Workers AI neuron ledger and one AI call per workflow step`: migration `0002_ai_budget.sql` (`ai_budget(day, reserved, used, calls)`, one row per UTC day); `src/llm/budget.ts` (pinned rate for `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, 26,668 and 204,805 neurons per M input and output tokens; worst-case reservation `ceil(ceil((prompt chars + 971 schema chars) / 3) x input rate + 700 x output rate)`; one conditional upsert that reserves only while `reserved + cost <= AI_DAILY_NEURON_CAP`; settlement from the response's token usage, or the reservation stands); the grounded loop in `@datatrust/rca` split into `attemptDraft`, `needsRepair` and `finalizeOutcome` (`summarizeGrounded` composes them unchanged for the eval); InvestigationWorkflow steps `summarize-draft` and `summarize-repair` (one AI call each, `retries: {limit: 1}`, provider errors returned rather than thrown) and `summarize-finalize` (no AI call); a refused reservation makes no call and gives the template with reason `daily_neuron_cap`; incidents record `provenance.summarizer.neurons`; `AI_DAILY_NEURON_CAP = 2000` in all three configs; the production guard also requires a pinned rate for `WORKERS_AI_MODEL` and a numeric cap; `GET /api/ai/budget` (operator); `WorkerClient.ai_budget()`; the smoke checks 1,940 neurons of headroom before its fault runs (else it stops with "rerun after 00:00 UTC") and reports the neurons it reserved and used; doctor checks the rendered cap and the budget endpoint with the operator token. Tests: `budget.test.ts` (10: 187 and 201 for the SPEC 28.3 prompt sizes with the measured 971 schema characters, usage settlement 89 for 1,000 and 300 tokens, the UTC day boundary, a refused reservation makes no call, a refused repair after one call, the InvestigationWorkflow with a Workers AI stand-in where a failing `summarize-finalize` (once, and on every retry) still made exactly one AI call, the budget route for operators only, the guard), `free-plan.test.ts` (pinned rate, not a paid-billing model, cap at most 2,500), `d1-statements.test.ts` (summarize-draft with the ledger: 2), `test_prod_offline.py` (headroom), `test_ops_scripts.py` (doctor budget check). `npm run bench:e2e -- --pytest` 2 passed (migration 0002 applied locally by dev-up), ports free.
 
+- Builder 3, F8 `fix(runner): idle lease backoff up to 30 seconds`: `watch()` waits 2 s after a job and doubles while idle up to 30 s (`IDLE_INTERVAL_START`, `IDLE_INTERVAL_MAX`; CLI `--interval` and `--max-interval`), reset by a job, so an idle runner sends at most 2,880 lease requests a day instead of 43,200; the smoke's background runner thread uses the same backoff instead of a fixed 3 s; `sleep` and `clock` are injectable. Tests in `test_runner_client.py`: waits 2, 4, 8, 16, 30, 30 then 2, 4 after a job; `--idle-exit` measured on the same clock. The prod-runner workflow is unchanged (it uses the defaults).
+
 ## Next
 
-- SPEC 23.1, Free plan migration, in order (F1 to F7 done): F8 runner idle backoff; F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
+- SPEC 23.1, Free plan migration, in order (F1 to F8 done): F9 incident-exists guard; F10 shared Google Cloud project hygiene; F11 Free plan budget model and CPU gate; F12 README on the Free plan; F13 (stretch) resumable Workers AI eval.
 - Production execution, by Nitish's operator after the builder gate (a rerun of `setup:prod -- --cloudflare-only` redeploys later Worker changes and applies new migrations): SPEC 21.1 and 21.2. No builder session creates, changes or deploys a cloud resource. Only `npm run prod:smoke` may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e, plus the nightly benchmark); rehearsed in a Linux container, not yet observed on ubuntu-latest.
 
@@ -82,7 +84,7 @@ Spec 1.2 (commit e787baf, SPEC 28 and ADR-0008) moves production onto the Cloudf
 - `npm run test:worker`: 86 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 187 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F7)
+- `uv run pytest`: 189 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at F7)
 - `npx wrangler types --strict-vars=false --check` (apps/worker): up to date; `wrangler deploy --dry-run` passes for the local config and the placeholder-rendered production template (no `pipelines` binding)
 
 ## Deviations from SPEC.md

@@ -161,3 +161,37 @@ def _job():
     from datatrust.runner.client import LeasedJob
 
     return LeasedJob("job_1", "run_1", "dbt_build", {}, "abc", 1)
+
+
+def test_idle_polling_backs_off_to_30_seconds_and_resets_after_a_job(monkeypatch):
+    """SPEC 28.5.6: 2, 4, 8, 16, 30, 30 s while idle, back to 2 s after a job; at most 2,880 polls a day."""
+    from datatrust.runner import loop
+
+    script = [None] * 6 + [{"job": 1}] + [None] * 2 + [{"job": 2}]
+    monkeypatch.setattr(loop, "run_once", lambda client, target, kinds: script.pop(0))
+    sleeps: list[float] = []
+    done = loop.watch(None, target="duckdb", kinds=["dbt_build"], max_jobs=2, sleep=sleeps.append)  # type: ignore[arg-type]
+    assert done == [{"job": 1}, {"job": 2}]
+    assert sleeps == [2, 4, 8, 16, 30, 30, 2, 4]
+    assert 86_400 / loop.IDLE_INTERVAL_MAX == 2_880
+
+
+def test_idle_exit_uses_the_backoff_clock(monkeypatch):
+    from datatrust.runner import loop
+
+    now = [0.0]
+
+    def sleep(s: float) -> None:
+        now[0] += s
+
+    monkeypatch.setattr(loop, "run_once", lambda client, target, kinds: None)
+    sleeps: list[float] = []
+    loop.watch(
+        None,  # type: ignore[arg-type]
+        target="duckdb",
+        kinds=["dbt_build"],
+        idle_exit=59,
+        sleep=lambda s: (sleeps.append(s), sleep(s)),
+        clock=lambda: now[0],
+    )
+    assert sleeps == [2, 4, 8, 16, 30] and now[0] == 60

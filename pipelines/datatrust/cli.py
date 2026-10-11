@@ -258,6 +258,8 @@ def _cmd_runner(args: argparse.Namespace) -> int:
         client,
         target=args.target,
         kinds=kinds,
+        interval=args.interval,
+        max_interval=args.max_interval,
         max_jobs=args.max_jobs,
         idle_exit=args.idle_exit,
         periodic=periodic,
@@ -490,6 +492,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--kinds", default="dbt_build,diagnostics")
     p.add_argument("--max-jobs", type=int)
     p.add_argument("--idle-exit", type=float, help="stop after this many seconds without a job")
+    p.add_argument("--interval", type=float, default=2.0, help="seconds to the first poll after a job")
+    p.add_argument(
+        "--max-interval",
+        type=float,
+        default=30.0,
+        help="idle polls double up to this many seconds (default 30: at most 2,880 requests per idle day)",
+    )
     p.add_argument(
         "--lake-commit-every",
         type=float,
