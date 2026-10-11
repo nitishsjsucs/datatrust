@@ -33,6 +33,7 @@ for port in 8792 9242; do
   if port_busy "$port"; then echo "port $port is already in use; run \`npm run dev:down\` first" >&2; exit 1; fi
 done
 [[ -f "$ROOT/apps/worker/.dev.vars" ]] || node "$ROOT/scripts/dev-keys.mjs"
+[[ -f "$ROOT/apps/web/dist/index.html" ]] || (cd "$ROOT" && npm run -s build -w @datatrust/web >"$LOGS/web-build.log" 2>&1)
 (cd "$ROOT/apps/worker" && npx wrangler d1 migrations apply datatrust --local >"$LOGS/migrations.log" 2>&1)
 
 EXTRA_VARS=()

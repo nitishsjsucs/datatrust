@@ -17,6 +17,13 @@
     }
   ],
   "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "datatrust-artifacts" }],
+  // Read-only incident dashboard (apps/web, built with `npm run build -w @datatrust/web`). API routes run the
+  // Worker first; everything else is a static asset with SPA fallback.
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/healthz"]
+  },
   // Secrets: ACCESS_JWKS_JSON is local only (written by `npm run dev:keys` to .dev.vars). Declaring them here
   // keeps `wrangler types` independent of whatever .dev.vars holds on a given machine.
   "secrets": { "required": ["ACCESS_AUD", "ROLE_MAP_JSON", "EVIDENCE_HMAC_KEY", "ACCESS_JWKS_JSON"] },

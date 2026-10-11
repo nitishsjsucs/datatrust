@@ -4,7 +4,7 @@ Tracks the SPEC.md section 23 commit plan. Updated with every commit.
 
 ## Position
 
-All 19 core commits done (plus extras 9b and 15b): last is `docs: final benchmark results and README status`. Below the core cut line, the stretch commits 20-23 are not started.
+All 19 core commits done (plus extras 9b and 15b). Stretch: 20 `feat(web): incident dashboard` done; 21-23 not started.
 
 ## Done
 
@@ -29,6 +29,7 @@ All 19 core commits done (plus extras 9b and 15b): last is `docs: final benchmar
 - 17. `apps/worker/wrangler.prod.template.jsonc` (AI, Pipelines, `workers_dev: true`, `preview_urls: false`, no cron, production vars, `secrets.required`), `scripts/render-prod-config.mjs` (fail-closed `https://unset.cloudflareaccess.com` default; `--placeholders` for CI), CI dry-run deploy of the rendered template; Python `prod/settings.py` (.env.prod, placeholder refusal), `warehouse/bigquery_wh.py` (impersonated `datatrust-prober`, dry run then capped query, parameterized information schema), `load/bigquery_loader.py` (Parquet loads, type assertions), `prod/governance.py` (taxonomy, three policy tags, SHA256 / DATE_YEAR_MASK / ALWAYS_NULL data policies, Fine-Grained Reader and Masked Reader IAM with read-modify-write, dataset readers, `.prod/dbt_vars.yml`, analyst verification with 10 s doubling retries for 10 minutes), `prod/validate.py` (steps a-f), `prod/smoke.py`, `dbt/dialect_check.py` (shared banned-construct check), runner BigQuery build and diagnostics paths, `datatrust prod governance apply|verify|validate|smoke|reset`, `npm run prod:validate|prod:smoke`, `test_prod_offline.py` (11 tests with fakes). `datatrust prod validate` on this machine stops at step a and names the missing `DATATRUST_GCP_PROJECT`, as designed. Nothing here has run against Google Cloud or Cloudflare.
 - 18. `scripts/setup-prod.sh` (SPEC 18.1 steps P1-P3 and 1-21: idempotent existence checks with JSON parsing, `wr()` wrapper that strips env credentials, `--dry-run`, `--cloudflare-only`, `--gcp-only`, `--use-env-token`, `.prod/state.json`, catalog text parse with a paste fallback, fail-closed first deploy with `--secrets-file`, gcloud/bq steps, governance, validate, real build, verify), `scripts/doctor.sh` + `datatrust doctor` (local, `.env.prod`, Cloudflare and Google Cloud checks with `[ok]`/`[missing]`/`[warn]` and the exact fix), `npm run doctor|setup:prod|deploy:prod`, Makefile targets (setup, test, bench, bench-e2e, doctor, bootstrap, dev-up, dev-down), README production setup (SPEC 21 checklists), `test_ops_scripts.py`. On this machine: `npm run doctor` all ok; `npm run doctor -- --prod` lists the 9 missing `.env.prod` values, wrangler login and the missing gcloud CLI; `setup:prod --cloudflare-only --dry-run` stops at "wrangler is not logged in".
 - 19. Final check of results: the test-seed command rerun at commit 019714f (2026-10-10, 305 s with the machine shared by other builds) reproduced all 105 per-trial rankings and the headline numbers exactly, so `results/bench-2026-10-10-offline.*` stand; the rerun's report is committed as `results/bench-2026-10-10-offline-recheck.md`. README: status line, status table (every row with its execution label), Results (offline, recheck, e2e, honest reading), documented frozen weights.
+- 20 (stretch). `apps/web` (React 19.3, Vite 8.3.4, hash routing, incident list and incident detail with summary, failing checks, ranked candidates, lineage path grouped by hop, diagnostic SQL, recovery, provenance with stand-in labels, light and dark themes, local dev-token box), served as Worker static assets (`assets` in `wrangler.jsonc` and the prod template, `run_worker_first` for `/api/*` and `/healthz`), npm workspace, `test/format.test.ts`, `dev-up.sh` builds it if missing, CI e2e job builds all workspaces. Verified by hand on 2026-10-10 in the browser pane against `wrangler dev`: list and T14 incident rendered, no horizontal scroll at 375 px; stack stopped, ports free.
 
 ## Next
 
@@ -36,13 +37,14 @@ Core v1 is complete locally. What remains:
 
 - Production execution, which needs Nitish's accounts (README, production setup): `npm run setup:prod -- --cloudflare-only` (twice, around the Access steps), `npm run setup:prod -- --gcp-only`, `npm run doctor -- --prod`, `npm run prod:smoke`. Only the smoke may move README status labels to "executed in production".
 - First CI run on GitHub after the owner pushes (jobs: node, python, bench-offline, e2e); not yet observed.
-- Stretch (SPEC 23, below the cut line): 20 `feat(web): incident dashboard`, 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B`, 22 `ci: nightly full five-seed benchmark`, 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation`.
+- Stretch (SPEC 23, below the cut line): 21 `feat(eval): summary faithfulness eval with local Qwen3-1.7B`, 22 `ci: nightly full five-seed benchmark`, 23 `feat(prod): scheduled GitHub Actions runner with Workload Identity Federation`.
 
 ## Check status (at the final commit, 2026-10-10, macOS; CI not yet run because nothing is pushed)
 
 - `npm run typecheck`: pass
 - `npm run test:rca`: 49 passed
 - `npm run test:worker`: 57 passed
+- `npm run test -w @datatrust/web`: 4 passed
 - `uv run ruff check`: pass
 - `uv run pytest`: 145 passed (default, `-m 'not bench'`); `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed
 

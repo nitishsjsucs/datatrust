@@ -102,7 +102,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run build -w @datatrust/rca
+      - run: npm run build
       - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true

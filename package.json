@@ -10,13 +10,14 @@
   },
   "workspaces": [
     "packages/rca",
-    "apps/worker"
+    "apps/worker",
+    "apps/web"
   ],
   "scripts": {
     "setup": "npm ci && uv sync --locked",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test:rca && npm run test:worker && uv run pytest",
+    "test": "npm run test:rca && npm run test:worker && npm run test -w @datatrust/web && uv run pytest",
     "test:rca": "npm run test -w @datatrust/rca",
     "test:worker": "npm run test -w @datatrust/worker",
     "bench": "uv run datatrust bench --mode offline --seeds 101-105 --dev-results results/bench-2026-10-10-offline-dev.json",
