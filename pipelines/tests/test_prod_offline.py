@@ -691,3 +691,18 @@ def test_wif_doc_grants_no_project_viewer_and_names_datatrust_resources():
     assert "roles/viewer" not in text
     assert "--taxonomy-admin serviceAccount:$SA" in text
     assert "workload-identity-pools create datatrust-github" in text
+
+
+def test_wif_trust_is_this_repositorys_prod_runner_on_main_only():
+    """Only prod-runner.yml on refs/heads/main of this repository (immutable numeric id) can become the runner
+    service account; a repository-name condition would admit any workflow, branch or event (2026-10-11)."""
+    text = (config.REPO_ROOT / "docs" / "prod-runner-wif.md").read_text()
+    condition = next(line for line in text.splitlines() if "--attribute-condition=" in line)
+    assert "assertion.repository_id=='$REPO_ID'" in condition
+    assert "assertion.ref=='refs/heads/main'" in condition
+    assert "assertion.workflow_ref=='$WORKFLOW_REF'" in condition
+    assert "WORKFLOW_REF=nitishsjsucs/datatrust/.github/workflows/prod-runner.yml@refs/heads/main" in text
+    assert "REPO_ID=1413751218" in text
+    assert "attribute.repository_id/$REPO_ID" in text
+    assert "attribute.repository/" not in text and "assertion.repository==" not in text
+    assert (config.REPO_ROOT / ".github" / "workflows" / "prod-runner.yml").exists()

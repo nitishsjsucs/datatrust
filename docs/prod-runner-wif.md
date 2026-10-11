@@ -11,7 +11,14 @@ The project `master-magnet-444903-u4` is shared by four repos (SPEC 28.5.10), so
 `datatrust*` and every grant is scoped to DataTrust's own datasets, taxonomy and service accounts. The runner
 gets no project-level data role: in particular not Project Viewer, which would give it READER on every
 dataset in the project through BigQuery's default dataset access. Its only project-level role is BigQuery Job
-User, which lets it run jobs and reads no data. Replace `OWNER/REPO` with `nitishsjsucs/datatrust`.
+User, which lets it run jobs and reads no data.
+
+The federation trusts one workflow only: `prod-runner.yml` on `refs/heads/main` of this repository, matched by
+the repository's numeric id (`1413751218`, from `gh api repos/nitishsjsucs/datatrust --jq .id` on 2026-10-11),
+which a renamed or re-created repository cannot reuse. A condition on the repository name alone would let any
+workflow on any branch, tag or pull-request event of this public repository that asks for `id-token: write`
+become the runner service account, which owns the four DataTrust datasets (2026-10-11 review). The claims
+`repository_id`, `ref` and `workflow_ref` are in GitHub's OIDC token reference (checked 2026-10-11).
 
 ```sh
 P=master-magnet-444903-u4
@@ -35,16 +42,24 @@ gcloud iam service-accounts add-iam-policy-binding datatrust-prober@$P.iam.gserv
 # tags; and Policy Tags Admin on the DataTrust taxonomy for datacatalog.taxonomies.get
 uv run datatrust prod governance apply --extra-reader serviceAccount:$SA --taxonomy-admin serviceAccount:$SA
 
-# Workload identity pool and GitHub OIDC provider, restricted to this repository
+# Workload identity pool and GitHub OIDC provider, restricted to prod-runner.yml on main of this repository
+# (immutable numeric repository id; GitHub's OIDC token carries repository_id, ref and workflow_ref)
+REPO_ID=1413751218
+WORKFLOW_REF=nitishsjsucs/datatrust/.github/workflows/prod-runner.yml@refs/heads/main
 gcloud iam workload-identity-pools create datatrust-github --project=$P --location=global \
   --display-name="DataTrust GitHub Actions"
 gcloud iam workload-identity-pools providers create-oidc datatrust --project=$P --location=global \
   --workload-identity-pool=datatrust-github --issuer-uri=https://token.actions.githubusercontent.com \
-  --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository \
-  --attribute-condition="assertion.repository=='OWNER/REPO'"
+  --attribute-mapping=google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.ref=assertion.ref,attribute.workflow_ref=assertion.workflow_ref \
+  --attribute-condition="assertion.repository_id=='$REPO_ID' && assertion.ref=='refs/heads/main' && assertion.workflow_ref=='$WORKFLOW_REF'"
 gcloud iam service-accounts add-iam-policy-binding $SA --project=$P --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/$NUM/locations/global/workloadIdentityPools/datatrust-github/attribute.repository/OWNER/REPO"
+  --member="principalSet://iam.googleapis.com/projects/$NUM/locations/global/workloadIdentityPools/datatrust-github/attribute.repository_id/$REPO_ID"
 ```
+
+Optional, stronger: put the job in a protected GitHub environment (for example `datatrust-production`, with
+required reviewers) by adding `environment: datatrust-production` to the job in `prod-runner.yml`, and add
+`&& assertion.environment=='datatrust-production'` to the condition above. Not done by default, because
+GitHub creates a missing environment on the first run without protection rules.
 
 UNVERIFIED (no Google Cloud account was used to write this): that a Policy Tags Admin grant on the taxonomy,
 rather than on the project, satisfies the `datacatalog.taxonomies.get` check when dbt sets policy tags. The
