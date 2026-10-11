@@ -93,6 +93,8 @@ Builder 4 (2026-10-11) continues from 98d1914: every local check passed again fi
 
 - Builder 4, five-seed recheck at the current code: `uv run datatrust bench --mode offline --seeds 101-105 --workers 6 --dev-results results/bench-2026-10-10-offline-dev.json --out .data/recheck-2026-10-11 --gate results/baseline.json` at commit e00de5c on 2026-10-11 (190.4 s): gate passed; every one of the 105 records equals `results/bench-2026-10-10-offline.json` in every field except timings, and the summary (headline, intervals, LOSO, baselines, ablations) is identical. Report committed as `results/bench-2026-10-11-offline-recheck.md`; README Results cites it.
 
+- Builder 4, e2e results at the current code: `npm run bench:e2e -- --out .data/e2e-2026-10-11` at commit 6437742 on 2026-10-11 (223.7 s of trials, 277 s in all): 20/20 detected, 20/20 top-3, 18/20 top-1, 0 clean false positives, offline parity yes; the 21 records equal `results/bench-2026-10-10-e2e.json` in status, failing checks, rankings, ground-truth ranks and summary fields, and differ only in run, job and incident ids, wall time and provenance (the 2026-10-10 file still names the removed Pipelines lake sink; the new one records the audit queue path, `summarizer.neurons` and T20's time-travel delta, 144 then 150 rows). Committed as `results/bench-2026-10-11-e2e.{json,md}`; ports 8792, 9242 and 8160 free afterwards.
+
 ## Next
 
 - SPEC 23.1: F1 to F13 done. The Workers AI summary eval (F13) is for Nitish to run after the production smoke.
@@ -108,7 +110,7 @@ Builder 4 (2026-10-11) continues from 98d1914: every local check passed again fi
 - `npm run test:worker`: 91 passed
 - `npm run test -w @datatrust/web`: 5 passed
 - `uv run ruff check`: pass
-- `uv run pytest`: 216 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at the perf follow-up); full `npm run bench:e2e` (20 scenarios) at a49d6e9: identical to the committed e2e results
+- `uv run pytest`: 216 passed, 5 deselected (default, `-m 'not bench and not e2e'`); `TZ=America/Los_Angeles uv run pytest pipelines/tests/test_clean_baseline.py`: 5 passed; `uv run pytest -m bench`: 3 passed; `npm run bench:e2e -- --pytest`: 2 passed (2026-10-11, at the perf follow-up); full `npm run bench:e2e` (20 scenarios) at 6437742: identical outcome to the 2026-10-10 run, committed as `results/bench-2026-10-11-e2e.*`
 - `npm run budget:cpu -- --gate 8`: pass when this machine is not loaded by other builds (largest median 2.4 to 3.3 ms on Apple M5, Node 25.9; 2.9 to 3.5 ms in a node:24 Linux arm64 container); under a load average of 6 to 16 every figure, the unchanged rank step included, reads 3 to 4 times higher. on GitHub's ubuntu-latest x64 runner (run 38123502863, commit 6a0bda3, Node 24.21.0) the largest median was 3.63 ms
 - GitHub Actions `ci` (ubuntu-latest): `node` job passes (every published commit); `python`, `bench-offline` and `e2e` failed to start on every published commit up to 6a0bda3 (setup-uv `@v10` does not exist), fixed in this commit, result not yet observed
 - `npm run doctor`: everything required in place; `npm run doctor -- --prod` (read-only, real logins): exits 1 with the 31 items production setup still has to create
