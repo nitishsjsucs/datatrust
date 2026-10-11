@@ -37,6 +37,43 @@ def _claims(jwt: str) -> dict[str, Any]:
     return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
 
 
+def versions() -> dict[str, str]:
+    """Package and tool versions recorded with the smoke report (SPEC 18.4 step 7)."""
+    from importlib import metadata
+
+    out: dict[str, str] = {}
+    for pkg in ("dbt-core", "dbt-bigquery", "openlineage-dbt", "google-cloud-bigquery", "pyiceberg"):
+        try:
+            out[pkg] = metadata.version(pkg)
+        except metadata.PackageNotFoundError:
+            out[pkg] = "not installed"
+    wrangler = config.REPO_ROOT / "node_modules" / "wrangler" / "package.json"
+    out["wrangler"] = json.loads(wrangler.read_text())["version"] if wrangler.exists() else "not installed"
+    return out
+
+
+def bytes_billed_since(settings: GcpSettings, start: dt.datetime, client: Any = None) -> int | str:
+    """BigQuery bytes billed in the project since `start` (every identity: Nitish, prober, analyst), from
+    INFORMATION_SCHEMA.JOBS_BY_PROJECT, which Owner can read. Reported, never asserted."""
+    try:
+        from google.cloud import bigquery
+
+        client = client or bigquery.Client(project=settings.project, location=settings.location)
+        region = f"region-{settings.location.lower()}"
+        sql = (
+            "select coalesce(sum(total_bytes_billed), 0) as billed "
+            f"from `{settings.project}`.`{region}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT "
+            "where creation_time >= @start"
+        )
+        cfg = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("start", "TIMESTAMP", start)]
+        )
+        rows = list(client.query(sql, job_config=cfg).result())
+        return int(rows[0]["billed"]) if rows else 0
+    except Exception as err:  # noqa: BLE001 - the report says why the figure is missing
+        return f"unavailable ({type(err).__name__})"
+
+
 def access_checks(base_url: str) -> dict[str, Any]:
     anon = requests.get(f"{base_url}/api/whoami", allow_redirects=False, timeout=30)
     headers = {
@@ -175,6 +212,11 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
         time.sleep(20)
     report["iceberg_run_completed_rows"] = rows
     report["access"] = access_checks(base_url)
+    report["bigquery_bytes_billed"] = bytes_billed_since(settings, started)
+    report["versions"] = versions()
+    report["workers_ai_model"] = next(
+        ((r["summarizer"] or {}).get("model") for r in faults if r.get("summarizer")), None
+    )
     report["ok"] = (
         report["clean_ok"]
         and report["workers_ai_incidents"] == len(FAULTS)
@@ -194,7 +236,11 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
         f"template fallback rate: {report['fallback_rate']:.0%}\n"
         f"- run_completed rows read back from Basin Catalog: {rows} (expected {len(ids)})\n"
         f"- Access: unauthenticated {report['access']['unauthenticated_status']}, "
-        f"service token {report['access']['service_token_status']}\n"
+        f"service token {report['access']['service_token_status']}, runner token cannot start runs: "
+        f"{report['access']['runner_token_cannot_start_runs']}\n"
+        f"- Workers AI model: {report['workers_ai_model']}; BigQuery bytes billed since start: "
+        f"{report['bigquery_bytes_billed']}\n"
+        f"- Versions: {', '.join(f'{k} {v}' for k, v in report['versions'].items())}\n"
         f"- Overall: {'passed' if report['ok'] else 'FAILED'}\n"
     )
     return report

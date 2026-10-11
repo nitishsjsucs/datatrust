@@ -480,3 +480,30 @@ def test_catalog_status_parsers_do_not_mistake_not_enabled_for_enabled():
         "0123abcd_datatrust-lake https://catalog.cloudflarestorage.com/0123abcd/datatrust-lake"
     )
     assert parse(DISABLED_CATALOG) == ""
+
+
+def test_smoke_report_records_bytes_billed_and_versions():
+    import datetime as dt
+
+    from datatrust.prod.smoke import bytes_billed_since, versions
+
+    s = GcpSettings("datatrust-abc123", "US", "p@x", "a@x")
+    seen = {}
+
+    class Client:
+        def query(self, sql, job_config=None):
+            seen["sql"], seen["params"] = sql, job_config.query_parameters
+            return SimpleNamespace(result=lambda: [{"billed": 10485760}])
+
+    start = dt.datetime(2026, 10, 10, tzinfo=dt.UTC)
+    assert bytes_billed_since(s, start, client=Client()) == 10485760
+    assert "`datatrust-abc123`.`region-us`.INFORMATION_SCHEMA.JOBS_BY_PROJECT" in seen["sql"]
+    assert seen["params"][0].name == "start" and seen["params"][0].value == start
+
+    class Broken:
+        def query(self, *a, **k):
+            raise PermissionError("no jobs.listAll")
+
+    assert bytes_billed_since(s, start, client=Broken()) == "unavailable (PermissionError)"
+    v = versions()
+    assert v["wrangler"] == "4.149.0" and v["dbt-core"] == "1.12.5" and v["dbt-bigquery"] == "1.12.1"
