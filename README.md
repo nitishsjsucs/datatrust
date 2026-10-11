@@ -4,7 +4,7 @@ Lineage-aware data quality and root-cause analysis for workforce data (HR, recru
 
 DataTrust builds a synthetic workforce warehouse with dbt, guards it with schema contracts and 40 data checks, captures column-level lineage as OpenLineage events, and when checks or metrics fail it traces the failure upstream, runs read-only diagnostic SQL probes, ranks the likely root cause, and writes an incident summary from sanitized evidence. Validation and investigation are coordinated by Cloudflare Queues and Workflows; summaries come from Workers AI in production.
 
-> **Status: v1 core implemented; production not yet executed.** Built against [SPEC.md](SPEC.md). Everything runs locally and in CI on stand-ins (DuckDB for BigQuery, Miniflare for Cloudflare, a local LLM or template for Workers AI). The production path is implemented and waits for the account setup below. The status table never claims more than the repo has run.
+> **Status: v1 core implemented; production not yet executed.** Built against [SPEC.md](SPEC.md). Everything runs locally on stand-ins (DuckDB for BigQuery, Miniflare for Cloudflare, a local LLM or template for Workers AI), and CI is configured to run the same checks once the repo is pushed. The production path is implemented and waits for the account setup below. The status table never claims more than the repo has run.
 
 All data is synthetic. No real employee or candidate data is used anywhere; emails use the reserved `example.com` domain.
 
@@ -178,7 +178,8 @@ Prerequisites: Node 22 or newer (CI uses Node 24 from `.nvmrc`), npm, [uv](https
 npm run setup        # npm ci && uv sync --locked
 npm run doctor       # checks the local prerequisites and prints the fix for anything missing
 npm run typecheck    # TypeScript strict, all workspaces
-npm test             # vitest (packages/rca, apps/worker) and pytest
+npm run build        # RCA CLI bundle (used by the Python runner) and the dashboard
+npm test             # vitest (packages/rca, apps/worker, apps/web) and pytest
 ```
 
 Generate, load and build one seed locally (DuckDB is the local stand-in for BigQuery):
@@ -217,7 +218,7 @@ Audit events (check results, completed runs, incidents) go to the lake. Locally 
 
 `npm run dev:up -- --llm` also starts llama-server (Qwen3-1.7B) on 127.0.0.1:8160; set `DATATRUST_LLM_MODEL_PATH` if the GGUF lives elsewhere.
 
-More commands are added here as the components land.
+`npm run doctor` and `npm run doctor -- --prod` print one line per prerequisite and the exact fix; `make` offers the same entry points (`make setup|test|bench|bench-e2e|doctor|bootstrap|dev-up|dev-down`).
 
 ## Production setup
 

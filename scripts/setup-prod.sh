@@ -232,6 +232,7 @@ PY
   note "secrets file written (mode 600); ACCESS_AUD=${ACCESS_AUD:-unset}"
 
   say "11. Deploy the Worker with its secrets"
+  run npm run -s build # RCA bundle and the dashboard assets (apps/web/dist) the Worker serves
   if ((DRY)); then
     note "[dry-run] wrangler deploy -c apps/worker/wrangler.prod.jsonc --secrets-file .prod/secrets.json"
   else
