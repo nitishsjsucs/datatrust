@@ -1,4 +1,5 @@
-"""Local stand-in for Basin Catalog: a pyiceberg SqlCatalog on SQLite (SPEC 13.9).
+"""Local stand-in for Basin Catalog: a pyiceberg SqlCatalog on SQLite (SPEC 13.9). `datatrust lake commit
+--catalog local` (lake/commit.py) writes it; `append` here is for tests and `read` for `lake query`.
 
 The warehouse is an absolute file:// URI: a relative path also works but records cwd-relative metadata
 locations, which break when the command runs from another directory (verified).
@@ -10,14 +11,9 @@ from pathlib import Path
 
 import pyarrow as pa
 from pyiceberg.catalog.sql import SqlCatalog
-from pyiceberg.exceptions import NamespaceAlreadyExistsError, NoSuchTableError
 from pyiceberg.table import Table
 
 from datatrust import config
-from datatrust.lake.schema import arrow_schema
-
-NAMESPACE = "datatrust"
-TABLE = "audit_events"
 
 
 def lake_dir() -> Path:
@@ -35,15 +31,9 @@ def catalog(root: Path | None = None) -> SqlCatalog:
 
 
 def table(root: Path | None = None) -> Table:
-    cat = catalog(root)
-    try:
-        cat.create_namespace(NAMESPACE)
-    except NamespaceAlreadyExistsError:
-        pass
-    try:
-        return cat.load_table(f"{NAMESPACE}.{TABLE}")
-    except NoSuchTableError:
-        return cat.create_table(f"{NAMESPACE}.{TABLE}", schema=arrow_schema())
+    from datatrust.lake.commit import ensure_table
+
+    return ensure_table(catalog(root))
 
 
 def append(rows: pa.Table, root: Path | None = None) -> int:

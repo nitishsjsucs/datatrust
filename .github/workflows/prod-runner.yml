@@ -40,6 +40,11 @@ jobs:
       CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
       CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       EVIDENCE_HMAC_KEY: ${{ secrets.EVIDENCE_HMAC_KEY }}
+      # Optional: with these set, the runner commits the audit lake to Basin Catalog every 15 minutes and
+      # on exit (SPEC 28.5.1); without them it logs that the lake commit is off.
+      BASIN_CATALOG_URI: ${{ vars.BASIN_CATALOG_URI }}
+      BASIN_WAREHOUSE: ${{ vars.BASIN_WAREHOUSE }}
+      BASIN_CATALOG_TOKEN: ${{ secrets.BASIN_CATALOG_TOKEN }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

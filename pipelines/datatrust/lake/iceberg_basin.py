@@ -1,5 +1,6 @@
-"""Production read path: Basin Catalog (formerly R2 Data Catalog) through pyiceberg's REST catalog
-(SPEC 13.9, 18.4). Needs BASIN_CATALOG_URI, BASIN_WAREHOUSE and BASIN_CATALOG_TOKEN (an R2 API token)."""
+"""Basin Catalog (formerly R2 Data Catalog) through pyiceberg's REST catalog: the production catalog for
+`datatrust lake commit --catalog basin` and the smoke's read-back (SPEC 13.9, 18.4, 28.5.1). Needs
+BASIN_CATALOG_URI, BASIN_WAREHOUSE and BASIN_CATALOG_TOKEN (an R2 API token)."""
 
 from __future__ import annotations
 

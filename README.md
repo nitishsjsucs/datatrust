@@ -22,7 +22,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Worker API, D1, R2, Queues, ValidationRunWorkflow, InvestigationWorkflow | executed in Miniflare (`wrangler dev --local` and `@cloudflare/vitest-plugin`) only; 2026-10-10 `npm run bench:e2e` (seed 101, 20 scenarios) |
 | Access JWT verification | executed against local RS256 keys only (`npm run dev:keys`, `npm run dev:token`) |
 | Workers AI summaries, AI Gateway | implemented, not executed (tests mock the AI binding; the local stand-ins are llama-server with Qwen3-1.7B and a deterministic template) |
-| Audit lake: Queue to R2 objects, Basin Catalog commit | Queue and R2 objects implemented, not executed in production; the Basin Catalog committer is being added (SPEC 23.1, F2). Local path executed in Miniflare on 2026-10-10: queue `datatrust-audit-events`, immutable R2 `lake/` objects, `/api/lake/export`, then `uv run datatrust lake sync` into the pyiceberg SQL catalog (stand-in for Basin Catalog) |
+| Audit lake: Queue to R2 objects, Basin Catalog commit | implemented, not executed in production. Local path executed in Miniflare on 2026-10-10: queue `datatrust-audit-events`, immutable R2 `lake/` objects, `/api/lake/export`, then `uv run datatrust lake commit` (exactly once per `event_id`) into the pyiceberg SQL catalog (stand-in for Basin Catalog) |
 | BigQuery path, policy tags, masking, authorized view, time travel | implemented, not executed (CI renders the BigQuery macro branches, runs `dbt parse --target bigquery` and tests the governance logic against fakes; `npm run prod:validate` is the first real check) |
 | Incident dashboard (stretch) | executed locally under `wrangler dev` (Miniflare) as Worker static assets, 2026-10-10 |
 | `setup:prod`, `setup:wizard` and `doctor` | implemented; `npm run doctor` (local) executed; `npm run doctor -- --prod` and `setup:prod` executed only up to their local preconditions (no Cloudflare or Google Cloud account connected); the wizard has not been run end to end |
@@ -108,7 +108,7 @@ flowchart LR
     DBT["dbt-ol build<br/>22 contracts + 40 checks"]
     PROBE["Diagnostic probes<br/>read-only identity"]
     SAN["rca sanitize (Node CLI)<br/>HMAC tokens, aggregates only"]
-    COMMIT["datatrust lake sync<br/>pyiceberg"]
+    COMMIT["datatrust lake commit<br/>pyiceberg, once per event_id"]
   end
 
   WH[("Warehouse<br/>local: DuckDB stand-in<br/>prod: BigQuery")]
@@ -156,7 +156,7 @@ flowchart LR
   SINK --> QAU
   QAU -- "one object per batch" --> R2
   COMMIT -- "GET /api/lake/export" --> API
-  COMMIT -. "prod (F2, in progress)" .-> CAT
+  COMMIT -- prod --> CAT
   COMMIT -- local --> ICE
 ```
 
@@ -176,7 +176,7 @@ Local stand-ins are labelled as stand-ins. They are never presented as the produ
 | Restricted / authorized views | plain DuckDB views (stand-in) | BigQuery authorized view over an untagged aggregate table |
 | Column masking | none (stand-in: sanitizer and tests) | BigQuery policy tags and data masking policies |
 | Time travel / recovery | per-run Parquet snapshots of marts (stand-in) | `FOR SYSTEM_TIME AS OF`, 7-day window, `bq cp table@<ms>` restore |
-| Iceberg lake | the same Queue, consumer and R2 `lake/` objects as production, then **pyiceberg SqlCatalog on SQLite (stand-in for Basin Catalog)** | Queue `datatrust-audit-events` to immutable NDJSON objects in R2, to be added to the Basin Catalog Iceberg table `datatrust.audit_events` on R2 `datatrust-lake` by a pyiceberg committer (in progress, SPEC 23.1 F2; Basin Pipelines is Workers Paid only and is not used) |
+| Iceberg lake | the same Queue, consumer and R2 `lake/` objects as production, then **pyiceberg SqlCatalog on SQLite (stand-in for Basin Catalog)** | Queue `datatrust-audit-events` to immutable NDJSON objects in R2, added to the Basin Catalog Iceberg table `datatrust.audit_events` on R2 `datatrust-lake` by `datatrust lake commit --catalog basin` (pyiceberg REST catalog; the production runner runs it every 15 minutes and on exit). Basin Pipelines is Workers Paid only and is not used |
 | LLM summaries | **llama-server (Qwen3-1.7B Q4_0) on 127.0.0.1:8160 (stand-in)** or a deterministic template (CI) | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `datatrust` |
 | Auth | locally generated RS256 keypair and JWKS | Cloudflare Access (team JWKS) |
 | Runner identity | local dev JWT (role `runner`) | Access service token `datatrust-runner` (role `runner` only) |
@@ -230,7 +230,7 @@ The same in two commands: `uv run datatrust runner --watch --idle-exit 60` in on
 
 The Worker also serves a read-only incident dashboard (`apps/web`, React 19 and Vite 8, built with `npm run build`) at http://127.0.0.1:8792/: the incident list, then per incident the summary, failing checks, ranked candidates with their features, the column-level lineage path, the supporting diagnostic SQL, recovery commands and the provenance with every local stand-in labelled. Locally, paste a token from `npm run -s dev:token -- --role viewer` into the "Local dev token" box; in production Cloudflare Access signs the browser in.
 
-Audit events (check results, completed runs, incidents) go to the lake the same way locally and in production: the Worker sends them to queue `datatrust-audit-events`, whose consumer writes each batch as one immutable NDJSON object under `lake/` in R2, and `GET /api/lake/export` serves objects once they have settled (5 s locally, 120 s in production). Locally `npm run lake:sync` (`uv run datatrust lake sync`) appends them to a pyiceberg SQL catalog under `.data/lake/` (stand-in for Basin Catalog); `uv run datatrust lake query` reads the Iceberg table through DuckDB.
+Audit events (check results, completed runs, incidents) go to the lake the same way locally and in production: the Worker sends them to queue `datatrust-audit-events`, whose consumer writes each batch as one immutable NDJSON object under `lake/` in R2, and `GET /api/lake/export` serves objects once they have settled (5 s locally, 120 s in production). `uv run datatrust lake commit` (alias `npm run lake:sync`) adds them to a pyiceberg SQL catalog under `.data/lake/` (stand-in for Basin Catalog): it drops events whose `event_id` is already in the table and moves its cursor, the table property `datatrust.lake.after`, in the same Iceberg commit as the rows, so every event lands exactly once. In production the same command with `--catalog basin` writes the Basin Catalog table. `uv run datatrust lake query` reads the local Iceberg table through DuckDB.
 
 `npm run dev:up -- --llm` also starts llama-server (Qwen3-1.7B) on 127.0.0.1:8160; set `DATATRUST_LLM_MODEL_PATH` if the GGUF lives elsewhere.
 

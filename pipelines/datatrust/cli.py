@@ -245,7 +245,23 @@ def _cmd_runner(args: argparse.Namespace) -> int:
         report = run_once(client, target=args.target, kinds=kinds)
         print(json.dumps(report))
         return 0
-    watch(client, target=args.target, kinds=kinds, max_jobs=args.max_jobs, idle_exit=args.idle_exit)
+    periodic = None
+    if args.env == "prod" and not args.no_lake_commit:
+        from datatrust.lake.commit import PeriodicCommit, basin_configured, catalog_for
+
+        if basin_configured():
+            # Basin Catalog commit every 15 minutes and on exit (SPEC 14.2, 28.5.1).
+            periodic = PeriodicCommit(client, lambda: catalog_for("basin"), interval=args.lake_commit_every)
+        else:
+            logging.warning("lake commit off: set BASIN_CATALOG_URI, BASIN_WAREHOUSE, BASIN_CATALOG_TOKEN")
+    watch(
+        client,
+        target=args.target,
+        kinds=kinds,
+        max_jobs=args.max_jobs,
+        idle_exit=args.idle_exit,
+        periodic=periodic,
+    )
     return 0
 
 
@@ -310,11 +326,14 @@ def _cmd_restore(args: argparse.Namespace) -> int:
 
 
 def _cmd_lake(args: argparse.Namespace) -> int:
-    if args.lake_command == "sync":
-        from datatrust.lake.sync import sync
+    if args.lake_command in ("commit", "sync"):
+        from datatrust.lake.commit import catalog_for, commit
         from datatrust.runner.client import WorkerClient
 
-        print(json.dumps(sync(WorkerClient.from_env("runner", "local"))))
+        kind = "local" if args.lake_command == "sync" else args.catalog
+        # The Basin catalog is fed by the deployed Worker; the local catalog by `wrangler dev`.
+        client = WorkerClient.from_env("runner", "prod" if kind == "basin" else "local")
+        print(json.dumps({"catalog": kind, **commit(catalog_for(kind), client)}))
         return 0
     import duckdb
 
@@ -467,6 +486,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--kinds", default="dbt_build,diagnostics")
     p.add_argument("--max-jobs", type=int)
     p.add_argument("--idle-exit", type=float, help="stop after this many seconds without a job")
+    p.add_argument(
+        "--lake-commit-every",
+        type=float,
+        default=900.0,
+        help="with --env prod: seconds between Basin Catalog commits (also one on exit)",
+    )
+    p.add_argument("--no-lake-commit", action="store_true", help="with --env prod: do not commit the lake")
     p.set_defaults(func=_cmd_runner)
 
     p = sub.add_parser("run", help="start a validation run as an operator (POST /api/runs), optionally wait")
@@ -484,9 +510,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--duckdb-path", help=DUCKDB_HELP)
     p.set_defaults(func=_cmd_restore)
 
-    p = sub.add_parser("lake", help="local Iceberg lake (pyiceberg SQL catalog stand-in for Basin Catalog)")
+    p = sub.add_parser("lake", help="audit-event Iceberg lake (Basin Catalog or the local stand-in)")
     lake = p.add_subparsers(dest="lake_command", required=True)
-    lake.add_parser("sync", help="append the local Worker's audit events to the local Iceberg table")
+    c = lake.add_parser("commit", help="add settled audit-event objects to Iceberg, once per event_id")
+    c.add_argument(
+        "--catalog",
+        choices=["local", "basin"],
+        default="local",
+        help="local: SQL catalog fed by wrangler dev; basin: Basin Catalog fed by the deployed Worker",
+    )
+    lake.add_parser("sync", help="alias for `lake commit --catalog local`")
     q = lake.add_parser("query", help="query the local Iceberg table with DuckDB")
     q.add_argument("--sql", help="SQL over the table audit_events")
     p.set_defaults(func=_cmd_lake)

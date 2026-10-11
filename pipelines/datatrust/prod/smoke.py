@@ -7,8 +7,9 @@ production". Implemented, not executed: it needs the Cloudflare and Google Cloud
 3. one clean run on seed 101 that must pass with 40 checks and no incident;
 4. five fault runs (S01, S03, S04, T14, T20) through the deployed Queues and Workflows, each producing an
    incident with summary_provider = workers-ai; records grounding pass rate and fallback rate;
-5. reads the run_completed events of all six runs back from Basin Catalog (pyiceberg RestCatalog,
-   polling up to 10 minutes);
+5. `datatrust lake commit --catalog basin` (settled R2 lake objects into Basin Catalog, once per event_id),
+   then reads the run_completed events of all six runs back with pyiceberg RestCatalog, repeating both for up
+   to 5 minutes (audit batches close within 30 s and objects settle after 120 s);
 6. Access: an unauthenticated request is denied, a service-token request succeeds, the runner token cannot
    start a run, decoded claims recorded;
 7. writes results/prod-smoke-<date>.json and .md.
@@ -142,8 +143,35 @@ def wait_for_run(ops: Any, run_id: str, runner: RunnerThread, timeout_s: float =
         time.sleep(5)
 
 
+def lake_read_back(
+    client: Any,
+    run_ids: list[str],
+    timeout_s: float = 300,
+    sleep: Any = time.sleep,
+    catalog_factory: Any = None,
+    read: Any = None,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Smoke step 5: commit settled lake objects to Basin Catalog, then read the run_completed rows back,
+    until every run id is present or `timeout_s` passes. Returns the row count and each commit's counts."""
+    from datatrust.lake.commit import catalog_for, commit
+
+    if catalog_factory is None:
+        catalog_factory = lambda: catalog_for("basin")  # noqa: E731
+    if read is None:
+        from datatrust.lake.iceberg_basin import run_completed_events as read
+    deadline = time.monotonic() + timeout_s
+    commits: list[dict[str, Any]] = []
+    rows = 0
+    while True:
+        commits.append(commit(catalog_factory(), client))
+        table = read(run_ids)
+        rows = table.num_rows
+        if len(set(table.column("run_id").to_pylist())) == len(run_ids) or time.monotonic() > deadline:
+            return rows, commits
+        sleep(20)
+
+
 def smoke(skip_validate: bool = False) -> dict[str, Any]:
-    from datatrust.lake.iceberg_basin import run_completed_events
     from datatrust.prod.validate import validate
     from datatrust.runner.client import WorkerClient
 
@@ -201,15 +229,9 @@ def smoke(skip_validate: bool = False) -> dict[str, Any]:
     ) / len(faults)
     report["fallback_rate"] = sum(1 for r in faults if (r["summarizer"] or {}).get("fallback")) / len(faults)
 
-    deadline = time.monotonic() + 600
     ids = [r["runId"] for r in runs]
-    rows = 0
-    while time.monotonic() < deadline:
-        table = run_completed_events(ids)
-        rows = table.num_rows
-        if len(set(table.column("run_id").to_pylist())) == len(ids):
-            break
-        time.sleep(20)
+    rows, commits = lake_read_back(client, ids)
+    report["lake_commits"] = commits
     report["iceberg_run_completed_rows"] = rows
     report["access"] = access_checks(base_url)
     report["bigquery_bytes_billed"] = bytes_billed_since(settings, started)

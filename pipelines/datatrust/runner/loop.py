@@ -238,18 +238,27 @@ def watch(
     interval: float = 2.0,
     max_jobs: int | None = None,
     idle_exit: float | None = None,
+    periodic: Any = None,
 ) -> list[dict]:
-    """Keep leasing until stopped, `max_jobs` jobs ran, or nothing arrived for `idle_exit` seconds."""
+    """Keep leasing until stopped, `max_jobs` jobs ran, or nothing arrived for `idle_exit` seconds.
+    `periodic` (a lake.commit.PeriodicCommit with `--env prod`) gets `tick()` after every poll and `final()`
+    on exit, so the Basin Catalog table is committed every 15 minutes and before the runner stops."""
     done: list[dict] = []
     idle_since = time.monotonic()
-    while max_jobs is None or len(done) < max_jobs:
-        report = run_once(client, target=target, kinds=kinds)
-        if report is None:
-            if idle_exit is not None and time.monotonic() - idle_since > idle_exit:
-                break
-            time.sleep(interval)
-            continue
-        idle_since = time.monotonic()
-        done.append(report)
-        print(json.dumps(report), flush=True)
+    try:
+        while max_jobs is None or len(done) < max_jobs:
+            report = run_once(client, target=target, kinds=kinds)
+            if periodic is not None:
+                periodic.tick()
+            if report is None:
+                if idle_exit is not None and time.monotonic() - idle_since > idle_exit:
+                    break
+                time.sleep(interval)
+                continue
+            idle_since = time.monotonic()
+            done.append(report)
+            print(json.dumps(report), flush=True)
+    finally:
+        if periodic is not None:
+            periodic.final()
     return done

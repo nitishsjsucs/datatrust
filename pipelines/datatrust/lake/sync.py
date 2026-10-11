@@ -1,35 +1,14 @@
-"""`datatrust lake sync`: pull settled NDJSON audit-event objects from the Worker (/api/lake/export) and
-append them to the local Iceberg table (SPEC 13.9). The cursor lives next to the catalog."""
+"""`datatrust lake sync`: alias for `datatrust lake commit --catalog local` (SPEC 13.9). The cursor is the
+table property `datatrust.lake.after`, written in the same Iceberg commit as the rows (lake/commit.py)."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
-from datatrust.lake.iceberg_local import append, lake_dir
-from datatrust.lake.schema import to_arrow
-from datatrust.runner.client import WorkerClient
+from datatrust.lake import iceberg_local
+from datatrust.lake.commit import ExportSource, commit
 
 
-def _cursor_path(root: Path | None) -> Path:
-    return (root or lake_dir()) / "cursor.json"
-
-
-def sync(client: WorkerClient, root: Path | None = None) -> dict[str, Any]:
-    cursor_file = _cursor_path(root)
-    after = json.loads(cursor_file.read_text())["after"] if cursor_file.exists() else ""
-    appended = 0
-    while True:
-        res = client.request("GET", f"/api/lake/export?after={quote(after, safe='')}")
-        events = [json.loads(line) for line in res.text.splitlines() if line.strip()]
-        nxt = res.headers.get("x-next-after", after)
-        if events:
-            appended += append(to_arrow(events), root)
-        if not events or nxt == after:
-            break
-        after = nxt
-        cursor_file.parent.mkdir(parents=True, exist_ok=True)
-        cursor_file.write_text(json.dumps({"after": after}))
-    return {"appended": appended, "cursor": after}
+def sync(client: ExportSource, root: Path | None = None) -> dict[str, Any]:
+    return commit(iceberg_local.catalog(root), client)
