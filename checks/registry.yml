@@ -1,0 +1,58 @@
+# The 40 DataTrust checks (SPEC section 8). Every check is a dbt test node whose name starts with dq_.
+# pipelines/tests/test_check_registry.py asserts a 1:1 match with the dbt manifest and the category counts:
+#   uniqueness 8, referential 8, interval 7, stage_transition 7, compensation 6, reconciliation 4.
+# node/columns: where the root-cause trace starts for a failure of this check (the tested node and columns).
+# also: further nodes and columns a singular check reads; the trace starts from these too.
+
+checks:
+  # ---------------------------------------------------------------- record uniqueness (8, generic)
+  - {id: U01, test: dq_u01_unique_stg_employees_employee_id, category: uniqueness, kind: generic, node: stg_employees, columns: [employee_id], severity: error}
+  - {id: U02, test: dq_u02_unique_fct_compensation_usd_employee_id, category: uniqueness, kind: generic, node: fct_compensation_usd, columns: [employee_id], severity: error}
+  - {id: U03, test: dq_u03_unique_stg_applications_application_id, category: uniqueness, kind: generic, node: stg_applications, columns: [application_id], severity: error}
+  - {id: U04, test: dq_u04_unique_stg_hires_hire_id, category: uniqueness, kind: generic, node: stg_hires, columns: [hire_id], severity: error}
+  - {id: U05, test: dq_u05_unique_fct_hires_application_id, category: uniqueness, kind: generic, node: fct_hires, columns: [application_id], severity: error}
+  - {id: U06, test: dq_u06_unique_dim_employee_employee_id, category: uniqueness, kind: generic, node: dim_employee, columns: [employee_id], severity: error}
+  - {id: U07, test: dq_u07_unique_stg_fx_rates_currency_rate_date, category: uniqueness, kind: generic, node: stg_fx_rates, columns: [currency, rate_date], severity: error}
+  - {id: U08, test: dq_u08_unique_fct_payroll_reconciliation_employee_month, category: uniqueness, kind: generic, node: fct_payroll_reconciliation, columns: [employee_id, pay_month], severity: error}
+
+  # ---------------------------------------------------------------- referential integrity (8: 7 generic, 1 singular)
+  - {id: R01, test: dq_r01_job_assignments_employee_exists, category: referential, kind: generic, node: stg_job_assignments, columns: [employee_id], severity: error}
+  - {id: R02, test: dq_r02_job_assignments_department_exists, category: referential, kind: generic, node: stg_job_assignments, columns: [department_id], severity: error}
+  - {id: R03, test: dq_r03_applications_candidate_exists, category: referential, kind: generic, node: stg_applications, columns: [candidate_id], severity: error}
+  - {id: R04, test: dq_r04_applications_requisition_exists, category: referential, kind: generic, node: stg_applications, columns: [requisition_id], severity: error}
+  - {id: R05, test: dq_r05_hires_employee_exists, category: referential, kind: generic, node: stg_hires, columns: [employee_id], severity: error}
+  - {id: R06, test: dq_r06_offers_application_exists, category: referential, kind: generic, node: stg_offers, columns: [application_id], severity: error}
+  - {id: R07, test: dq_r07_payroll_lines_employee_exists, category: referential, kind: generic, node: stg_payroll_lines, columns: [employee_id], severity: error}
+  - {id: R08, test: dq_r08_hire_has_accepted_offer, category: referential, kind: singular, node: stg_hires, columns: [application_id], also: [{node: stg_offers, columns: [application_id, offer_status]}], severity: error}
+
+  # ---------------------------------------------------------------- historical intervals (7: 1 generic, 6 singular)
+  - {id: H01, test: dq_h01_no_overlapping_assignments, category: interval, kind: singular, node: stg_job_assignments, columns: [employee_id, valid_from, valid_to], severity: error}
+  - {id: H02, test: dq_h02_assignment_history_contiguous, category: interval, kind: singular, node: stg_job_assignments, columns: [employee_id, valid_from, valid_to], also: [{node: stg_employees, columns: [termination_date]}], severity: error}
+  - {id: H03, test: dq_h03_assignment_valid_to_after_valid_from, category: interval, kind: generic, node: stg_job_assignments, columns: [valid_from, valid_to], severity: error}
+  - {id: H04, test: dq_h04_one_current_assignment_per_active_employee, category: interval, kind: singular, node: stg_job_assignments, columns: [employee_id, valid_to], also: [{node: stg_employees, columns: [employee_id, termination_date]}], severity: error}
+  - {id: H05, test: dq_h05_no_overlapping_compensation, category: interval, kind: singular, node: stg_compensation, columns: [employee_id, valid_from, valid_to], severity: error}
+  - {id: H06, test: dq_h06_first_assignment_starts_at_hire, category: interval, kind: singular, node: stg_job_assignments, columns: [employee_id, valid_from], also: [{node: stg_employees, columns: [hire_date]}], severity: error}
+  - {id: H07, test: dq_h07_no_payroll_after_termination, category: interval, kind: singular, node: stg_payroll_lines, columns: [employee_id, pay_month], also: [{node: stg_employees, columns: [termination_date]}], severity: error}
+
+  # ---------------------------------------------------------------- recruiting-stage transitions (7: 1 generic, 6 singular)
+  - {id: S01, test: dq_s01_stage_accepted_values, category: stage_transition, kind: generic, node: stg_stage_events, columns: [stage], severity: error}
+  - {id: S02, test: dq_s02_allowed_stage_transitions, category: stage_transition, kind: singular, node: stg_stage_events, columns: [application_id, stage, entered_at], severity: error}
+  - {id: S03, test: dq_s03_stage_timestamps_monotonic, category: stage_transition, kind: singular, node: stg_stage_events, columns: [application_id, stage_order, entered_at], severity: error}
+  - {id: S04, test: dq_s04_terminal_stage_is_last, category: stage_transition, kind: singular, node: stg_stage_events, columns: [application_id, stage, entered_at], severity: error}
+  - {id: S05, test: dq_s05_recruiter_events_in_local_business_hours, category: stage_transition, kind: singular, node: stg_stage_events, columns: [entered_at, location_tz, source_system], severity: error}
+  - {id: S06, test: dq_s06_offer_precedes_hire, category: stage_transition, kind: singular, node: stg_stage_events, columns: [stage, event_local_date], also: [{node: stg_hires, columns: [application_id, hire_date]}], severity: error}
+  - {id: S07, test: dq_s07_hired_event_matches_hire_date, category: stage_transition, kind: singular, node: stg_stage_events, columns: [stage, event_local_date], also: [{node: stg_hires, columns: [application_id, hire_date]}], severity: error}
+
+  # ---------------------------------------------------------------- compensation and FX (6: 1 generic, 5 singular)
+  - {id: C01, test: dq_c01_base_salary_usd_positive, category: compensation, kind: generic, node: fct_compensation_usd, columns: [base_salary_usd], severity: error}
+  - {id: C02, test: dq_c02_comp_usd_recomputes, category: compensation, kind: singular, node: fct_compensation_usd, columns: [base_salary_usd], also: [{node: stg_compensation, columns: [base_salary_local_minor, currency, valid_from]}, {node: int_fx_daily, columns: [rate_to_usd]}], severity: error}
+  - {id: C03, test: dq_c03_fx_not_stale, category: compensation, kind: singular, node: stg_fx_rates, columns: [currency, rate_date, rate_to_usd], severity: error}
+  - {id: C04, test: dq_c04_fx_complete_calendar, category: compensation, kind: singular, node: stg_fx_rates, columns: [currency, rate_date], severity: error}
+  - {id: C05, test: dq_c05_fx_within_band, category: compensation, kind: singular, node: stg_fx_rates, columns: [currency, rate_date, rate_to_usd], severity: error}
+  - {id: C06, test: dq_c06_comp_currency_matches_location, category: compensation, kind: singular, node: fct_compensation_usd, columns: [currency], also: [{node: int_assignment_current, columns: [location_currency]}], severity: error}
+
+  # ---------------------------------------------------------------- SQL reconciliation (4 singular)
+  - {id: X01, test: dq_x01_payroll_matches_expected, category: reconciliation, kind: singular, node: fct_payroll_reconciliation, columns: [actual_gross_local_minor, expected_gross_local_minor], severity: error}
+  - {id: X02, test: dq_x02_headcount_metric_reconciles, category: reconciliation, kind: singular, node: metric_headcount_monthly, columns: [headcount, month_start], also: [{node: int_employee_month, columns: [is_active, month_start]}], severity: error}
+  - {id: X03, test: dq_x03_payroll_cost_metric_reconciles, category: reconciliation, kind: singular, node: metric_payroll_cost_usd_monthly, columns: [payroll_cost_usd, pay_month], also: [{node: stg_payroll_lines, columns: [gross_pay_local_minor, pay_month, currency]}, {node: int_fx_daily, columns: [rate_to_usd]}], severity: error}
+  - {id: X04, test: dq_x04_hires_three_way, category: reconciliation, kind: singular, node: metric_hires_monthly, columns: [hires, hire_month], also: [{node: fct_hires, columns: [hire_month]}, {node: stg_stage_events, columns: [stage, event_local_date]}], severity: error}

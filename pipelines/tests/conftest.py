@@ -50,3 +50,27 @@ def build_warehouse(seed: int, root: Path, dbt_args: list[str] | None = None) ->
 def built_101(tmp_path_factory) -> BuiltWarehouse:
     """Seed 101, clean, full `dbt build` on a fresh DuckDB file."""
     return build_warehouse(101, tmp_path_factory.mktemp("wh101"))
+
+
+@pytest.fixture(scope="session")
+def parsed_manifest(tmp_path_factory) -> dict:
+    """`dbt parse` on the DuckDB target; no warehouse data needed."""
+    import json
+
+    from datatrust.dbt.build import run_dbt
+
+    root = tmp_path_factory.mktemp("parse")
+    res = run_dbt(["parse"], target_path=root / "target", duckdb_path=root / "parse.duckdb")
+    assert res.returncode == 0, res.stdout
+    return json.loads((root / "target" / "manifest.json").read_text())
+
+
+@pytest.fixture(scope="session")
+def built_101_results(built_101):
+    import json
+
+    from datatrust.checks.results import classify
+
+    rr = json.loads((built_101.target_path / "run_results.json").read_text())
+    manifest = json.loads((built_101.target_path / "manifest.json").read_text())
+    return classify(rr, manifest)

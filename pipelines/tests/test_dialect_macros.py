@@ -98,6 +98,7 @@ def test_models_and_tests_use_only_portable_sql():
         for path in DBT_DIR.joinpath(folder).rglob("*.sql"):
             text = re.sub(r"\{#.*?#\}", "", path.read_text(), flags=re.S)
             text = re.sub(r"\{\{.*?\}\}", "", text, flags=re.S)
+            text = re.sub(r"--[^\n]*", "", text)
             hits = banned_hits(text)
             if hits:
                 offenders[str(path.relative_to(DBT_DIR))] = hits

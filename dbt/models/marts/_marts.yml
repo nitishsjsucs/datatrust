@@ -19,6 +19,9 @@ models:
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: emp}}
+        data_tests:
+          - unique:
+              name: dq_u06_unique_dim_employee_employee_id
         constraints: [{type: not_null}]
       - name: first_name
         data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
@@ -92,6 +95,9 @@ models:
       - name: application_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: app}}
+        data_tests:
+          - unique:
+              name: dq_u05_unique_fct_hires_application_id
         constraints: [{type: not_null}]
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
@@ -188,10 +194,17 @@ models:
         grain: [employee_id]
         rowcount: {parent: stg_employees, ratio: 1.0}
         recompute: [{column: base_salary_usd, expr: "base_salary_local * rate_to_usd"}]
+    data_tests:
+      - expression_is_true:
+          name: dq_c01_base_salary_usd_positive
+          arguments: {expression: "base_salary_usd > 0"}
     columns:
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: emp}}
+        data_tests:
+          - unique:
+              name: dq_u02_unique_fct_compensation_usd_employee_id
         constraints: [{type: not_null}]
       - name: as_of_date
         data_type: "date"
@@ -227,6 +240,10 @@ models:
         recompute:
           - {column: expected_gross_local_minor, expr: "base_salary_local_minor / 12.0"}
           - {column: actual_gross_local_minor, expr: "expected_gross_local_minor"}
+    data_tests:
+      - unique_combination:
+          name: dq_u08_unique_fct_payroll_reconciliation_employee_month
+          arguments: {combination_of_columns: [employee_id, pay_month]}
     columns:
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"

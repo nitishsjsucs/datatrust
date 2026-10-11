@@ -13,6 +13,7 @@ clean-targets: ["target", "logs"]
 flags:
   send_anonymous_usage_stats: false
   partial_parse: false
+  require_generic_test_arguments_property: true
 
 vars:
   # Calendar covered by payroll, FX and metrics (SPEC 6.2).

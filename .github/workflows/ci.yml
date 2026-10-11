@@ -37,3 +37,9 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check
       - run: uv run pytest
+        env:
+          TZ: UTC
+      - name: clean baseline under a non-UTC machine zone (ADR-0006)
+        run: uv run pytest pipelines/tests/test_clean_baseline.py
+        env:
+          TZ: America/Los_Angeles

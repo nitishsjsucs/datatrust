@@ -4,7 +4,7 @@ version: 2
 
 models:
   - name: int_fx_daily
-    description: Daily rate per currency on the 2025 calendar.
+    description: "Daily rate per currency on the 2025 calendar."
     config:
       meta:
         grain: [currency, rate_date]
@@ -19,7 +19,7 @@ models:
         config: {meta: {classification: public}}
 
   - name: int_assignment_current
-    description: The assignment active on each employee's as-of date.
+    description: "The assignment active on each employee's as-of date."
     config:
       meta:
         grain: [employee_id]
@@ -27,9 +27,29 @@ models:
     columns:
       - name: employee_id
         config: {meta: {classification: identifier, entity: emp}}
+      - name: as_of_date
+        config: {meta: {classification: internal}}
+      - name: assignment_id
+        config: {meta: {classification: internal}}
+      - name: department_id
+        config: {meta: {classification: internal}}
+      - name: location_id
+        config: {meta: {classification: internal}}
+      - name: job_title
+        config: {meta: {classification: internal}}
+      - name: job_level
+        config: {meta: {classification: internal}}
+      - name: valid_from
+        config: {meta: {classification: internal}}
+      - name: valid_to
+        config: {meta: {classification: internal}}
+      - name: location_tz
+        config: {meta: {classification: public}}
+      - name: location_currency
+        config: {meta: {classification: public}}
 
   - name: int_compensation_usd
-    description: One row per compensation interval with its USD value on the conversion date fx_date.
+    description: "One row per compensation interval with its USD value on the conversion date fx_date."
     config:
       meta:
         grain: [compensation_id]
@@ -37,17 +57,29 @@ models:
         interval: {key: [employee_id], from: valid_from, to: valid_to}
         recompute: [{column: base_salary_usd, expr: "base_salary_local * rate_to_usd"}]
     columns:
+      - name: compensation_id
+        config: {meta: {classification: internal}}
       - name: employee_id
         config: {meta: {classification: identifier, entity: emp}}
+      - name: currency
+        config: {meta: {classification: internal}}
       - name: base_salary_local_minor
         config: {meta: {classification: compensation}}
       - name: base_salary_local
         config: {meta: {classification: compensation}}
+      - name: valid_from
+        config: {meta: {classification: internal}}
+      - name: valid_to
+        config: {meta: {classification: internal}}
+      - name: fx_date
+        config: {meta: {classification: internal}}
+      - name: rate_to_usd
+        config: {meta: {classification: public}}
       - name: base_salary_usd
         config: {meta: {classification: compensation}}
 
   - name: int_application_stage_path
-    description: One row per application with its ordered stage path.
+    description: "One row per application with its ordered stage path."
     config:
       meta:
         grain: [application_id]
@@ -55,9 +87,31 @@ models:
     columns:
       - name: application_id
         config: {meta: {classification: identifier, entity: app}}
+      - name: stage_path
+        config: {meta: {classification: internal}}
+      - name: n_events
+        config: {meta: {classification: internal}}
+      - name: applied_at
+        config: {meta: {classification: internal}}
+      - name: screen_at
+        config: {meta: {classification: internal}}
+      - name: onsite_at
+        config: {meta: {classification: internal}}
+      - name: offer_at
+        config: {meta: {classification: internal}}
+      - name: hired_at
+        config: {meta: {classification: internal}}
+      - name: applied_local_date
+        config: {meta: {classification: internal}}
+      - name: offer_local_date
+        config: {meta: {classification: internal}}
+      - name: hired_local_date
+        config: {meta: {classification: internal}}
+      - name: terminal_stage
+        config: {meta: {classification: internal}}
 
   - name: int_employee_month
-    description: Employee x month of 2025 with an active flag and the intervals in effect on the 1st.
+    description: "Employee x month of 2025 with an active flag and the intervals in effect on the 1st."
     config:
       meta:
         grain: [employee_id, month_start]
@@ -65,13 +119,29 @@ models:
     columns:
       - name: employee_id
         config: {meta: {classification: identifier, entity: emp}}
+      - name: month_start
+        config: {meta: {classification: internal}}
+      - name: hire_date
+        config: {meta: {classification: internal}}
+      - name: termination_date
+        config: {meta: {classification: internal}}
+      - name: is_active
+        config: {meta: {classification: internal}}
+      - name: department_id
+        config: {meta: {classification: internal}}
+      - name: location_id
+        config: {meta: {classification: internal}}
+      - name: compensation_id
+        config: {meta: {classification: internal}}
+      - name: currency
+        config: {meta: {classification: internal}}
       - name: base_salary_local_minor
         config: {meta: {classification: compensation}}
       - name: base_salary_local
         config: {meta: {classification: compensation}}
 
   - name: int_comp_by_dept_month
-    description: Department x month compensation aggregates, groups under 5 employees suppressed, untagged.
+    description: "Department x month compensation aggregates, groups under 5 employees suppressed, untagged."
     config:
       meta:
         grain: [department_id, month_start]

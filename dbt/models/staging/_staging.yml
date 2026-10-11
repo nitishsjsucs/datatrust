@@ -53,6 +53,9 @@ models:
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: emp}}
+        data_tests:
+          - unique:
+              name: dq_u01_unique_stg_employees_employee_id
       - name: first_name
         data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
         config: {meta: {classification: pii}}
@@ -82,6 +85,10 @@ models:
           - {column: department_id, parent: stg_departments, parent_column: department_id}
           - {column: location_id, parent: stg_locations, parent_column: location_id}
         interval: {key: [employee_id], from: valid_from, to: valid_to}
+    data_tests:
+      - expression_is_true:
+          name: dq_h03_assignment_valid_to_after_valid_from
+          arguments: {expression: "valid_to is null or valid_to > valid_from"}
     columns:
       - name: assignment_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
@@ -89,9 +96,17 @@ models:
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: emp}}
+        data_tests:
+          - relationships:
+              name: dq_r01_job_assignments_employee_exists
+              arguments: {to: ref('stg_employees'), field: employee_id}
       - name: department_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: internal}}
+        data_tests:
+          - relationships:
+              name: dq_r02_job_assignments_department_exists
+              arguments: {to: ref('stg_departments'), field: department_id}
       - name: location_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: internal}}
@@ -176,12 +191,23 @@ models:
       - name: application_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: app}}
+        data_tests:
+          - unique:
+              name: dq_u03_unique_stg_applications_application_id
       - name: candidate_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: cand}}
+        data_tests:
+          - relationships:
+              name: dq_r03_applications_candidate_exists
+              arguments: {to: ref('stg_candidates'), field: candidate_id}
       - name: requisition_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: internal}}
+        data_tests:
+          - relationships:
+              name: dq_r04_applications_requisition_exists
+              arguments: {to: ref('stg_requisitions'), field: requisition_id}
       - name: source_channel
         data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
         config: {meta: {classification: internal}}
@@ -211,6 +237,11 @@ models:
       - name: stage
         data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
         config: {meta: {classification: internal}}
+        data_tests:
+          - accepted_values:
+              name: dq_s01_stage_accepted_values
+              arguments:
+                values: [applied, screen, onsite, offer, hired, rejected, withdrawn, declined]
       - name: stage_order
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: internal}}
@@ -247,6 +278,10 @@ models:
       - name: application_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: app}}
+        data_tests:
+          - relationships:
+              name: dq_r06_offers_application_exists
+              arguments: {to: ref('stg_applications'), field: application_id}
       - name: offer_status
         data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
         config: {meta: {classification: internal}}
@@ -269,12 +304,19 @@ models:
       - name: hire_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: hire}}
+        data_tests:
+          - unique:
+              name: dq_u04_unique_stg_hires_hire_id
       - name: application_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: app}}
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: emp}}
+        data_tests:
+          - relationships:
+              name: dq_r05_hires_employee_exists
+              arguments: {to: ref('stg_employees'), field: employee_id}
       - name: hire_date
         data_type: "date"
         config: {meta: {classification: internal}}
@@ -317,6 +359,10 @@ models:
       meta:
         grain: [currency, rate_date]
         fx: {currency: currency, date: rate_date, rate: rate_to_usd}
+    data_tests:
+      - unique_combination:
+          name: dq_u07_unique_stg_fx_rates_currency_rate_date
+          arguments: {combination_of_columns: [currency, rate_date]}
     columns:
       - name: currency
         data_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
@@ -343,6 +389,10 @@ models:
       - name: employee_id
         data_type: "{{ 'int64' if target.type == 'bigquery' else 'bigint' }}"
         config: {meta: {classification: identifier, entity: emp}}
+        data_tests:
+          - relationships:
+              name: dq_r07_payroll_lines_employee_exists
+              arguments: {to: ref('stg_employees'), field: employee_id}
       - name: pay_month
         data_type: "date"
         config: {meta: {classification: internal}}

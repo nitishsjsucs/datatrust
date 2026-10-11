@@ -96,3 +96,30 @@ def test_contract_types_mirror_dt_type():
         m = re.fullmatch(r"\{\{ '(.+)' if target.type == 'bigquery' else '(.+)' \}\}", expr)
         pair = (m.group(1), m.group(2)) if m else (expr, expr)
         assert pair in pairs, expr
+
+
+def test_documented_columns_match_warehouse(built_101):
+    """Every model's YAML documents exactly the columns it builds (classification coverage for the sanitizer)."""
+    import json
+
+    manifest = json.loads((built_101.target_path / "manifest.json").read_text())
+    models = [n for n in manifest["nodes"].values() if n["resource_type"] == "model"]
+    with built_101.connect() as con:
+        for m in models:
+            actual = {
+                r[0]
+                for r in con.execute(
+                    "select column_name from information_schema.columns where table_schema = ? and table_name = ?",
+                    [m["schema"], m["alias"]],
+                ).fetchall()
+            }
+            assert actual, m["name"]
+            assert set(m["columns"]) == actual, m["name"]
+            for col in m["columns"].values():
+                assert col["meta"].get("classification") in {
+                    "pii",
+                    "identifier",
+                    "compensation",
+                    "internal",
+                    "public",
+                }, (m["name"], col["name"])

@@ -15,7 +15,7 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | Component | Status |
 |---|---|
 | Synthetic data generator (exact, seeded counts) | implemented; tests pass locally (`uv run pytest`), CI configured |
-| dbt models, 22 enforced contracts, 40 checks | in progress: 29 models (13 staging views, 6 intermediate, 5 marts, 4 metrics, 1 restricted view) with 22 enforced contracts build on DuckDB (stand-in), tested locally; the 40 checks are planned |
+| dbt models, 22 enforced contracts, 40 checks | implemented: 29 models, 22 enforced contracts and 40 checks build and pass on clean seeds on DuckDB (stand-in), tested locally; CI configured to run them under `TZ=UTC` and `TZ=America/Los_Angeles` |
 | OpenLineage capture and column-level lineage graph | planned |
 | Diagnostic probes, root-cause ranker, baselines | planned |
 | Fault-injection benchmark (20 scenarios) | planned |
@@ -41,6 +41,21 @@ Every component carries exactly one label (SPEC section 4.1). A label changes on
 | payroll_lines | 12,060 | **total** | **43,190** |
 
 Employees: 780 tenured, 60 leavers (2025-06-30), 360 hired in 2025 (30 per month). Eight locations in six currencies; FX rates are a bounded daily random walk that never repeats on consecutive days. People are synthetic: names are drawn from fixed word lists and emails use `example.com`.
+
+## Checks
+
+40 dbt test nodes, all named `dq_*` and listed in [`checks/registry.yml`](checks/registry.yml): 18 generic tests and 22 singular SQL tests. No dbt packages are used.
+
+| Category | Count | Examples |
+|---|---|---|
+| Record uniqueness | 8 | unique employee, hire and application keys; one compensation row per employee; one FX rate per currency-day |
+| Referential integrity | 8 | assignments, applications, hires, offers and payroll lines point at existing parents; every hire has an accepted offer |
+| Historical intervals | 7 | no overlapping or gapped assignment and compensation history; first assignment starts at hire; no payroll after termination |
+| Recruiting-stage transitions | 7 | allowed stage pairs, monotonic timestamps, terminal stage last, recruiter events in local business hours, hired event on the local hire date |
+| Compensation and FX | 6 | USD salary recomputes from staging and the daily rate, FX not stale, complete 2025 calendar, within 15% of the trailing 30-day median |
+| SQL reconciliation | 4 | payroll actual vs expected, headcount, payroll cost and a three-way hires reconciliation across metric, fact and HRIS events |
+
+Separately, 22 enforced dbt model contracts (13 staging, 5 marts, 4 metrics) are the schema contracts. Staging passes raw integer money columns through uncast, so a source that starts delivering salary as text fails the `stg_compensation` contract at build time; the runner classifies that as `schema_contract` with the column name.
 
 ## Architecture
 
