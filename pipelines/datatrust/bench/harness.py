@@ -160,6 +160,7 @@ def run_trial(
                 "lineageCoverage": coverage,
                 # Kept in memory for the PII prompt test; dropped from saved reports (report.slim).
                 "promptText": "\n".join(m["content"] for m in prompt["messages"]),
+                "evidence": evidence,
                 "summaryText": json.dumps(template["rendered"]),
             }
         )

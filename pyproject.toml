@@ -59,3 +59,5 @@ select = ["E", "F", "I", "B", "UP", "W"]
 # Markdown table rows and user-facing fix instructions are long strings.
 "pipelines/datatrust/bench/report.py" = ["E501"]
 "pipelines/datatrust/doctor.py" = ["E501"]
+"pipelines/datatrust/bench/summaries.py" = ["E501"]
+"pipelines/datatrust/bench/pii.py" = ["E501"]

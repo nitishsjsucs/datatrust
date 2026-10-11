@@ -57,6 +57,7 @@ def slim(record: dict[str, Any]) -> dict[str, Any]:
     rec.pop("top", None)
     rec.pop("promptText", None)
     rec.pop("summaryText", None)
+    rec.pop("evidence", None)
     return rec
 
 

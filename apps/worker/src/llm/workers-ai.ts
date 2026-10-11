@@ -1,5 +1,5 @@
 import { type ChatMessage, incidentSummaryJsonSchema } from '@datatrust/rca';
-import type { Summarizer } from './summarizer';
+import type { Summarizer } from '@datatrust/rca';
 
 type AiRun = (model: string, inputs: unknown, options?: unknown) => Promise<unknown>;
 

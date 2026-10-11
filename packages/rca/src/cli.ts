@@ -17,11 +17,18 @@
  *   prompt           {evidence}                                           -> {messages}
  *   validate         {draft, evidence}                                    -> {ok, violations}
  *   template         {evidence}                                           -> {draft, rendered}
+ *   summarize        {evidence, provider: template|local-llm, llmUrl?}    -> SummaryOutcome (+ rawDrafts)
  */
 import { readFileSync } from 'node:fs';
 import { buildEvidence, type SanitizedEvidence } from './evidence/evidence';
 import { findUnsanitized, sanitizeProbeResults } from './evidence/sanitize';
-import { buildPrompt } from './summary/prompt';
+import {
+  OpenAICompatSummarizer,
+  type Summarizer,
+  summarizeGrounded,
+  TemplateSummarizer,
+} from './summary/grounded';
+import { buildPrompt, type ChatMessage } from './summary/prompt';
 import { renderSummary } from './summary/render';
 import { templateDraft } from './summary/template';
 import { validateSummary } from './summary/validate';
@@ -103,6 +110,26 @@ async function run(command: string, input: Input): Promise<unknown> {
       return { messages: buildPrompt(input['evidence'] as SanitizedEvidence) };
     case 'validate':
       return validateSummary(input['draft'], input['evidence'] as SanitizedEvidence);
+    case 'summarize': {
+      const ev = input['evidence'] as SanitizedEvidence;
+      const base: Summarizer =
+        input['provider'] === 'local-llm'
+          ? new OpenAICompatSummarizer(String(input['llmUrl'] ?? 'http://127.0.0.1:8160'))
+          : new TemplateSummarizer();
+      // Record every raw provider answer, so the eval can report JSON validity and scan drafts for PII.
+      const rawDrafts: string[] = [];
+      const recording: Summarizer = {
+        provider: base.provider,
+        model: base.model,
+        draft: async (messages: ChatMessage[], evidence: SanitizedEvidence) => {
+          const raw = await base.draft(messages, evidence);
+          rawDrafts.push(typeof raw === 'string' ? raw : JSON.stringify(raw));
+          return raw;
+        },
+      };
+      const outcome = await summarizeGrounded(recording, ev);
+      return { ...outcome, rawDrafts };
+    }
     case 'template': {
       const ev = input['evidence'] as SanitizedEvidence;
       const draft = templateDraft(ev);

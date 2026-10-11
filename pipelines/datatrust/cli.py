@@ -102,6 +102,8 @@ def _cmd_bench(args: argparse.Namespace) -> int:
     from datatrust.bench.scenarios import SCENARIOS
     from datatrust.rca_cli import rca
 
+    if args.what == "summaries":
+        return _bench_summaries(args)
     if args.mode == "e2e":
         return _bench_e2e(args)
     seeds = _parse_seeds(args.seeds)
@@ -145,6 +147,19 @@ def _cmd_bench(args: argparse.Namespace) -> int:
             return 1
         print("gate passed", file=sys.stderr)
     return 0
+
+
+def _bench_summaries(args: argparse.Namespace) -> int:
+    from datatrust import config
+    from datatrust.bench.summaries import evaluate_summaries, write_summary_report
+
+    seeds = _parse_seeds(args.seeds if args.seeds != "101-105" else "101")
+    report = evaluate_summaries(seeds[0], args.provider, llm_url=args.llm_url, workers=args.workers or 4)
+    command = args.command_label or "uv run datatrust " + " ".join(sys.argv[1:])
+    jpath, mpath = write_summary_report(report, Path(args.out) if args.out else config.RESULTS_DIR, command)
+    print(mpath.read_text())
+    print(json.dumps({"json": str(jpath), "md": str(mpath)}))
+    return 0 if report["summary"]["piiLeaks"] == 0 else 1
 
 
 def _bench_e2e(args: argparse.Namespace) -> int:
@@ -369,8 +384,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--verbose", action="store_true", help="print dbt output")
     p.set_defaults(func=_cmd_build)
 
-    p = sub.add_parser("bench", help="fault-injection benchmark (SPEC 12)")
+    p = sub.add_parser(
+        "bench", help="fault-injection benchmark (SPEC 12); `bench summaries` evaluates summaries"
+    )
+    p.add_argument("what", nargs="?", choices=["trials", "summaries"], default="trials")
     p.add_argument("--mode", choices=["offline", "e2e"], default="offline")
+    p.add_argument(
+        "--provider", choices=["template", "local-llm"], default="template", help="bench summaries only"
+    )
+    p.add_argument(
+        "--llm-url", default="http://127.0.0.1:8160", help="bench summaries with --provider local-llm"
+    )
     p.add_argument("--seeds", default="101-105", help="e.g. 101-105 or 1,2,3")
     p.add_argument("--scenarios", help="comma-separated scenario ids (default: all 20)")
     p.add_argument("--no-clean", action="store_true", help="skip the clean trial per seed")
