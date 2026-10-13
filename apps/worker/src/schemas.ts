@@ -51,6 +51,17 @@ export const ArtifactSchema = z.object({
   data: z.unknown(),
 });
 
+export const AlertSchema = z.object({
+  runId: z.string().min(1).max(100),
+  metricNode: z.string().regex(/^model\.[a-z_]+\.[a-z0-9_]+$/),
+  column: z.string().regex(/^[a-z_][a-z0-9_]*$/).optional(),
+  observed: z.number(),
+  expected: z.number(),
+});
+
+/** A failed metric found by the runner's metric watch on a build whose checks all passed (the run id is the job's). */
+export const MetricAlertSchema = AlertSchema.omit({ runId: true });
+
 export const CompleteSchema = z.object({
   status: z.enum(['completed', 'failed']),
   // Request caps keep CPU bounded on the Free plan's 10 ms (SPEC 28.5.3): 40 or 41 check results and at most
@@ -58,6 +69,7 @@ export const CompleteSchema = z.object({
   checkResults: z.array(CheckResultSchema).max(100).optional(),
   probeResults: z.array(ProbeResultSchema).max(100).optional(),
   expectedLineageEvents: z.number().int().min(0).optional(),
+  metricAlert: MetricAlertSchema.optional(),
   error: z.string().max(200).optional(),
 });
 
@@ -77,13 +89,6 @@ export const PruneSchema = z.object({
   dryRun: z.boolean().default(false),
 });
 
-export const AlertSchema = z.object({
-  runId: z.string().min(1).max(100),
-  metricNode: z.string().regex(/^model\.[a-z_]+\.[a-z0-9_]+$/),
-  column: z.string().regex(/^[a-z_][a-z0-9_]*$/).optional(),
-  observed: z.number(),
-  expected: z.number(),
-});
 
 /** One message per lineage POST: up to 10 events already stored in R2 (SPEC 28.5.2). */
 export const LineageBundleSchema = z.object({
@@ -100,4 +105,5 @@ export const InvestigateMessage = z.object({
 
 export type CreateRun = z.infer<typeof CreateRunSchema>;
 export type Alert = z.infer<typeof AlertSchema>;
+export type MetricAlertBody = z.infer<typeof MetricAlertSchema>;
 export type InvestigateMsg = z.infer<typeof InvestigateMessage>;

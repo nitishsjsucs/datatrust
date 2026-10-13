@@ -1,7 +1,8 @@
 /**
  * ValidationRunWorkflow (SPEC 13.4): register the run, enqueue a dbt_build job for the runner, wait for the
  * runner's build-complete event, wait until Queues have ingested every check result and lineage event,
- * summarize, dispatch one investigation if anything failed, finalize. A run that cannot finish (no build
+ * summarize, dispatch one investigation if anything failed (a failing check, or else a failed metric that the
+ * runner's metric watch reported with the build), finalize. A run that cannot finish (no build
  * event within the wait, a failed build, or queues that never caught up) ends 'stale' or 'error' and fails
  * its open jobs, so no runner leases work whose result nothing would receive.
  */
@@ -9,6 +10,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloud
 import { jsonStep, RETRY_INGEST } from './steps';
 import type { AppEnv } from '../env';
 import { investigationIds } from '../investigation-ids';
+import type { Alert, MetricAlertBody } from '../schemas';
 import { auditEvent, auditEventId, createSink } from '../sinks/event-sink';
 import {
   countCheckResults,
@@ -32,6 +34,8 @@ export interface BuildCompletePayload {
   status: 'completed' | 'failed';
   checkCount?: number;
   expectedLineageEvents?: number;
+  /** Set only when every check passed and a metric moved against the last green run (runner metric watch). */
+  metricAlert?: MetricAlertBody;
   error?: string;
 }
 
@@ -67,6 +71,20 @@ export async function summarizeRun(db: D1Database, runId: string): Promise<RunSu
     if (c.status === 'fail' || c.status === 'error') out.failing.push(c.checkId);
   }
   return out;
+}
+
+export type Dispatch = { trigger: 'checks'; alert?: undefined } | { trigger: 'alert'; alert: Alert };
+
+/**
+ * The one investigation a finished build gets: failing checks start a checks investigation; otherwise a failed
+ * metric from the runner's metric watch starts an alert investigation from that metric. Only one, because the
+ * checks investigation already traces the run and one investigation per run keeps the Free plan budget per run
+ * unchanged (SPEC 28). Null for a green run.
+ */
+export function dispatchFor(runId: string, summary: RunSummary, build: BuildCompletePayload): Dispatch | null {
+  if (summary.fail + summary.error > 0) return { trigger: 'checks' };
+  if (build.metricAlert) return { trigger: 'alert', alert: { runId, ...build.metricAlert } };
+  return null;
 }
 
 export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, ValidationRunParams> {
@@ -128,11 +146,12 @@ export class ValidationRunWorkflow extends WorkflowEntrypoint<AppEnv, Validation
 
     const summary = await jsonStep<RunSummary>(step, 'summarize-run', async () => summarizeRun(db, runId));
 
-    const failed = summary.fail + summary.error > 0;
-    if (failed) {
+    const dispatch = dispatchFor(runId, summary, build);
+    const failed = dispatch !== null;
+    if (dispatch) {
       await jsonStep(step, 'dispatch-investigation', async () => {
-        const ids = await investigationIds(runId, 'checks');
-        await this.env.INVESTIGATE_Q.send({ runId, incidentId: ids.incidentId, trigger: 'checks' });
+        const ids = await investigationIds(runId, dispatch.trigger, dispatch.alert);
+        await this.env.INVESTIGATE_Q.send({ runId, incidentId: ids.incidentId, ...dispatch });
         return ids;
       });
     }

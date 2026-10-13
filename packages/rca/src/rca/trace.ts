@@ -7,6 +7,31 @@ export function isFailing(c: CheckResult): boolean {
   return c.status === 'fail' || c.status === 'error';
 }
 
+/** A failed metric reported to POST /api/alerts (by the runner's metric watch or an operator). */
+export interface MetricAlert {
+  metricNode: NodeId;
+  column?: string | undefined;
+  observed: number;
+  expected: number;
+}
+
+/**
+ * A failed metric as a failing check on the metric's node and column, so the trace starts from the metric
+ * (SPEC 13.1). The Worker's InvestigationWorkflow and the offline benchmark both use this one conversion.
+ */
+export function alertAsCheck(alert: MetricAlert): CheckResult {
+  return {
+    checkId: `alert:${alert.metricNode.split('.').pop()}`,
+    testName: 'metric_alert',
+    category: 'alert',
+    kind: 'data_test',
+    status: 'fail',
+    failures: 1,
+    node: alert.metricNode,
+    columns: alert.column ? [alert.column] : [],
+  };
+}
+
 /** Where the trace starts for one check: its tested node and columns, plus registry `also` targets. */
 export function checkStartRefs(check: CheckResult, g: LineageGraph): ColumnRef[] {
   const all = (node: NodeId): ColumnRef[] => {

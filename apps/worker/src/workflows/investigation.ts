@@ -4,6 +4,7 @@
  * frozen weights, build sanitized evidence, summarize, persist the incident.
  */
 import {
+  alertAsCheck,
   buildEvidence,
   type CheckResult,
   findUnsanitized,
@@ -62,23 +63,16 @@ export interface Context {
   lastGreen: LastGreen | null;
 }
 
-export function alertAsCheck(alert: Alert): CheckResult {
-  return {
-    checkId: `alert:${alert.metricNode.split('.').pop()}`,
-    testName: 'metric_alert',
-    category: 'alert',
-    kind: 'data_test',
-    status: 'fail',
-    failures: 1,
-    node: alert.metricNode,
-    columns: alert.column ? [alert.column] : [],
-  };
-}
+/** The shared conversion (`@datatrust/rca`), re-exported for callers of this module. */
+export { alertAsCheck };
 
-/** D1 part of step persist-incident: the incident row and, for a checks trigger, the run's incident id. */
+/**
+ * D1 part of step persist-incident: the incident row and the run's incident id (an alert's incident links only
+ * a run without one, such as a run whose checks passed but whose metric watch reported a failed metric).
+ */
 export async function persistIncidentRows(db: D1Database, i: IncidentInsert): Promise<void> {
   await upsertIncident(db, i);
-  if (i.trigger === 'checks') await setRunIncident(db, i.runId, i.incidentId);
+  await setRunIncident(db, i.runId, i.incidentId, i.trigger !== 'checks');
 }
 
 export async function readRelations(env: AppEnv, runId: string): Promise<RelationsMap> {

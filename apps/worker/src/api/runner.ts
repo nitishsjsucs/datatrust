@@ -123,6 +123,7 @@ runner.post('/jobs/:jobId/complete', async (c) => {
       status: b.status,
       checkCount: checks.length,
       expectedLineageEvents: b.expectedLineageEvents ?? 0,
+      ...(b.metricAlert ? { metricAlert: b.metricAlert } : {}),
       ...(b.error ? { error: b.error } : {}),
     });
     return c.json({ ok: true, checkMessages: messages.length, repeat, event });

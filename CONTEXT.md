@@ -27,8 +27,15 @@ columns, and for singular SQL tests the further nodes it reads (`also`). A **Che
 outcome in one run. An enforced **contract** failure or a model build error is also reported as a
 CheckResult (`schema_contract`, `model_error`), but contracts are not counted among the 40 checks.
 
-**Failed metric**: a failing reconciliation check on a `metric_*` model (X02 to X04), or an **alert** posted
-to `/api/alerts` naming a metric model. Both start an investigation.
+**Failed metric**: a failing reconciliation check on a `metric_*` model (X02 to X04), or an **alert** naming a
+metric model: posted to `/api/alerts`, or reported by the **metric watch**. Both start an investigation.
+
+**Metric watch**: after a build whose checks all passed, the runner compares every metric model (dbt meta
+`metric` and `grain`) cell by cell with the last green run's snapshot of the same seed. The calendar is closed,
+so a moved, missing or duplicated department-month means the metric failed; the runner reports the metric with
+the largest share of moved cells with the build, the run ends `failed` and gets one alert investigation, and the
+run leaves no snapshot (restated history never becomes the baseline). The offline benchmark runs the same
+comparison against a clean build and traces each trial a second time from that failed metric alone.
 
 **Lineage graph**: nodes are dbt unique ids (sources and models); column edges come from OpenLineage
 `columnLineage` facets, dataset edges from event inputs and outputs. OpenLineage dataset names are matched

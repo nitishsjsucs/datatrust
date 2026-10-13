@@ -98,6 +98,51 @@ def test_gate():
     assert any("clean false positives" in p for p in gate(clean_fp, base))
 
 
+def _watch(alert_metric=None, ranked=()):
+    if alert_metric is None:
+        return {"watched": 4, "failed": [], "alert": None}
+    node = f"model.datatrust.{alert_metric}"
+    return {
+        "watched": 4,
+        "failed": [
+            {"node": node, "column": "v", "cells": 10, "changed": 2, "observed": 1.0, "expected": 2.0}
+        ],
+        "alert": {"metricNode": node, "column": "v", "observed": 1.0, "expected": 2.0},
+        "ranked": list(ranked),
+    }
+
+
+def test_metric_trigger_summary_and_gate():
+    recs = [
+        {**_rec("S01", True, ["g"]), "metricWatch": _watch("metric_hires_monthly", ["g", "a"])},
+        {**_rec("S02", True, ["g"]), "metricWatch": _watch("metric_headcount_monthly", ["a", "b", "c", "g"])},
+        {**_rec("S03", True, ["g"]), "metricWatch": _watch()},
+        {
+            "trial": "clean",
+            "scenario": None,
+            "kind": "clean",
+            "groundTruth": None,
+            "detected": False,
+            "failing": [],
+            "metricWatch": _watch(),
+        },
+    ]
+    s = summarize(recs)
+    mt = s["metricTrigger"]
+    assert (mt["injected"], mt["withFailedMetric"], mt["clean"], mt["cleanFalseAlarms"]) == (3, 2, 1, 0)
+    assert mt["overAlerted"]["n"] == 2
+    assert mt["overAlerted"]["top1"] == pytest.approx(0.5)
+    assert mt["overAlerted"]["top3"] == pytest.approx(0.5)
+    assert mt["alertMetrics"] == {"metric_headcount_monthly": 1, "metric_hires_monthly": 1}
+    assert mt["perScenario"]["S03"]["ranks"] == ["no alert"]
+    assert mt["perScenario"]["S02"]["ranks"] == [4]
+    assert gate(s, baseline_from(s)) == []
+    recs[-1] = {**recs[-1], "metricWatch": _watch("metric_hires_monthly", ["a"])}
+    assert any("metric watch false alarms" in p for p in gate(summarize(recs), baseline_from(s)))
+    # Reports without the metric watch summarize exactly as before (no metricTrigger key).
+    assert "metricTrigger" not in summarize([_rec("S01", True, ["g"])])
+
+
 def test_summary_violation_rules():
     from datatrust.bench.summaries import violation_rule
 

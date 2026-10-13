@@ -1,8 +1,10 @@
 """Runner loop: lease a job, execute it, complete it (SPEC 14.2, ADR-0001).
 
 dbt_build: synthesize the seed, apply the scenario if one is given (scenario + decoys, exactly as the offline
-benchmark does), load, `dbt-ol build`, snapshot marts on green runs, upload relations and run_results, post
-OpenLineage events in POSTs of at most 10 events and 256 KB with the job headers, complete with check results.
+benchmark does), load, `dbt-ol build`, on a green build run the metric watch against the last green
+snapshot of the same seed and snapshot marts unless a metric moved, upload relations and run_results, post
+OpenLineage events in POSTs of at most 10 events and 256 KB with the job headers, complete with check
+results and the failed metric, if any (the Worker then investigates it as an alert).
 diagnostics: render and run the requested probes against this runner's own warehouse and relations (never
 SQL from the request), on a read-only connection; sanitize with `rca sanitize`; complete.
 """
@@ -56,6 +58,35 @@ def snapshot_marts(db: Path, snapshot_root: Path, run_id: str, relations: dict[s
                 )
                 written.append(node["name"])
     return written
+
+
+def after_green_build(
+    db: Path,
+    relations: dict[str, Any],
+    snapshot_root: Path,
+    run_id: str,
+    *,
+    seed: int,
+    target: str = "duckdb",
+) -> dict[str, Any] | None:
+    """Metric watch on a build whose checks all passed (local target). Compares the metrics with the last
+    green snapshot of the same seed; when one moved, returns the alert body (without runId) and leaves no
+    snapshot, so restated history never becomes the next baseline. Otherwise snapshots the marts as the new
+    last green run and returns None."""
+    from datatrust.checks.metric_watch import (
+        choose_alert,
+        compare_metrics,
+        last_green_snapshot,
+        write_snapshot_meta,
+    )
+
+    previous = last_green_snapshot(snapshot_root, seed=seed, target=target)
+    alert = choose_alert(compare_metrics(db, relations, previous)) if previous is not None else None
+    if alert is not None:
+        return alert
+    snapshot_marts(db, snapshot_root, run_id, relations)
+    write_snapshot_meta(snapshot_root / run_id, seed=seed, target=target)
+    return None
 
 
 def handle_dbt_build(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
@@ -112,16 +143,26 @@ def handle_dbt_build(client: WorkerClient, job: LeasedJob) -> dict[str, Any]:
         raise RuntimeError("dbt produced no run_results.json")
     checks = [c.to_json() for c in classify(res.run_results(), res.manifest())]
     relations = json.loads((work / "target" / "relations.json").read_text())
+    metric_alert = None
     if target == "duckdb" and not any(c["status"] in ("fail", "error") for c in checks):
-        snapshot_marts(db, snapshots, job.run_id, relations)
+        metric_alert = after_green_build(db, relations, snapshots, job.run_id, seed=seed)
     client.upload_artifact(job, "relations", relations)
     client.upload_artifact(job, "run_results", _slim_run_results(res.run_results()))
     events = res.openlineage_events()
     event_ids = client.post_lineage(job, events)
-    body = {"status": "completed", "checkResults": checks, "expectedLineageEvents": len(set(event_ids))}
+    body: dict[str, Any] = {
+        "status": "completed",
+        "checkResults": checks,
+        "expectedLineageEvents": len(set(event_ids)),
+    }
+    if metric_alert is not None:
+        body["metricAlert"] = metric_alert
     client.complete(job, body)
     failing = sorted(c["checkId"] for c in checks if c["status"] in ("fail", "error"))
-    return {"checks": len(checks), "failing": failing, "lineageEvents": len(set(event_ids))}
+    out = {"checks": len(checks), "failing": failing, "lineageEvents": len(set(event_ids))}
+    if metric_alert is not None:
+        out["metricAlert"] = metric_alert["metricNode"]
+    return out
 
 
 def _slim_run_results(rr: dict[str, Any]) -> dict[str, Any]:

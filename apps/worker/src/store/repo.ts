@@ -147,8 +147,15 @@ export async function finishRun(
     .run();
 }
 
-export async function setRunIncident(db: D1Database, runId: string, incidentId: string): Promise<void> {
-  await db.prepare(`UPDATE runs SET incident_id = ? WHERE run_id = ?`).bind(incidentId, runId).run();
+/** Link a run to its incident. `onlyIfUnset` (alerts) never replaces the run's checks incident. */
+export async function setRunIncident(
+  db: D1Database,
+  runId: string,
+  incidentId: string,
+  onlyIfUnset = false,
+): Promise<void> {
+  const sql = `UPDATE runs SET incident_id = ? WHERE run_id = ?${onlyIfUnset ? ' AND incident_id IS NULL' : ''}`;
+  await db.prepare(sql).bind(incidentId, runId).run();
 }
 
 // ------------------------------------------------------------------------------------------- jobs

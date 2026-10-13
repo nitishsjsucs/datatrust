@@ -4,7 +4,7 @@ import { buildLineageGraph } from '@datatrust/rca';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { AppEnv } from '../src/env';
 import { getJob, getRun, lineageBundleStatements, upsertCheckResults, upsertLineageGraph } from '../src/store/repo';
-import { awaitIngested } from '../src/workflows/validation-run';
+import { awaitIngested, dispatchFor, type RunSummary } from '../src/workflows/validation-run';
 import { request } from './helpers/app';
 import { s01 } from './helpers/fixtures';
 import { humanClaims, type Keys, makeKeys, mint, OPERATOR, serviceClaims, testEnv } from './helpers/keys';
@@ -72,6 +72,44 @@ describe('ValidationRunWorkflow', () => {
     expect(run?.status).toBe('failed');
     expect(run?.n_fail).toBe(1);
     expect(run?.workflow_instance_id).toBe(runId);
+  });
+
+  it('dispatches one investigation: failing checks first, else the failed metric the runner reported', () => {
+    const build = { jobId: 'job_x_build', status: 'completed' as const, checkCount: 40, expectedLineageEvents: 3 };
+    const metricAlert = { metricNode: 'model.datatrust.metric_headcount_monthly', column: 'headcount', observed: 9, expected: 8 };
+    const summary = (fail: number): RunSummary => ({ pass: 40 - fail, fail, error: 0, skip: 0, byCategory: {}, failing: [] });
+    expect(dispatchFor('run_x', summary(1), { ...build, metricAlert })).toEqual({ trigger: 'checks' });
+    expect(dispatchFor('run_x', summary(0), { ...build, metricAlert })).toEqual({
+      trigger: 'alert',
+      alert: { runId: 'run_x', ...metricAlert },
+    });
+    expect(dispatchFor('run_x', summary(0), build)).toBeNull();
+  });
+
+  it('ends a run whose checks passed but whose metric moved as failed, with an alert investigation', async () => {
+    const runId = 'run_wf_metric';
+    const metricAlert = { metricNode: 'model.datatrust.metric_hires_monthly', column: 'hires', observed: 3, expected: 2 };
+    await using instance = await introspectWorkflowInstance(baseEnv.VALIDATION_RUN, runId);
+    await instance.modify(async (m) => {
+      await m.disableRetryDelays();
+      await m.mockEvent({
+        type: 'build-complete',
+        payload: { jobId: `job_${runId}_build`, status: 'completed', checkCount: 40, expectedLineageEvents: 3, metricAlert },
+      });
+      await m.mockStepResult({ name: 'dispatch-investigation' }, JSON.stringify({ instanceId: 'mocked' }));
+    });
+    await ingest(runId, s01.checks.map((c) => ({ ...c, status: 'pass' as const, failures: 0 })));
+    await baseEnv.DB.prepare(`INSERT INTO runs (run_id, target, seed, scenario, status, created_at) VALUES (?, 'duckdb', 101, NULL, 'queued', ?)`)
+      .bind(runId, new Date().toISOString())
+      .run();
+    await baseEnv.VALIDATION_RUN.create({ id: runId, params: { runId, target: 'duckdb', seed: 101, scenario: null } });
+    await instance.waitForStatus('complete');
+    const summary = JSON.parse((await instance.waitForStepResult({ name: 'summarize-run' })) as string);
+    expect(summary.failing).toEqual([]);
+    expect(await instance.waitForStepResult({ name: 'dispatch-investigation' })).toBe(JSON.stringify({ instanceId: 'mocked' }));
+    const run = await getRun(baseEnv.DB, runId);
+    expect(run?.status).toBe('failed');
+    expect(run?.n_fail).toBe(0);
   });
 
   it('awaitIngested throws until every check result and lineage event is in D1', async () => {

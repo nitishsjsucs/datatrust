@@ -3,6 +3,7 @@
  * and the offline benchmark, so they use exactly the code the Worker runs (ADR-0002).
  *
  *   graph            {events, relations}                                  -> LineageGraph
+ *   alert-check      {alert}                                              -> CheckResult (a failed metric)
  *   trace            {checks, graph|events, relations, mode?}             -> {candidates, failing}
  *   plan             {checks, graph|events, relations}                    -> {candidates, failing, probes}
  *   rank             {checks, graph|events, relations, probeResults, baselineChecksums?, weights?}
@@ -41,7 +42,7 @@ import { buildLineageGraph, columnLineageCoverage } from './lineage/graph';
 import { baselineOrders } from './rca/baselines';
 import { planProbes } from './rca/plan';
 import { rankAll } from './rca/rank';
-import { traceUpstream } from './rca/trace';
+import { alertAsCheck, type MetricAlert, traceUpstream } from './rca/trace';
 import { evaluate, leaveOneScenarioOut, tune } from './rca/tune';
 import { FROZEN_WEIGHTS } from './rca/weights';
 import type { CheckResult, LineageGraph, ProbeResult, RankedCandidate, RelationsMap } from './types';
@@ -51,6 +52,7 @@ type Input = Record<string, unknown>;
 const COMMON = ['checks', 'graph', 'events', 'relations'];
 const ALLOWED_KEYS: Record<string, string[]> = {
   graph: ['events', 'relations'],
+  'alert-check': ['alert'],
   trace: [...COMMON, 'mode'],
   plan: COMMON,
   rank: [...COMMON, 'probeResults', 'baselineChecksums', 'weights'],
@@ -86,6 +88,8 @@ async function run(command: string, input: Input): Promise<unknown> {
   switch (command) {
     case 'graph':
       return graphOf(input);
+    case 'alert-check':
+      return alertAsCheck(input['alert'] as MetricAlert);
     case 'trace': {
       const mode = input['mode'] === 'dataset' ? 'dataset' : 'column';
       return traceUpstream(input['checks'] as CheckResult[], graphOf(input), mode);

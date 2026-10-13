@@ -114,6 +114,7 @@ def _cmd_bench(args: argparse.Namespace) -> int:
         work_dir=Path(args.work_dir) if args.work_dir else None,
         workers=args.workers,
         keep=args.keep,
+        metric_watch=not args.no_metric_watch,
     )
     wall = time.perf_counter() - t0
     loso = None
@@ -627,6 +628,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dev-results", help="dev-seed report JSON; enables the leave-one-scenario-out figure")
     p.add_argument("--work-dir", help="scratch directory for trials (default .data/bench)")
     p.add_argument("--keep", action="store_true", help="keep each trial's warehouse and dbt target")
+    p.add_argument(
+        "--no-metric-watch",
+        action="store_true",
+        help="skip the metric watch (comparing each trial's metrics with a clean build and tracing from "
+        "the failed metric)",
+    )
     p.add_argument("--gate", help="baseline JSON; fail on clean false positives or a drop of more than 0.05")
     p.add_argument("--parity", action="store_true", help="e2e: also run the offline trials and compare top-3")
     p.add_argument("--command-label", help=argparse.SUPPRESS)

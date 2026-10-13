@@ -316,7 +316,6 @@ datatrust/
     src/api/incidents.ts
     src/api/alerts.ts
     src/api/lake.ts                        # /api/lake/export for the committer (runner, both environments)
-    src/api/dev.ts                         # /api/dev/* only when ENVIRONMENT=local
     src/queues/router.ts                   # dispatch by batch.queue
     src/queues/check-results.ts
     src/queues/lineage-events.ts
@@ -447,6 +446,7 @@ datatrust/
       dbt/overlay.py                       # temp project copy + patch application
       checks/registry.py
       checks/results.py                    # run_results.json + manifest -> CheckResult[]
+      checks/metric_watch.py               # failed metrics: closed months moved since the last green run
       diagnostics/probes.py                # registry + Jinja rendering per dialect
       diagnostics/templates/*.sql.j2       # one file per probe (section 10)
       runner/client.py                     # Worker API client (dev JWT or Access service token headers)
@@ -482,7 +482,8 @@ datatrust/
       test_readonly_guard.py
       test_scenarios.py
       test_patch_combinations.py           # every (scenario, decoy set) drawn for seeds 1-3, 101-105 applies cleanly
-      test_injection_detected_smoke.py     # 3 scenarios end-to-end through dbt, offline
+      test_injection_detected_smoke.py     # 3 scenarios end-to-end through dbt, offline; S01 also from its failed metric
+      test_metric_watch.py                 # moved, missing and duplicated cells; last green snapshot per seed; runner alert
       test_metrics.py
       test_no_pii_in_prompts.py
       test_restricted_views.py
@@ -597,7 +598,7 @@ Wording rule: SHA-256 masking (BigQuery) and HMAC tokens (sanitizer) are **pseud
 - **Staging (13 views, enforced contracts):** `stg_<table>` for each source: renames, typed casts through `dt_cast`, location join for local timezone on stage events. Raw integer money columns pass through uncast (section 7.2). Instants stay TIMESTAMPTZ (DuckDB) / TIMESTAMP (BigQuery); no naive timestamp is ever cast to a zoned one.
 - **Intermediate (6 tables):** `int_fx_daily`; `int_assignment_current`; `int_compensation_usd` (grain: one row per compensation interval, 1,980 rows; `fx_date = least(greatest(valid_from, date '2025-01-01'), date '2025-12-31')`, `base_salary_usd = dt_cast(base_salary_local * rate_to_usd on fx_date, 'money')`); `int_application_stage_path` (one row per application, `ordered_path` stage string and timestamps); `int_employee_month` (employee x month active flag with comp as-of the 1st); `int_comp_by_dept_month` (department x month aggregates of compensation, no per-person rows, groups under 5 employees suppressed, untagged; it feeds the authorized view, section 7.4).
 - **Marts (5 tables, enforced contracts):** `dim_employee`, `fct_hires`, `fct_recruiting_funnel`, `fct_compensation_usd` (grain: **one row per employee**, 1,200 rows: the compensation interval active on `as_of = least(date '2025-12-31', coalesce(termination_date, date '2025-12-31'))`, with its USD value from `int_compensation_usd`), `fct_payroll_reconciliation` (employee x month: actual vs expected gross, delta pct, USD at the rate on the 1st of the pay month).
-- **Metrics (4 tables, enforced contracts):** `metric_headcount_monthly`, `metric_hires_monthly` (hires bucketed by local hire date), `metric_time_to_hire`, `metric_payroll_cost_usd_monthly` (all by department x month). "Failed metrics" in the resume are checks on these models (X02-X04) or alerts posted to `/api/alerts` naming one of them.
+- **Metrics (4 tables, enforced contracts):** `metric_headcount_monthly`, `metric_hires_monthly` (hires bucketed by local hire date), `metric_time_to_hire`, `metric_payroll_cost_usd_monthly` (all by department x month). "Failed metrics" in the resume are checks on these models (X02-X04) or alerts naming one of them: posted to `/api/alerts` by an operator, or reported by the runner's metric watch with a green build (section 13.4: a closed department-month whose metric moved since the last green run of the same seed; `pipelines/datatrust/checks/metric_watch.py`).
 - **Restricted (1 view):** `rpt_compensation_by_dept` selects from `int_comp_by_dept_month` only, exposes no PII or per-person compensation.
 
 Clean-seed invariants asserted by `test_clean_baseline.py`: `int_compensation_usd` has 1,980 rows and `fct_compensation_usd` has 1,200 rows, both with 0 null `base_salary_usd`; U02 (`unique(fct_compensation_usd.employee_id)`) therefore holds by the stated grain.
@@ -938,8 +939,8 @@ Messages carry IDs and pointers; payloads live in R2 or D1. Since spec 1.2 a fai
 3. `waitForEvent('wait-build', {type: 'build-complete', timeout: '6 hours'})`. Verified: events sent before the wait is reached are buffered; default timeout is 24 hours, range 1 second to 365 days; timeout throws, caught here and the run is marked `stale`.
 4. `await-ingested`: compare D1 counts with `checkResults.length` and `expectedLineageEvents`; throw if short so the step retries (`retries: {limit: 10, delay: '5 seconds', backoff: 'exponential'}`).
 5. `summarize-run`: counts by status and category.
-6. `dispatch-investigation`: if any failure or error, send one `datatrust-investigate` message (v1: one incident per failing run).
-7. `finalize`: status `passed` or `failed`, EventSink `run_completed`.
+6. `dispatch-investigation`: if any failure or error, send one `datatrust-investigate` message (v1: one incident per failing run). Otherwise, if the build completion carried a `metricAlert` (the runner's metric watch: on a local build whose checks all passed, a metric moved against the last green snapshot of the same seed), send one message with `trigger: 'alert'` and that alert, so the investigation starts from the failed metric. Never both: one investigation per run keeps the per-run Free plan budget of section 28 unchanged.
+7. `finalize`: status `passed`, or `failed` when step 6 dispatched (a run with a failed metric is never a last green run), EventSink `run_completed`. An alert incident also links its run when the run has no incident yet.
 
 ### 13.5 InvestigationWorkflow (`params: {runId, incidentId, trigger, alert?}`)
 
@@ -1176,7 +1177,7 @@ Expected cost per smoke: $0. BigQuery under 1 GB billed per run (inside the free
 | 20 defect scenarios | scenarios.py | test_scenarios (20 ids, 13 source + 7 transformation, the four named defects present, every ground-truth node exists in the manifest) | `uv run pytest -k scenarios` |
 | 95% detection recall (target) | benchmark | measured over 100 trials, Wilson and scenario-clustered bootstrap intervals | `npm run bench` |
 | 90% top-three root-cause accuracy (target) | benchmark | measured over 100 trials, same intervals, baselines (`change_only`, `nearest_upstream_source`, `random_in_closure`), median candidate-set size, LOSO top-3 | `npm run bench` |
-| tracing failed metrics to upstream transformations | trace + rank on metric_* failures and `/api/alerts` | trace.test.ts, T20 and S09 trials, api.test.ts alert path | `npm run test:rca`, `npm run bench` |
+| tracing failed metrics to upstream transformations | trace + rank on metric_* failures and alerts: `/api/alerts`, and the runner's metric watch, which compares every metric with the last green run and reports the most-changed one with a green build | trace.test.ts (alert as the trace start), T20 and S09 trials, api.test.ts alert path, test_metric_watch.py, validation-run.test.ts (a green build with a failed metric dispatches an alert investigation), runner.test.ts, test_injection_detected_smoke.py (S01 traced from its failed metric alone), the benchmark's metric-triggered trace (every trial's metrics compared with a clean build, then traced from the failed metric with the failing checks withheld) | `npm run test:rca`, `npm run test:worker`, `uv run pytest -k "metric_watch or smoke"`, `npm run bench` |
 | supporting diagnostic SQL | probe SQL attached to incidents | test_probes_render (sqlglot parses DuckDB and BigQuery variants), investigation.test.ts asserts SQL present | `uv run pytest -k probes`, `npm run test:worker` |
 | OpenLineage | dbt-ol events ingested via `/api/v1/lineage` (10 per POST) and datatrust-lineage-events | queues.test.ts, e2e | as above |
 | Access protection | JWT verification | access.test.ts (12 cases, including the documented service-token payload shape) | `npm run test:worker` |

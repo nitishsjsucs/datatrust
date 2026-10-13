@@ -169,6 +169,24 @@ describe('job completion is safe to retry', () => {
     expect((await request(e, 'POST', path, { token: runnerToken, headers: foreign, body })).status).toBe(403);
   });
 
+  it("forwards the runner's failed metric with the build event and refuses a malformed one", async () => {
+    const headers = await leasedBuildJob('run_metric1');
+    const wf = flakyWorkflow(0);
+    const e = { ...env, VALIDATION_RUN: wf.binding, CHECK_RESULTS_Q: recordingQueue().queue };
+    const passing = s01.checks.map((c) => ({ ...c, status: 'pass' as const, failures: 0 }));
+    const metricAlert = { metricNode: 'model.datatrust.metric_hires_monthly', column: 'hires', observed: 3, expected: 2 };
+    const path = '/api/runner/jobs/job_run_metric1_build/complete';
+    const bad = { status: 'completed', checkResults: passing, metricAlert: { ...metricAlert, metricNode: 'raw.hires' } };
+    expect((await request(e, 'POST', path, { token: runnerToken, headers, body: bad })).status).toBe(400);
+    const res = await request(e, 'POST', path, {
+      token: runnerToken,
+      headers,
+      body: { status: 'completed', checkResults: passing, expectedLineageEvents: 3, metricAlert },
+    });
+    expect(res.status).toBe(200);
+    expect(wf.sent[0]!.payload).toMatchObject({ status: 'completed', checkCount: 40, metricAlert });
+  });
+
   it('answers 200 when the workflow instance no longer exists (Free plan retention)', async () => {
     const headers = await leasedBuildJob('run_gone1');
     const e = { ...env, CHECK_RESULTS_Q: recordingQueue().queue };

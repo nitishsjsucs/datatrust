@@ -103,8 +103,12 @@ def build_with_lineage(
     duckdb_path: Path | None = None,
     env_extra: dict[str, str] | None = None,
     extra_args: list[str] | None = None,
+    command: str = "build",
 ) -> DbtResult:
-    """`dbt-ol build` with a file transport; writes openlineage.jsonl and relations.json into target_path."""
+    """`dbt-ol build` (or `run`, models only) with a file transport; writes openlineage.jsonl and
+    relations.json into target_path."""
+    if command not in ("build", "run"):
+        raise ValueError(f"unsupported dbt command {command!r}")
     target_path.mkdir(parents=True, exist_ok=True)
     events_path = target_path / "openlineage.jsonl"
     if events_path.exists():
@@ -120,7 +124,7 @@ def build_with_lineage(
     if env_extra:
         env.update(env_extra)
     res = run_dbt(
-        ["build", *(extra_args or [])],
+        [command, *(extra_args or [])],
         project_dir=project_dir,
         target_path=target_path,
         duckdb_path=duckdb_path,

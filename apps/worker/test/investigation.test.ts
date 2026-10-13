@@ -3,9 +3,18 @@ import { env as baseEnv } from 'cloudflare:workers';
 import { buildLineageGraph, findUnsanitized } from '@datatrust/rca';
 import { describe, expect, it } from 'vitest';
 import { investigationIds } from '../src/investigation-ids';
+import { persistIncidentRows } from '../src/workflows/investigation';
 import type { AppEnv } from '../src/env';
 import worker from '../src/index';
-import { getIncident, getJob, getRun, upsertCheckResults, upsertIncident, upsertLineageGraph } from '../src/store/repo';
+import {
+  getIncident,
+  getJob,
+  getRun,
+  type IncidentInsert,
+  upsertCheckResults,
+  upsertIncident,
+  upsertLineageGraph,
+} from '../src/store/repo';
 import { s01 } from './helpers/fixtures';
 
 async function seedRun(runId: string) {
@@ -167,6 +176,39 @@ describe('InvestigationWorkflow', () => {
     expect(trace.failing).toContain('alert:metric_hires_monthly');
     expect(trace.candidates.map((c) => c.node)).toContain('model.datatrust.fct_hires');
     expect(trace.candidates.map((c) => c.node)).toContain('source.datatrust.raw.hires');
+  });
+});
+
+describe('persist-incident links the run to its incident', () => {
+  const row = (incidentId: string, runId: string, trigger: 'checks' | 'alert'): IncidentInsert => ({
+    incidentId,
+    runId,
+    trigger,
+    status: 'open',
+    failingChecks: [],
+    ranked: [],
+    evidenceR2Key: null,
+    summaryDraft: null,
+    summary: null,
+    summaryProvider: 'template',
+    summaryModel: 'template-v1',
+    summaryAttempts: 1,
+    summaryFallback: false,
+    summaryFallbackReason: null,
+    provenance: {},
+  });
+
+  it('an alert links a run without an incident (a failed metric on a run whose checks passed)', async () => {
+    await seedRun('run_link_alert');
+    await persistIncidentRows(baseEnv.DB, row('inc_run_link_alert_alert_aaaaaaaa', 'run_link_alert', 'alert'));
+    expect((await getRun(baseEnv.DB, 'run_link_alert'))?.incident_id).toBe('inc_run_link_alert_alert_aaaaaaaa');
+  });
+
+  it("a later alert never replaces the run's checks incident", async () => {
+    await seedRun('run_link_both');
+    await persistIncidentRows(baseEnv.DB, row('inc_run_link_both_checks_00000000', 'run_link_both', 'checks'));
+    await persistIncidentRows(baseEnv.DB, row('inc_run_link_both_alert_bbbbbbbb', 'run_link_both', 'alert'));
+    expect((await getRun(baseEnv.DB, 'run_link_both'))?.incident_id).toBe('inc_run_link_both_checks_00000000');
   });
 });
 

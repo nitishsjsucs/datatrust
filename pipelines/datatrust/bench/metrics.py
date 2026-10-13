@@ -184,6 +184,62 @@ def summarize(records: list[dict[str, Any]], loso: dict[str, Any] | None = None)
         "perScenario": per_scenario,
         "perKind": per_kind,
         "loso": loso,
+        **({"metricTrigger": mt} if (mt := metric_trigger(records)) else {}),
+    }
+
+
+def metric_trigger(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The metric watch (harness docstring): how often a trial moved a metric against the clean build, and
+    where the ground truth ranked when traced from that failed metric alone. None for reports without it."""
+    watched = [r for r in records if "metricWatch" in r]
+    if not watched:
+        return None
+    injected = [r for r in watched if r["scenario"]]
+    clean = [r for r in watched if not r["scenario"]]
+    alerted = [r for r in injected if r["metricWatch"].get("alert")]
+
+    def order(rec: dict[str, Any]) -> Sequence[str] | None:
+        return rec["metricWatch"].get("ranked")
+
+    by_scen_top3: dict[str, list[float]] = defaultdict(list)
+    for r in alerted:
+        pos = gt_rank(order(r), r["groundTruth"])
+        by_scen_top3[r["scenario"]].append(1.0 if pos is not None and pos <= 3 else 0.0)
+    per_scenario = {}
+    for sid in sorted({r["scenario"] for r in injected}):
+        recs = [r for r in injected if r["scenario"] == sid]
+        ranks = [gt_rank(order(r), r["groundTruth"]) if r["metricWatch"].get("alert") else None for r in recs]
+        per_scenario[sid] = {
+            "n": len(recs),
+            "alerts": sum(1 for r in recs if r["metricWatch"].get("alert")),
+            "metrics": sorted(
+                {
+                    r["metricWatch"]["alert"]["metricNode"].split(".")[-1]
+                    for r in recs
+                    if r["metricWatch"].get("alert")
+                }
+            ),
+            "top1": sum(1 for p in ranks if p == 1),
+            "top3": sum(1 for p in ranks if p is not None and p <= 3),
+            "ranks": [
+                p if r["metricWatch"].get("alert") else "no alert" for r, p in zip(recs, ranks, strict=True)
+            ],
+        }
+    metrics_alerted: dict[str, int] = defaultdict(int)
+    for r in alerted:
+        metrics_alerted[r["metricWatch"]["alert"]["metricNode"].split(".")[-1]] += 1
+    return {
+        "injected": len(injected),
+        "clean": len(clean),
+        "withFailedMetric": len(alerted),
+        "withFailedMetricWilson95": list(wilson(len(alerted), len(injected))),
+        "cleanFalseAlarms": sum(1 for r in clean if r["metricWatch"].get("alert")),
+        "overAlerted": {
+            **_topk_from(alerted, order),
+            "top3Interval": _interval_block(by_scen_top3) if alerted else None,
+        },
+        "alertMetrics": dict(sorted(metrics_alerted.items())),
+        "perScenario": per_scenario,
     }
 
 
@@ -206,6 +262,9 @@ def gate(summary: dict[str, Any], baseline: dict[str, Any], tolerance: float = 0
     problems = []
     if now["cleanFalsePositives"] != 0:
         problems.append(f"clean false positives: {now['cleanFalsePositives']}")
+    alarms = (summary.get("metricTrigger") or {}).get("cleanFalseAlarms", 0)
+    if alarms:
+        problems.append(f"metric watch false alarms on clean trials: {alarms}")
     for key in ("detectionRecall", "top3"):
         if now[key] < baseline[key] - tolerance:
             problems.append(

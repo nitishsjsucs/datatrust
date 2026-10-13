@@ -157,8 +157,53 @@ def markdown(report: dict[str, Any]) -> str:
             f"| {sid} {report['scenarioTitles'].get(sid, '')} | {v['kind']} | {v['n']} | {v['detected']} | "
             f"{v['top1']} | {v['top3']} | {ranks} |"
         )
+    lines += metric_trigger_markdown(s.get("metricTrigger"), report.get("scenarioTitles") or {})
     lines.append("")
     return "\n".join(lines)
+
+
+def metric_trigger_markdown(mt: dict[str, Any] | None, titles: dict[str, str]) -> list[str]:
+    if not mt:
+        return []
+    oa = mt["overAlerted"]
+    lines = [
+        "",
+        "## Metric-triggered trace (metric watch)",
+        "",
+        "Each trial's four metric tables are compared cell by cell with a clean, unpatched build of the same "
+        "seed (the last green run). A metric with a moved cell has failed; the alert names the metric with the "
+        "largest share of moved cells, as the runner does. The trial is then traced from that alert alone: "
+        "its failing dbt checks are withheld, its passing checks kept, and the same probes and frozen-weight "
+        "ranker run (`dbt-ol run` first builds the models dbt build skipped behind a failing test).",
+        "",
+        f"- Injected trials with a failed metric: {mt['withFailedMetric']}/{mt['injected']} "
+        f"(Wilson 95% {pct(mt['withFailedMetricWilson95'][0])} to {pct(mt['withFailedMetricWilson95'][1])})",
+        f"- Metric alerts on clean trials (false alarms): {mt['cleanFalseAlarms']}/{mt['clean']}",
+    ]
+    if oa["n"]:
+        ti = oa["top3Interval"]
+        lines += [
+            f"- Traced from the failed metric alone, over those {oa['n']} trials: top-1 {pct(oa['top1'])}, "
+            f"top-3 {pct(oa['top3'])} ({ti['k']}/{ti['n']}; Wilson 95% {interval(ti, 'wilson95')}; "
+            f"scenario-clustered bootstrap 95% {interval(ti, 'scenarioBootstrap95')}), MRR {oa['mrr']:.3f}",
+        ]
+    lines.append(
+        "- Alerted metrics: " + ", ".join(f"{k} {v}" for k, v in mt["alertMetrics"].items())
+        if mt["alertMetrics"]
+        else "- Alerted metrics: none"
+    )
+    lines += [
+        "",
+        "| Scenario | Trials | Metric alerts | Alerted metric | Top-1 | Top-3 | Ground-truth rank per trial |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for sid, v in mt["perScenario"].items():
+        ranks = ", ".join("miss" if r is None else str(r) for r in v["ranks"])
+        lines.append(
+            f"| {sid} {titles.get(sid, '')} | {v['n']} | {v['alerts']} | {', '.join(v['metrics']) or '-'} | "
+            f"{v['top1']} | {v['top3']} | {ranks} |"
+        )
+    return lines
 
 
 def write_report(

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildLineageGraph } from '../src/lineage/graph';
-import { checkStartRefs, traceUpstream } from '../src/rca/trace';
+import { alertAsCheck, checkStartRefs, traceUpstream } from '../src/rca/trace';
 import type { CheckResult } from '../src/types';
 import { loadEvents, loadRelations } from './helpers';
 import { check, FCT, graph, INT_AB, RAW_A, RAW_B, STG_A, STG_B } from './synthetic';
@@ -28,6 +28,17 @@ describe('traceUpstream on a synthetic graph', () => {
     expect(byNode[STG_A]).toEqual(['C2']);
     expect(byNode[RAW_A]).toEqual(['C2']);
     expect(byNode[INT_AB]).toEqual(['C1']);
+  });
+
+  it('traces a failed metric (an alert) from its node and column like a failing check', () => {
+    const alert = alertAsCheck({ metricNode: FCT, column: 'total', observed: 12, expected: 10 });
+    expect(alert).toMatchObject({ checkId: 'alert:fct', testName: 'metric_alert', category: 'alert', status: 'fail' });
+    const fromAlert = traceUpstream([alert], graph(), 'column');
+    const fromCheck = traceUpstream([check('C1', FCT, ['total'])], graph(), 'column');
+    expect(fromAlert.candidates.map((c) => [c.node, c.distance])).toEqual(fromCheck.candidates.map((c) => [c.node, c.distance]));
+    expect(fromAlert.failing).toEqual(['alert:fct']);
+    // Without a column the trace starts at every column of the metric.
+    expect(checkStartRefs(alertAsCheck({ metricNode: FCT, observed: 1, expected: 0 }), graph()).length).toBeGreaterThan(1);
   });
 
   it('ignores passing and skipped checks', () => {
