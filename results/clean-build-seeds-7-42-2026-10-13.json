@@ -1,0 +1,33 @@
+{
+ "commands": [
+  "uv run datatrust synth --seed <seed> --out <scratch>/raw<seed>",
+  "uv run datatrust load --seed <seed> --raw-dir <scratch>/raw<seed> --duckdb-path <scratch>/wh<seed>.duckdb",
+  "uv run datatrust build --duckdb-path <scratch>/wh<seed>.duckdb --target-path <scratch>/target<seed>"
+ ],
+ "date": "2026-10-13",
+ "gitCommit": "c9db79e245f247cec4e10e4648d73cab7e32dcc4",
+ "purpose": "clean builds of seeds outside the dev (1-3) and test (101-105) sets: no defect injected, no decoy",
+ "seeds": {
+  "42": {
+   "checks": {
+    "error": 0,
+    "fail": 0,
+    "pass": 40,
+    "skip": 0
+   },
+   "failing": [],
+   "openlineage_events": 140
+  },
+  "7": {
+   "checks": {
+    "error": 0,
+    "fail": 0,
+    "pass": 40,
+    "skip": 0
+   },
+   "failing": [],
+   "openlineage_events": 140
+  }
+ },
+ "warehouse": "DuckDB 1.5.6 via dbt-duckdb 1.11.0, local stand-in for BigQuery"
+}
