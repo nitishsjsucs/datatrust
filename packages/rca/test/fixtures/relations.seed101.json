@@ -326,7 +326,7 @@
      "entity": null
     },
     "delta_pct": {
-     "classification": "internal",
+     "classification": "compensation",
      "dataType": "decimal(38,9)",
      "entity": null
     },
@@ -378,11 +378,8 @@
     "recompute": [
      {
       "column": "expected_gross_local_minor",
-      "expr": "base_salary_local_minor / 12.0"
-     },
-     {
-      "column": "actual_gross_local_minor",
-      "expr": "expected_gross_local_minor"
+      "compare": "exact",
+      "expr": "int_div(base_salary_local_minor + 6, 12)"
      }
     ],
     "rowcount": {
@@ -962,7 +959,7 @@
    "uniqueId": "model.datatrust.metric_hires_monthly"
   },
   "model.datatrust.metric_payroll_cost_usd_monthly": {
-   "checksum": "149218f248e4920a051f05726a8d8eff1fecd8e8c16e265f74a43680488577d4",
+   "checksum": "14abc957286e2be3d480efce66613b377e1b69bfd6b487d38b0fb959c4a7e535",
    "columns": {
     "department_id": {
      "classification": "internal",
@@ -980,7 +977,7 @@
      "entity": null
     },
     "payroll_cost_usd": {
-     "classification": "internal",
+     "classification": "compensation",
      "dataType": "decimal(38,9)",
      "entity": null
     }
@@ -1429,6 +1426,14 @@
     ],
     "grain": [
      "hire_id"
+    ],
+    "unique_keys": [
+     [
+      "application_id"
+     ],
+     [
+      "employee_id"
+     ]
     ]
    },
    "name": "stg_hires",
@@ -1675,6 +1680,12 @@
     ],
     "grain": [
      "payroll_line_id"
+    ],
+    "unique_keys": [
+     [
+      "employee_id",
+      "pay_month"
+     ]
     ]
    },
    "name": "stg_payroll_lines",
@@ -1816,10 +1827,16 @@
     "grain": [
      "event_id"
     ],
+    "recompute": [
+     {
+      "column": "event_local_date",
+      "compare": "exact",
+      "expr": "tz_local_date(entered_at, location_tz)"
+     }
+    ],
     "timezone": {
      "filter_column": "source_system",
      "filter_value": "recruiter_tool",
-     "hour": "event_local_hour",
      "ts": "entered_at",
      "tz": "location_tz"
     },
@@ -1837,12 +1854,35 @@
   },
   "source.datatrust.raw.applications": {
    "checksum": null,
-   "columns": {},
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "app"
+    },
+    "candidate_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "cand"
+    }
+   },
    "database": "warehouse",
    "identifier": "applications",
    "kind": "source",
    "materialization": null,
    "meta": {
+    "foreign_keys": [
+     {
+      "column": "candidate_id",
+      "parent": "raw.candidates",
+      "parent_column": "candidate_id"
+     },
+     {
+      "column": "requisition_id",
+      "parent": "raw.requisitions",
+      "parent_column": "requisition_id"
+     }
+    ],
     "grain": [
      "application_id"
     ]
@@ -1855,6 +1895,11 @@
   "source.datatrust.raw.candidates": {
    "checksum": null,
    "columns": {
+    "candidate_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "cand"
+    },
     "email": {
      "classification": "pii",
      "dataType": null,
@@ -1897,6 +1942,11 @@
      "classification": "compensation",
      "dataType": null,
      "entity": null
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
     }
    },
    "database": "warehouse",
@@ -1904,16 +1954,29 @@
    "kind": "source",
    "materialization": null,
    "meta": {
+    "casts": [
+     {
+      "column": "base_salary_local_minor",
+      "type": "int"
+     }
+    ],
+    "foreign_keys": [
+     {
+      "column": "employee_id",
+      "parent": "raw.employees",
+      "parent_column": "employee_id"
+     }
+    ],
     "grain": [
      "compensation_id"
     ],
-    "interval": [
-     "valid_from",
-     "valid_to"
-    ],
-    "interval_key": [
-     "employee_id"
-    ]
+    "interval": {
+     "from": "valid_from",
+     "key": [
+      "employee_id"
+     ],
+     "to": "valid_to"
+    }
    },
    "name": "compensation",
    "relation": "\"warehouse\".\"raw\".\"compensation\"",
@@ -1945,13 +2008,28 @@
      "dataType": null,
      "entity": null
     },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
+    },
     "first_name": {
      "classification": "pii",
      "dataType": null,
      "entity": null
     },
+    "hire_date": {
+     "classification": "internal",
+     "dataType": null,
+     "entity": null
+    },
     "last_name": {
      "classification": "pii",
+     "dataType": null,
+     "entity": null
+    },
+    "termination_date": {
+     "classification": "internal",
      "dataType": null,
      "entity": null
     },
@@ -1983,6 +2061,11 @@
    "kind": "source",
    "materialization": null,
    "meta": {
+    "fx": {
+     "currency": "currency",
+     "date": "rate_date",
+     "rate": "rate_to_usd"
+    },
     "grain": [
      "currency",
      "rate_date"
@@ -1995,14 +2078,50 @@
   },
   "source.datatrust.raw.hires": {
    "checksum": null,
-   "columns": {},
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "app"
+    },
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
+    },
+    "hire_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "hire"
+    }
+   },
    "database": "warehouse",
    "identifier": "hires",
    "kind": "source",
    "materialization": null,
    "meta": {
+    "foreign_keys": [
+     {
+      "column": "application_id",
+      "parent": "raw.applications",
+      "parent_column": "application_id"
+     },
+     {
+      "column": "employee_id",
+      "parent": "raw.employees",
+      "parent_column": "employee_id"
+     }
+    ],
     "grain": [
      "hire_id"
+    ],
+    "unique_keys": [
+     [
+      "application_id"
+     ],
+     [
+      "employee_id"
+     ]
     ]
    },
    "name": "hires",
@@ -2012,22 +2131,45 @@
   },
   "source.datatrust.raw.job_assignments": {
    "checksum": null,
-   "columns": {},
+   "columns": {
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
+    }
+   },
    "database": "warehouse",
    "identifier": "job_assignments",
    "kind": "source",
    "materialization": null,
    "meta": {
+    "foreign_keys": [
+     {
+      "column": "employee_id",
+      "parent": "raw.employees",
+      "parent_column": "employee_id"
+     },
+     {
+      "column": "department_id",
+      "parent": "raw.departments",
+      "parent_column": "department_id"
+     },
+     {
+      "column": "location_id",
+      "parent": "raw.locations",
+      "parent_column": "location_id"
+     }
+    ],
     "grain": [
      "assignment_id"
     ],
-    "interval": [
-     "valid_from",
-     "valid_to"
-    ],
-    "interval_key": [
-     "employee_id"
-    ]
+    "interval": {
+     "from": "valid_from",
+     "key": [
+      "employee_id"
+     ],
+     "to": "valid_to"
+    }
    },
    "name": "job_assignments",
    "relation": "\"warehouse\".\"raw\".\"job_assignments\"",
@@ -2053,12 +2195,25 @@
   },
   "source.datatrust.raw.offers": {
    "checksum": null,
-   "columns": {},
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "app"
+    }
+   },
    "database": "warehouse",
    "identifier": "offers",
    "kind": "source",
    "materialization": null,
    "meta": {
+    "foreign_keys": [
+     {
+      "column": "application_id",
+      "parent": "raw.applications",
+      "parent_column": "application_id"
+     }
+    ],
     "grain": [
      "offer_id"
     ]
@@ -2071,6 +2226,11 @@
   "source.datatrust.raw.payroll_lines": {
    "checksum": null,
    "columns": {
+    "employee_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "emp"
+    },
     "gross_pay_local_minor": {
      "classification": "compensation",
      "dataType": null,
@@ -2082,8 +2242,27 @@
    "kind": "source",
    "materialization": null,
    "meta": {
+    "casts": [
+     {
+      "column": "gross_pay_local_minor",
+      "type": "int"
+     }
+    ],
+    "foreign_keys": [
+     {
+      "column": "employee_id",
+      "parent": "raw.employees",
+      "parent_column": "employee_id"
+     }
+    ],
     "grain": [
      "payroll_line_id"
+    ],
+    "unique_keys": [
+     [
+      "employee_id",
+      "pay_month"
+     ]
     ]
    },
    "name": "payroll_lines",
@@ -2099,6 +2278,18 @@
    "kind": "source",
    "materialization": null,
    "meta": {
+    "foreign_keys": [
+     {
+      "column": "department_id",
+      "parent": "raw.departments",
+      "parent_column": "department_id"
+     },
+     {
+      "column": "location_id",
+      "parent": "raw.locations",
+      "parent_column": "location_id"
+     }
+    ],
     "grain": [
      "requisition_id"
     ]
@@ -2110,15 +2301,66 @@
   },
   "source.datatrust.raw.stage_events": {
    "checksum": null,
-   "columns": {},
+   "columns": {
+    "application_id": {
+     "classification": "identifier",
+     "dataType": null,
+     "entity": "app"
+    }
+   },
    "database": "warehouse",
    "identifier": "stage_events",
    "kind": "source",
    "materialization": null,
    "meta": {
+    "foreign_keys": [
+     {
+      "column": "application_id",
+      "parent": "raw.applications",
+      "parent_column": "application_id"
+     }
+    ],
     "grain": [
      "event_id"
-    ]
+    ],
+    "timezone": {
+     "filter_column": "source_system",
+     "filter_value": "recruiter_tool",
+     "ts": "entered_at",
+     "tz_path": [
+      {
+       "column": "application_id",
+       "parent": "raw.applications",
+       "parent_column": "application_id"
+      },
+      {
+       "column": "requisition_id",
+       "parent": "raw.requisitions",
+       "parent_column": "requisition_id"
+      },
+      {
+       "column": "location_id",
+       "parent": "raw.locations",
+       "parent_column": "location_id",
+       "tz": "timezone"
+      }
+     ]
+    },
+    "transitions": {
+     "key": "application_id",
+     "order_map": {
+      "Applied": 1,
+      "Hired": 5,
+      "Offer Declined": 5,
+      "Offer Extended": 4,
+      "Onsite Interview": 3,
+      "Phone Screen": 2,
+      "Rejected": 5,
+      "Withdrawn": 5
+     },
+     "stage": "stage",
+     "ts": "entered_at"
+    }
    },
    "name": "stage_events",
    "relation": "\"warehouse\".\"raw\".\"stage_events\"",
